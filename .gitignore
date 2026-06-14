@@ -1,0 +1,58 @@
+# Node / pnpm
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+out/
+.cache/
+.turbo/
+
+# Electron build artifacts
+release/
+*.exe
+*.app
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.msi
+
+# Vite / TS
+*.tsbuildinfo
+.vite/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Env / secrets
+.env
+.env.dev
+.env.*.local
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Local user vault (we never commit user data)
+**/AppData/
+**/NuwaPet/
+
+# Test
+coverage/
+
+# Cursor plan / chat scratch
+.cursor/plans/scratch/

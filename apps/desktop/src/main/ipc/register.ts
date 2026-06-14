@@ -1,0 +1,544 @@
+import { ipcMain, BrowserWindow } from "electron";
+import { ulid } from "ulid";
+import {
+  IPC,
+  type DistillationProgressEvent,
+  type SendMessageInput
+} from "../../shared/ipc-contract.js";
+import type { LocalVault } from "../store/local-vault.js";
+import type { MemoryStore } from "../runtime/memory-store.js";
+import type { CharacterRuntime } from "../runtime/character-runtime.js";
+import type { NuwaOrchestrator } from "../runtime/nuwa-orchestrator.js";
+import type { LLMAdapter } from "../adapters/llm-adapter.js";
+import { findStarterById, STARTER_META } from "@nuwa-pet/starter-library";
+import {
+  DistillationJobConfigSchema,
+  summarizeAppearance,
+  type CharacterBundle,
+  type DistillationJob
+} from "@nuwa-pet/character-protocol";
+
+export interface IpcDeps {
+  vault: LocalVault;
+  memory: MemoryStore;
+  runtime: CharacterRuntime;
+  orchestrator: NuwaOrchestrator;
+  llm: LLMAdapter;
+  getActiveCharacterId(): string | null;
+  setActiveCharacterId(id: string | null): void;
+  broadcast: (channel: string, payload: unknown) => void;
+  getPetBounds: () => { x: number; y: number; width: number; height: number } | null;
+  showChatNearPet: () => void;
+  hideChat: () => void;
+  hidePet: () => void;
+  movePet: (x: number, y: number) => void;
+  ensureSettingsWindow: () => void;
+}
+
+const SETTING_FIRST_RUN_DONE = "first_run_done";
+const SETTING_ACTIVE_CHARACTER = "active_character_id";
+const SETTING_LLM_PROVIDER = "llm_provider_json";
+const SETTING_LLM_API_KEY = "llm_api_key_enc";
+
+interface ApprovalGate {
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (err: Error) => void;
+}
+
+interface DeepJobState {
+  jobId: string;
+  abortCtl: AbortController;
+  approvals: Map<"research" | "synthesis", ApprovalGate>;
+}
+
+function makeGate(): ApprovalGate {
+  let resolve!: () => void;
+  let reject!: (err: Error) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+export function registerIpc(deps: IpcDeps): void {
+  const { vault, memory, runtime, orchestrator, llm, broadcast } = deps;
+  /** 进行中的深度蒸馏 jobs（jobId → state）。 */
+  const activeJobs = new Map<string, DeepJobState>();
+
+  // ===== App =====
+  ipcMain.handle(IPC.AppIsFirstRun, () => vault.getSetting(SETTING_FIRST_RUN_DONE) !== "1");
+  ipcMain.handle(IPC.AppCompleteFirstRun, () => vault.setSetting(SETTING_FIRST_RUN_DONE, "1"));
+  ipcMain.handle(IPC.AppQuit, () => {
+    setTimeout(() => process.exit(0), 50);
+  });
+
+  // ===== LLM =====
+  ipcMain.handle(IPC.LlmSetProvider, async (_e, input) => {
+    try {
+      const { apiKey, ...rest } = input;
+      vault.setSetting(SETTING_LLM_PROVIDER, JSON.stringify(rest));
+      vault.setEncryptedString(SETTING_LLM_API_KEY, apiKey);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  ipcMain.handle(IPC.LlmGetProvider, () => {
+    const json = vault.getSetting(SETTING_LLM_PROVIDER);
+    const key = vault.getEncryptedString(SETTING_LLM_API_KEY);
+    if (!json || !key) return null;
+    try {
+      const rest = JSON.parse(json);
+      return { ...rest, apiKey: key };
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC.LlmTestConnection, () => llm.testConnection());
+
+  ipcMain.handle(IPC.LlmClearKey, () => {
+    vault.setSetting(SETTING_LLM_PROVIDER, "");
+    vault.setSetting(SETTING_LLM_API_KEY, "");
+  });
+
+  // ===== Characters =====
+  ipcMain.handle(IPC.CharactersListStarters, () => STARTER_META);
+
+  ipcMain.handle(IPC.CharactersList, () => {
+    const activeId = deps.getActiveCharacterId();
+    return vault.listCharacters().map((c) => ({
+      id: c.id,
+      name: c.name,
+      sourceName: c.sourceName,
+      track: c.track,
+      isSkeleton: c.isSkeleton,
+      isActive: c.id === activeId
+    }));
+  });
+
+  ipcMain.handle(IPC.CharactersGet, (_e, characterId: string) => vault.getCharacter(characterId));
+  ipcMain.handle(IPC.CharactersGetActive, () => {
+    const id = deps.getActiveCharacterId();
+    return id ? vault.getCharacter(id) : null;
+  });
+
+  ipcMain.handle(IPC.CharactersImportStarter, (_e, starterId: string) => {
+    const starter = findStarterById(starterId);
+    if (!starter) return { ok: false, error: "starter not found" };
+    const now = Date.now();
+    const bundle: CharacterBundle = {
+      ...starter,
+      card: { ...starter.card, id: ulid(), createdAt: now, updatedAt: now }
+    };
+    vault.upsertCharacter({ id: bundle.card.id, bundle, isSkeleton: false, now });
+    deps.setActiveCharacterId(bundle.card.id);
+    vault.setSetting(SETTING_ACTIVE_CHARACTER, bundle.card.id);
+    broadcast(IPC.EventActiveCharacterChanged, bundle);
+    return { ok: true, characterId: bundle.card.id };
+  });
+
+  ipcMain.handle(IPC.CharactersCreate, async (_e, input) => {
+    try {
+      const result = await orchestrator.createCharacter(input);
+      vault.upsertCharacter({
+        id: result.bundle.card.id,
+        bundle: result.bundle,
+        isSkeleton: result.isSkeleton,
+        now: Date.now()
+      });
+      deps.setActiveCharacterId(result.bundle.card.id);
+      vault.setSetting(SETTING_ACTIVE_CHARACTER, result.bundle.card.id);
+      broadcast(IPC.EventActiveCharacterChanged, result.bundle);
+      return {
+        ok: true,
+        characterId: result.bundle.card.id,
+        isSkeleton: result.isSkeleton,
+        warnings: result.warnings
+      };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  ipcMain.handle(IPC.CharactersRegenerateSprite, async (_e, characterId: string) => {
+    try {
+      const bundle = vault.getCharacter(characterId);
+      if (!bundle) return { ok: false, error: "角色不存在" };
+      const result = await orchestrator.regenerateSprite({ card: bundle.card });
+      if (!result.ok && !result.sprite) {
+        return { ok: false, error: result.error ?? "形象生成失败" };
+      }
+      const newBundle: CharacterBundle = {
+        ...bundle,
+        sprite: result.sprite!
+      };
+      vault.upsertCharacter({
+        id: characterId,
+        bundle: newBundle,
+        isSkeleton: false,
+        now: Date.now()
+      });
+      if (deps.getActiveCharacterId() === characterId) {
+        broadcast(IPC.EventActiveCharacterChanged, newBundle);
+      }
+      return { ok: true, warnings: result.warnings };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  ipcMain.handle(IPC.CharactersDelete, (_e, characterId: string) => {
+    vault.deleteCharacter(characterId);
+    if (deps.getActiveCharacterId() === characterId) {
+      const fallback = vault.listCharacters()[0];
+      const nextId = fallback?.id ?? null;
+      deps.setActiveCharacterId(nextId);
+      vault.setSetting(SETTING_ACTIVE_CHARACTER, nextId ?? "");
+      broadcast(IPC.EventActiveCharacterChanged, nextId ? vault.getCharacter(nextId) : null);
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.CharactersDetectCapabilities, () => llm.detectCapabilities());
+  ipcMain.handle(IPC.CharactersDetectVision, () => llm.detectVisionCapability());
+  ipcMain.handle(IPC.CharactersProbeVision, () => llm.probeVision());
+  ipcMain.handle(IPC.CharactersProbeWebSearch, () => llm.probeWebSearch());
+
+  ipcMain.handle(IPC.CharactersRegenerateAppearance, async (_e, input: {
+    characterId: string;
+    referenceImages?: Array<{
+      url: string;
+      source: "user-upload" | "web";
+      role?: "primary" | "reference";
+      notes?: string;
+    }>;
+    userHint?: string;
+  }) => {
+    try {
+      const bundle = vault.getCharacter(input.characterId);
+      if (!bundle) return { ok: false, error: "角色不存在" };
+      // 限制图片大小：拒绝 >6MB 的 data URI（base64 ~ 8MB binary）
+      const refs = (input.referenceImages ?? []).filter((r) => {
+        if (!r.url) return false;
+        if (r.url.startsWith("data:") && r.url.length > 6 * 1024 * 1024) {
+          return false;
+        }
+        return true;
+      });
+      const result = await orchestrator.regenerateAppearance({
+        card: bundle.card,
+        referenceImages: refs,
+        userHint: input.userHint
+      });
+      if (!result.ok || !result.appearance || !result.sprite) {
+        return { ok: false, error: result.error ?? "形象重生失败", warnings: result.warnings };
+      }
+      const newBundle: CharacterBundle = {
+        ...bundle,
+        card: {
+          ...bundle.card,
+          meta: {
+            ...bundle.card.meta,
+            appearance: result.appearance,
+            avatarHint: summarizeAppearance(result.appearance)
+          },
+          updatedAt: Date.now()
+        },
+        sprite: result.sprite
+      };
+      vault.upsertCharacter({
+        id: input.characterId,
+        bundle: newBundle,
+        isSkeleton: false,
+        now: Date.now()
+      });
+      if (deps.getActiveCharacterId() === input.characterId) {
+        broadcast(IPC.EventActiveCharacterChanged, newBundle);
+      }
+      return { ok: true, warnings: result.warnings };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  // ===== 深度蒸馏 =====
+  ipcMain.handle(IPC.CharactersCreateDeep, async (_e, rawInput) => {
+    const parsed = DistillationJobConfigSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.errors.slice(0, 4).map((e) => `${e.path.join(".")}: ${e.message}`).join("; ")
+      };
+    }
+    const config = parsed.data;
+    const jobId = ulid();
+    const now = Date.now();
+    const job: DistillationJob = {
+      id: jobId,
+      config,
+      status: "pending",
+      progress: 0,
+      message: "已排队",
+      warnings: [],
+      createdAt: now,
+      updatedAt: now
+    };
+    vault.upsertJob(job);
+
+    const abortCtl = new AbortController();
+    const approvals = new Map<"research" | "synthesis", ApprovalGate>([
+      ["research", makeGate()],
+      ["synthesis", makeGate()]
+    ]);
+    activeJobs.set(jobId, { jobId, abortCtl, approvals });
+
+    // 后台跑 generator，不阻塞 IPC 返回
+    void (async () => {
+      try {
+        const generator = orchestrator.createCharacterDeep({
+          jobId,
+          config,
+          awaitApproval: (phase) => approvals.get(phase)!.promise,
+          signal: abortCtl.signal,
+          runVoiceTest: true
+        });
+
+        for await (const evt of generator) {
+          // 落盘 / 转发
+          if (evt.kind === "phase") {
+            vault.updateJobStatus(jobId, evt.phase, evt.progress, evt.message);
+          } else if (evt.kind === "warning") {
+            vault.appendJobWarning(jobId, evt.message);
+          } else if (evt.kind === "agent_done") {
+            vault.upsertResearchDoc({
+              jobId,
+              doc: evt.doc,
+              createdAt: Date.now()
+            });
+          } else if (evt.kind === "done") {
+            // 落盘 character & 关联 research_docs / job
+            const bundle = evt.bundle;
+            vault.upsertCharacter({
+              id: bundle.card.id,
+              bundle,
+              isSkeleton: evt.isSkeleton,
+              now: Date.now()
+            });
+            vault.bindResearchDocsToCharacter(jobId, bundle.card.id);
+            // 重新写一次 docs，让 character_id 关联 + 文件镜像
+            for (const d of bundle.researchDocs ?? []) {
+              vault.upsertResearchDoc({
+                jobId,
+                characterId: bundle.card.id,
+                doc: d,
+                createdAt: Date.now()
+              });
+            }
+            vault.updateJobStatus(jobId, "done", 100, "完成");
+            deps.setActiveCharacterId(bundle.card.id);
+            vault.setSetting(SETTING_ACTIVE_CHARACTER, bundle.card.id);
+            broadcast(IPC.EventActiveCharacterChanged, bundle);
+            // 转发给渲染进程
+            const forwardEvt: DistillationProgressEvent = {
+              kind: "done",
+              jobId,
+              characterId: bundle.card.id,
+              isSkeleton: evt.isSkeleton,
+              warnings: evt.warnings
+            };
+            broadcast(IPC.EventDistillationProgress, forwardEvt);
+            continue;
+          } else if (evt.kind === "cancelled") {
+            vault.updateJobStatus(jobId, "cancelled", 0, "已取消");
+          } else if (evt.kind === "failed") {
+            vault.updateJobStatus(jobId, "failed", 0, evt.reason);
+          }
+          // 直接转发其他事件（agent_start / research_complete / synthesis_summary / appearance_ready / quality_report / started）
+          broadcast(IPC.EventDistillationProgress, evt as DistillationProgressEvent);
+        }
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : String(e);
+        vault.updateJobStatus(jobId, "failed", 0, reason);
+        const failEvt: DistillationProgressEvent = {
+          kind: "failed",
+          jobId,
+          reason,
+          warnings: []
+        };
+        broadcast(IPC.EventDistillationProgress, failEvt);
+      } finally {
+        activeJobs.delete(jobId);
+      }
+    })();
+
+    return { ok: true, jobId };
+  });
+
+  ipcMain.handle(IPC.CharactersApproveDistillation, (_e, input: { jobId: string; phase: "research" | "synthesis" }) => {
+    const state = activeJobs.get(input.jobId);
+    if (!state) return { ok: false };
+    const gate = state.approvals.get(input.phase);
+    if (!gate) return { ok: false };
+    gate.resolve();
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.CharactersCancelDistillation, (_e, jobId: string) => {
+    const state = activeJobs.get(jobId);
+    if (!state) return { ok: false };
+    state.abortCtl.abort();
+    // 把两个 gate 全 reject，让 generator 立刻退出
+    for (const gate of state.approvals.values()) {
+      gate.reject(new Error("user cancelled"));
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.CharactersGetResearchDocs, (_e, jobId: string) =>
+    vault.getResearchDocs(jobId)
+  );
+
+  ipcMain.handle(IPC.CharactersGetResearchByCharacter, (_e, characterId: string) => {
+    const docs = vault.getResearchDocsByCharacter(characterId);
+    const bundle = vault.getCharacter(characterId);
+    return { docs, qualityReport: bundle?.qualityReport };
+  });
+
+  ipcMain.handle(IPC.CharactersActivate, (_e, characterId: string) => {
+    const bundle = vault.getCharacter(characterId);
+    if (!bundle) return { ok: false };
+    deps.setActiveCharacterId(characterId);
+    vault.setSetting(SETTING_ACTIVE_CHARACTER, characterId);
+    broadcast(IPC.EventActiveCharacterChanged, bundle);
+    return { ok: true };
+  });
+
+  // ===== Chat =====
+  ipcMain.handle(IPC.ChatNewSession, (_e, characterId: string) => ({
+    sessionId: runtime.newSession(characterId)
+  }));
+
+  ipcMain.handle(IPC.ChatGetRecent, (_e, characterId: string) => {
+    const sessionKey = vault.getSetting("session." + characterId);
+    if (!sessionKey) return [];
+    return runtime.getRecentTurns(characterId, sessionKey, 24);
+  });
+
+  ipcMain.handle(IPC.ChatSend, async (_e, input: SendMessageInput) => {
+    const bundle = vault.getCharacter(input.characterId);
+    if (!bundle) {
+      const requestId = ulid();
+      broadcast(IPC.EventChatStream, {
+        requestId,
+        sessionId: input.sessionId,
+        done: true,
+        error: "character not found"
+      });
+      return { requestId };
+    }
+    const sessionId = runtime.ensureSession(input.characterId, input.sessionId);
+    vault.setSetting("session." + input.characterId, sessionId);
+
+    const requestId = ulid();
+    void (async () => {
+      try {
+        for await (const chunk of runtime.sendMessage({
+          bundle,
+          sessionId,
+          userContent: input.content
+        })) {
+          if (chunk.kind === "delta") {
+            broadcast(IPC.EventChatStream, {
+              requestId,
+              sessionId,
+              done: false,
+              delta: chunk.text
+            });
+          } else if (chunk.kind === "done") {
+            broadcast(IPC.EventChatStream, {
+              requestId,
+              sessionId,
+              done: true,
+              finishReason: chunk.finishReason
+            });
+          } else {
+            broadcast(IPC.EventChatStream, {
+              requestId,
+              sessionId,
+              done: true,
+              error: chunk.message,
+              finishReason: "error"
+            });
+          }
+        }
+      } catch (e) {
+        broadcast(IPC.EventChatStream, {
+          requestId,
+          sessionId,
+          done: true,
+          error: e instanceof Error ? e.message : String(e),
+          finishReason: "error"
+        });
+      }
+    })();
+    return { requestId };
+  });
+
+  ipcMain.handle(IPC.ChatCancel, () => {
+    runtime.cancelActive();
+  });
+
+  ipcMain.handle(IPC.ChatHide, () => {
+    deps.hideChat();
+  });
+
+  // ===== Memory =====
+  ipcMain.handle(IPC.MemoryGetProfile, () => memory.getProfile());
+  ipcMain.handle(IPC.MemoryUpdateProfile, (_e, patch) => memory.updateProfile(patch));
+  ipcMain.handle(IPC.MemoryClearProfile, () => memory.clearProfile());
+  ipcMain.handle(IPC.MemoryGetPerCharacter, (_e, characterId: string) =>
+    memory.getPerCharacter(characterId)
+  );
+  ipcMain.handle(IPC.MemoryClearPerCharacter, (_e, characterId: string) =>
+    memory.clearPerCharacter(characterId)
+  );
+  ipcMain.handle(IPC.MemoryClearAll, () => vault.clearAll());
+
+  // ===== Pet =====
+  ipcMain.handle(IPC.PetSummon, () => deps.showChatNearPet());
+  ipcMain.handle(IPC.PetHush, () => {
+    /* MVP: 暂时无主动行为，无需 hush。 */
+  });
+  ipcMain.handle(IPC.PetSetPosition, (_e, x: number, y: number) => {
+    deps.movePet(Math.round(x), Math.round(y));
+    vault.setSetting(SETTING_PET_POS, JSON.stringify({ x: Math.round(x), y: Math.round(y) }));
+  });
+  ipcMain.handle(IPC.PetSetMouseIgnore, (e, ignore: boolean) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return;
+    if (ignore) {
+      win.setIgnoreMouseEvents(true, { forward: true });
+    } else {
+      win.setIgnoreMouseEvents(false);
+    }
+  });
+  ipcMain.handle(IPC.PetOpenSettings, () => deps.ensureSettingsWindow());
+  ipcMain.handle(IPC.PetHide, () => deps.hidePet());
+}
+
+const SETTING_PET_POS = "pet_position_json";
+export { SETTING_PET_POS };
+
+export function broadcastToAllWindows(channel: string, payload: unknown): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    try {
+      w.webContents.send(channel, payload);
+    } catch {
+      // ignore
+    }
+  }
+}

@@ -1,0 +1,232 @@
+<svg width="1200" height="400" viewBox="0 0 1200 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;family=Noto+Serif+SC:wght@700;900&amp;display=swap');
+    </style>
+
+    <!-- Gradient fade for flowing fragments (left → right, more solid at center) -->
+    <linearGradient id="nwFragmentFade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#888888" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#CCCCCC" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="#EEEEEE" stop-opacity="0.85"/>
+    </linearGradient>
+
+    <!-- Funnel gradient (brand orange core) -->
+    <linearGradient id="nwFunnelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D4532B"/>
+      <stop offset="100%" stop-color="#A83518"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="400" fill="#111111"/>
+
+  <!-- Left accent line (Pentagram-style editorial vertical rule) -->
+  <rect x="60" y="48" width="3" height="304" fill="#D4532B"/>
+
+  <!-- Top horizontal rule -->
+  <rect x="60" y="48" width="760" height="2" fill="#FFFFFF" opacity="0.15"/>
+
+  <!-- Bottom horizontal rule -->
+  <rect x="60" y="350" width="760" height="1" fill="#FFFFFF" opacity="0.15"/>
+
+  <!-- Thin divider between text and viz -->
+  <rect x="860" y="80" width="1" height="240" fill="#FFFFFF" opacity="0.08"/>
+
+  <!-- ============================================================ -->
+  <!-- LEFT: TEXT BLOCK                                             -->
+  <!-- ============================================================ -->
+
+  <!-- CATEGORY LABEL -->
+  <text
+    x="80"
+    y="88"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="11"
+    font-weight="700"
+    letter-spacing="3"
+    fill="#D4532B"
+  >CLAUDE CODE SKILL · PERSPECTIVE DISTILLER</text>
+
+  <!-- MAIN TITLE (Chinese Serif, with English annotation) -->
+  <text
+    x="80"
+    y="184"
+    font-family="'Noto Serif SC', 'Source Han Serif', serif"
+    font-size="96"
+    font-weight="900"
+    fill="#FFFFFF"
+    letter-spacing="-2"
+  >女娲.skill</text>
+
+  <!-- English annotation next to title -->
+  <text
+    x="80"
+    y="216"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="13"
+    font-weight="500"
+    fill="#888888"
+    letter-spacing="4"
+  >N U W A  ·  S K I L L</text>
+
+  <!-- Chinese subtitle / hero line -->
+  <text
+    x="80"
+    y="266"
+    font-family="'Noto Serif SC', 'Source Han Serif', serif"
+    font-size="24"
+    font-weight="700"
+    fill="#EEEEEE"
+    letter-spacing="1"
+  >蒸馏任何人的思维方式</text>
+
+  <!-- Tagline -->
+  <text
+    x="80"
+    y="298"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="15"
+    font-weight="400"
+    fill="#AAAAAA"
+    letter-spacing="0.3"
+  >你想蒸馏的下一个员工，何必是同事</text>
+
+  <!-- Meta row (stars / count / license) -->
+  <text
+    x="80"
+    y="326"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="13"
+    font-weight="700"
+    fill="#D4532B"
+    letter-spacing="0.5"
+  >21</text>
+  <text x="96" y="326" font-family="'Inter', sans-serif" font-size="13" font-weight="400" fill="#888888" letter-spacing="0.3"> perspective skills</text>
+  <text x="218" y="326" font-family="'Inter', sans-serif" font-size="13" font-weight="700" fill="#555555">·</text>
+  <text x="230" y="326" font-family="'Inter', sans-serif" font-size="13" font-weight="700" fill="#D4532B">21,670</text>
+  <text x="280" y="326" font-family="'Inter', sans-serif" font-size="13" font-weight="400" fill="#888888" letter-spacing="0.3"> stars</text>
+  <text x="318" y="326" font-family="'Inter', sans-serif" font-size="13" font-weight="700" fill="#555555">·</text>
+  <text x="330" y="326" font-family="'Inter', sans-serif" font-size="13" font-weight="400" fill="#888888" letter-spacing="0.3">MIT open source</text>
+
+  <!-- Footer credit -->
+  <text
+    x="80"
+    y="370"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="12"
+    font-weight="400"
+    fill="#666666"
+    letter-spacing="0.3"
+  >Distill any thinker into a runnable skill</text>
+
+  <!-- ============================================================ -->
+  <!-- RIGHT: DISTILLATION PIPELINE                                 -->
+  <!-- Flow: scattered quotes → funnel → skill.md                   -->
+  <!-- Area: x 880-1160, y 90-330                                   -->
+  <!-- ============================================================ -->
+
+  <!-- Section label -->
+  <text x="890" y="108" font-family="'Inter', sans-serif" font-size="10" font-weight="700" letter-spacing="2" fill="#D4532B" opacity="0.9">DISTILLATION PIPELINE</text>
+
+  <!-- === Stage 1: Scattered quote fragments (left, x 880-985) === -->
+  <!-- Using opacity + rotation to imply chaos / disorder.         -->
+  <!-- All fragments constrained left of funnel (funnel begins x=1000) -->
+
+  <!-- fragment 1 -->
+  <g transform="rotate(-8 900 145)">
+    <text x="883" y="145" font-family="'Inter', sans-serif" font-size="10" font-weight="400" fill="#888888" opacity="0.55">First principles</text>
+  </g>
+
+  <!-- fragment 2 (Chinese serif) -->
+  <g transform="rotate(4 900 168)">
+    <text x="888" y="168" font-family="'Noto Serif SC', serif" font-size="11" font-weight="700" fill="#BBBBBB" opacity="0.7">反脆弱</text>
+  </g>
+
+  <!-- fragment 3 (short italic quote, 2 lines) -->
+  <g transform="rotate(-3 900 192)">
+    <text x="878" y="192" font-family="'Inter', sans-serif" font-size="9" font-weight="400" fill="#777777" opacity="0.55" font-style="italic">"stay hungry,</text>
+    <text x="886" y="204" font-family="'Inter', sans-serif" font-size="9" font-weight="400" fill="#777777" opacity="0.55" font-style="italic">stay foolish"</text>
+  </g>
+
+  <!-- fragment 4 -->
+  <g transform="rotate(6 900 224)">
+    <text x="882" y="224" font-family="'Noto Serif SC', serif" font-size="10" font-weight="400" fill="#999999" opacity="0.6">跨学科 · 逆向</text>
+  </g>
+
+  <!-- fragment 5 -->
+  <g transform="rotate(-5 900 248)">
+    <text x="880" y="248" font-family="'Inter', sans-serif" font-size="10" font-weight="500" fill="#AAAAAA" opacity="0.72">Feynman tech</text>
+  </g>
+
+  <!-- fragment 6 -->
+  <g transform="rotate(3 900 272)">
+    <text x="888" y="272" font-family="'Noto Serif SC', serif" font-size="11" font-weight="700" fill="#AAAAAA" opacity="0.7">第一性原理</text>
+  </g>
+
+  <!-- fragment 7 -->
+  <g transform="rotate(-2 900 296)">
+    <text x="880" y="296" font-family="'Inter', sans-serif" font-size="9" font-weight="400" fill="#888888" opacity="0.55" font-style="italic">"One more thing."</text>
+  </g>
+
+  <!-- Directional flow dashes (fragments → funnel mouth) -->
+  <line x1="970" y1="170" x2="1002" y2="178" stroke="#D4532B" stroke-width="0.8" stroke-dasharray="2 3" opacity="0.4"/>
+  <line x1="970" y1="225" x2="1002" y2="200" stroke="#D4532B" stroke-width="0.8" stroke-dasharray="2 3" opacity="0.4"/>
+  <line x1="970" y1="275" x2="1002" y2="215" stroke="#D4532B" stroke-width="0.8" stroke-dasharray="2 3" opacity="0.4"/>
+
+  <!-- === Stage 2: Funnel (center, x 1000-1050) === -->
+  <!-- Funnel shape: polygon wider top, narrow bottom -->
+  <polygon points="1000,150 1060,150 1046,220 1014,220" fill="url(#nwFunnelGrad)" opacity="0.92"/>
+  <!-- funnel neck -->
+  <rect x="1014" y="220" width="32" height="24" fill="url(#nwFunnelGrad)"/>
+  <!-- funnel label -->
+  <text x="1030" y="260" font-family="'Inter', sans-serif" font-size="8" font-weight="700" letter-spacing="2" fill="#D4532B" text-anchor="middle">DISTILL</text>
+
+  <!-- Drop into file (between funnel and file) -->
+  <circle cx="1030" cy="274" r="1.5" fill="#D4532B"/>
+  <circle cx="1030" cy="280" r="1" fill="#D4532B" opacity="0.6"/>
+
+  <!-- === Stage 3: SKILL.md file output (right, x 1070-1160) === -->
+  <!-- File shape with folded corner -->
+  <g transform="translate(1080 140)">
+    <!-- Main file body -->
+    <path d="M 0 0 L 58 0 L 72 14 L 72 140 L 0 140 Z" fill="#F0ECE0" stroke="#D4532B" stroke-width="1.5"/>
+    <!-- Folded corner triangle -->
+    <path d="M 58 0 L 58 14 L 72 14 Z" fill="#D4C9A8" stroke="#D4532B" stroke-width="1.5"/>
+
+    <!-- File title -->
+    <text x="10" y="22" font-family="'Inter', sans-serif" font-size="9" font-weight="900" fill="#111111" letter-spacing="0.3">SKILL.md</text>
+
+    <!-- Underline -->
+    <rect x="10" y="26" width="52" height="1" fill="#D4532B"/>
+
+    <!-- Three structural bullets -->
+    <!-- Bullet 1 -->
+    <rect x="10" y="40" width="4" height="4" fill="#D4532B"/>
+    <text x="18" y="44" font-family="'Noto Serif SC', serif" font-size="8" font-weight="700" fill="#222222">心智模型</text>
+
+    <!-- Bullet 2 -->
+    <rect x="10" y="58" width="4" height="4" fill="#D4532B"/>
+    <text x="18" y="62" font-family="'Noto Serif SC', serif" font-size="8" font-weight="700" fill="#222222">决策启发式</text>
+
+    <!-- Bullet 3 -->
+    <rect x="10" y="76" width="4" height="4" fill="#D4532B"/>
+    <text x="18" y="80" font-family="'Noto Serif SC', serif" font-size="8" font-weight="700" fill="#222222">表达 DNA</text>
+
+    <!-- faux code lines (tiny gray bars) -->
+    <rect x="10" y="94" width="40" height="1.2" fill="#888888" opacity="0.6"/>
+    <rect x="10" y="100" width="52" height="1.2" fill="#888888" opacity="0.6"/>
+    <rect x="10" y="106" width="34" height="1.2" fill="#888888" opacity="0.6"/>
+    <rect x="10" y="112" width="48" height="1.2" fill="#888888" opacity="0.6"/>
+    <rect x="10" y="118" width="28" height="1.2" fill="#888888" opacity="0.6"/>
+    <rect x="10" y="124" width="44" height="1.2" fill="#888888" opacity="0.6"/>
+  </g>
+
+  <!-- Bottom annotation below the pipeline (compressed, clear) -->
+  <text x="890" y="332" font-family="'Inter', sans-serif" font-size="9" font-weight="500" letter-spacing="1.5" fill="#555555">QUOTES</text>
+  <text x="934" y="332" font-family="'Inter', sans-serif" font-size="9" font-weight="700" fill="#D4532B">→</text>
+  <text x="946" y="332" font-family="'Inter', sans-serif" font-size="9" font-weight="500" letter-spacing="1.5" fill="#555555">FRAMEWORK</text>
+  <text x="1020" y="332" font-family="'Inter', sans-serif" font-size="9" font-weight="700" fill="#D4532B">→</text>
+  <text x="1032" y="332" font-family="'Inter', sans-serif" font-size="9" font-weight="500" letter-spacing="1.5" fill="#555555">SKILL.md</text>
+
+</svg>

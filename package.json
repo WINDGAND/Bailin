@@ -1,0 +1,23 @@
+{
+  "name": "bailin",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Bailin (百灵) — an open-source Windows desktop companion that hosts AI character personas inspired by the Nuwa Skill distillation pipeline.",
+  "license": "MIT",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter=./packages/* run build && pnpm --filter=./apps/desktop run build",
+    "dev": "pnpm --filter=./apps/desktop run dev",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "tsup": "^8.5.1",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "@nuwa-pet/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Bailin (百灵) — Electron desktop shell.",
+  "main": "./dist/main/main/index.js",
+  "scripts": {
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "dev": "node ./scripts/dev.mjs",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:preload": "tsc -p tsconfig.preload.json",
+    "build:renderer": "vite build",
+    "build": "pnpm run build:main && pnpm run build:preload && pnpm run build:renderer",
+    "start": "electron .",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "package": "electron-builder"
+  },
+  "dependencies": {
+    "@nuwa-pet/character-protocol": "workspace:*",
+    "@nuwa-pet/nuwa-prompts": "workspace:*",
+    "@nuwa-pet/sprite-runtime": "workspace:*",
+    "@nuwa-pet/starter-library": "workspace:*",
+    "better-sqlite3": "^11.3.0",
+    "electron-log": "^5.2.0",
+    "ulid": "^2.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.16.10",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "electron": "^32.1.2",
+    "electron-builder": "^25.0.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.8"
+  }
+}
