@@ -53,6 +53,7 @@ desktop.ini
 
 # Test
 coverage/
+.smoke-out/
 
 # Cursor plan / chat scratch
 .cursor/plans/scratch/

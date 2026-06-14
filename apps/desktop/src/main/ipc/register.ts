@@ -3,6 +3,8 @@ import { ulid } from "ulid";
 import {
   IPC,
   type DistillationProgressEvent,
+  type ImageGenerationConfigDTO,
+  type ImageTierName,
   type SendMessageInput
 } from "../../shared/ipc-contract.js";
 import type { LocalVault } from "../store/local-vault.js";
@@ -10,6 +12,11 @@ import type { MemoryStore } from "../runtime/memory-store.js";
 import type { CharacterRuntime } from "../runtime/character-runtime.js";
 import type { NuwaOrchestrator } from "../runtime/nuwa-orchestrator.js";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
+import {
+  DEFAULT_IMAGE_GENERATION_CONFIG,
+  type ImageGenerationAdapter,
+  type ImageGenerationConfig
+} from "../adapters/image-generation-adapter.js";
 import { findStarterById, STARTER_META } from "@nuwa-pet/starter-library";
 import {
   DistillationJobConfigSchema,
@@ -24,6 +31,7 @@ export interface IpcDeps {
   runtime: CharacterRuntime;
   orchestrator: NuwaOrchestrator;
   llm: LLMAdapter;
+  imageGen: ImageGenerationAdapter;
   getActiveCharacterId(): string | null;
   setActiveCharacterId(id: string | null): void;
   broadcast: (channel: string, payload: unknown) => void;
@@ -39,6 +47,8 @@ const SETTING_FIRST_RUN_DONE = "first_run_done";
 const SETTING_ACTIVE_CHARACTER = "active_character_id";
 const SETTING_LLM_PROVIDER = "llm_provider_json";
 const SETTING_LLM_API_KEY = "llm_api_key_enc";
+export const SETTING_IMAGE_PROVIDER = "image_provider_json";
+export const SETTING_IMAGE_API_KEY = "image_api_key_enc";
 
 interface ApprovalGate {
   promise: Promise<void>;
@@ -63,7 +73,7 @@ function makeGate(): ApprovalGate {
 }
 
 export function registerIpc(deps: IpcDeps): void {
-  const { vault, memory, runtime, orchestrator, llm, broadcast } = deps;
+  const { vault, memory, runtime, orchestrator, llm, imageGen, broadcast } = deps;
   /** 进行中的深度蒸馏 jobs（jobId → state）。 */
   const activeJobs = new Map<string, DeepJobState>();
 
@@ -103,6 +113,64 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.LlmClearKey, () => {
     vault.setSetting(SETTING_LLM_PROVIDER, "");
     vault.setSetting(SETTING_LLM_API_KEY, "");
+  });
+
+  // ===== ImageGen =====
+  ipcMain.handle(IPC.ImageGenGetConfig, () => readImageConfigForRenderer(vault));
+
+  ipcMain.handle(IPC.ImageGenSetConfig, async (_e, input: ImageGenerationConfigDTO) => {
+    try {
+      if (!input || !input.tiers) {
+        return { ok: false, error: "tiers 必填" };
+      }
+      const persisted: Omit<ImageGenerationConfig, "apiKey"> = {
+        useLLMProvider: input.useLLMProvider,
+        baseUrl: input.baseUrl,
+        tiers: input.tiers,
+        defaultTier: input.defaultTier
+      };
+      vault.setSetting(SETTING_IMAGE_PROVIDER, JSON.stringify(persisted));
+      if (input.apiKey != null && input.apiKey !== "") {
+        vault.setEncryptedString(SETTING_IMAGE_API_KEY, input.apiKey);
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  ipcMain.handle(IPC.ImageGenDetectCapability, () => imageGen.detectCapability());
+
+  ipcMain.handle(IPC.ImageGenTest, async (_e, tier?: ImageTierName) => {
+    const startedAt = Date.now();
+    const cap = imageGen.detectCapability();
+    if (!cap.ok) {
+      return { ok: false, error: cap.reason };
+    }
+    const res = await imageGen.generate({
+      prompt:
+        "A friendly chibi mascot facing forward, transparent background, cell-safe pose.",
+      tier,
+      transparentBackground: true
+    });
+    if (res.kind === "error") {
+      return {
+        ok: false,
+        latencyMs: Date.now() - startedAt,
+        error: `${res.code}: ${res.message}`
+      };
+    }
+    return {
+      ok: true,
+      latencyMs: res.durationMs,
+      tier: res.tier,
+      model: res.model,
+      estimatedCostUsd: res.estimatedCostUsd
+    };
+  });
+
+  ipcMain.handle(IPC.ImageGenClearKey, () => {
+    vault.setSetting(SETTING_IMAGE_API_KEY, "");
   });
 
   // ===== Characters =====
@@ -304,7 +372,19 @@ export function registerIpc(deps: IpcDeps): void {
           config,
           awaitApproval: (phase) => approvals.get(phase)!.promise,
           signal: abortCtl.signal,
-          runVoiceTest: true
+          runVoiceTest: true,
+          // 让 hatch-pet 的实时事件越过 generator 直接推给 UI，避免批量延迟
+          liveBroadcast: (evt) => {
+            broadcast(IPC.EventDistillationProgress, evt as DistillationProgressEvent);
+            if (evt.kind === "hatch_progress") {
+              // 同时记一条 warning 文本到 vault，作为审计；不展开成详细字段
+              try {
+                vault.appendJobWarning(jobId, `[hatch] ${evt.event.kind}`);
+              } catch {
+                // ignore
+              }
+            }
+          }
         });
 
         for await (const evt of generator) {
@@ -541,4 +621,68 @@ export function broadcastToAllWindows(channel: string, payload: unknown): void {
       // ignore
     }
   }
+}
+
+/**
+ * 从 Vault 读取生图配置；返回 DTO（不含 apiKey）。
+ * 没有任何配置时返回 DEFAULT_IMAGE_GENERATION_CONFIG（仅展示，用户必须显式保存才会落库）。
+ */
+export function readImageConfigForRenderer(
+  vault: LocalVault
+): ImageGenerationConfigDTO {
+  const raw = vault.getSetting(SETTING_IMAGE_PROVIDER);
+  if (!raw) {
+    return {
+      useLLMProvider: DEFAULT_IMAGE_GENERATION_CONFIG.useLLMProvider,
+      tiers: DEFAULT_IMAGE_GENERATION_CONFIG.tiers,
+      defaultTier: DEFAULT_IMAGE_GENERATION_CONFIG.defaultTier
+    };
+  }
+  try {
+    const parsed = JSON.parse(raw) as Omit<ImageGenerationConfig, "apiKey">;
+    return {
+      useLLMProvider: parsed.useLLMProvider,
+      baseUrl: parsed.baseUrl,
+      tiers: parsed.tiers,
+      defaultTier: parsed.defaultTier
+    };
+  } catch {
+    return {
+      useLLMProvider: DEFAULT_IMAGE_GENERATION_CONFIG.useLLMProvider,
+      tiers: DEFAULT_IMAGE_GENERATION_CONFIG.tiers,
+      defaultTier: DEFAULT_IMAGE_GENERATION_CONFIG.defaultTier
+    };
+  }
+}
+
+/**
+ * 从 Vault 读完整 ImageGenerationConfig（含 apiKey，供主进程使用）。
+ * 没有自定义配置时返回默认；apiKey 会按 useLLMProvider 决定要不要读 image_api_key_enc。
+ */
+export function readImageConfigForMain(
+  vault: LocalVault
+): ImageGenerationConfig | null {
+  const raw = vault.getSetting(SETTING_IMAGE_PROVIDER);
+  let base: Omit<ImageGenerationConfig, "apiKey">;
+  if (!raw) {
+    base = {
+      useLLMProvider: DEFAULT_IMAGE_GENERATION_CONFIG.useLLMProvider,
+      tiers: DEFAULT_IMAGE_GENERATION_CONFIG.tiers,
+      defaultTier: DEFAULT_IMAGE_GENERATION_CONFIG.defaultTier
+    };
+  } else {
+    try {
+      base = JSON.parse(raw) as Omit<ImageGenerationConfig, "apiKey">;
+    } catch {
+      return null;
+    }
+  }
+  if (base.useLLMProvider) {
+    return base;
+  }
+  const key = vault.getEncryptedString(SETTING_IMAGE_API_KEY);
+  if (!key) {
+    return base; // baseUrl 有但没 key，adapter 会自检失败
+  }
+  return { ...base, apiKey: key };
 }

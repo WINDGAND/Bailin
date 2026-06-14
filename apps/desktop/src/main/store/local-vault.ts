@@ -52,6 +52,13 @@ export class LocalVault {
     return dir;
   }
 
+  /** %APPDATA%/Bailin/characters/<charId>/pet/，存 hatch-pet 生成的 atlas / QA 资产。 */
+  getPetAssetDir(characterId: string): string {
+    const dir = join(this.rootDir, "characters", characterId, "pet");
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
   private migrate(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS settings (

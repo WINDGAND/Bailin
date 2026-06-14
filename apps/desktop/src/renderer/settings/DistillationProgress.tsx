@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  HatchPetRowState,
   QualityCheckItem,
   QualityReport,
   ResearchAgentId,
   ResearchDoc
 } from "@nuwa-pet/character-protocol";
+import { HATCH_PET_ROW_STATES } from "@nuwa-pet/character-protocol";
 import type {
   DistillationProgressEvent,
+  HatchProgressEventDTO,
   ResearchSummaryPayload,
   SynthesisSummaryPayload
 } from "../../shared/ipc-contract.js";
@@ -56,6 +59,12 @@ export function DistillationProgress({
   const [synthSummary, setSynthSummary] = useState<SynthesisSummaryPayload | null>(null);
   const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
   const [appearanceReady, setAppearanceReady] = useState(false);
+  const [hatchState, setHatchState] = useState<HatchPanelState>({
+    started: false,
+    jobs: {},
+    totalCostUsd: 0,
+    estimatedCostUsd: 0
+  });
   const [showCheckpoint, setShowCheckpoint] = useState<null | "research" | "synthesis">(null);
   const [finalState, setFinalState] = useState<
     | null
@@ -116,6 +125,9 @@ export function DistillationProgress({
           break;
         case "quality_report":
           setQualityReport(evt.report);
+          break;
+        case "hatch_progress":
+          setHatchState((prev) => reduceHatch(prev, evt.event));
           break;
         case "warning":
           setWarnings((p) => [...p, evt.message]);
@@ -226,6 +238,8 @@ export function DistillationProgress({
           <span className="body-sm">外貌已生成（深度三步：搜图 → 结构化 → 自我批评）</span>
         </div>
       ) : null}
+
+      {hatchState.started ? <HatchPanel state={hatchState} /> : null}
 
       {qualityReport ? <QualityReportCard report={qualityReport} /> : null}
 
@@ -626,6 +640,290 @@ function CheckpointDialog(props: {
       </div>
     </div>
   );
+}
+
+// ===== Hatch-pet QA 面板 =====
+
+type HatchJobStatus = "pending" | "running" | "done" | "mirrored" | "failed";
+
+interface HatchJobState {
+  jobId: string;
+  rowState: HatchPetRowState | "base";
+  status: HatchJobStatus;
+  durationMs?: number;
+  costUsd?: number;
+  reason?: string;
+  mirroredFrom?: string;
+}
+
+interface HatchPanelState {
+  started: boolean;
+  jobsCount?: number;
+  estimatedCostUsd: number;
+  totalCostUsd: number;
+  atlasOk?: boolean;
+  atlasIssues?: string[];
+  contactSheetPath?: string;
+  previewPath?: string;
+  atlasPath?: string;
+  jobs: Record<string, HatchJobState>;
+}
+
+const HATCH_LABELS: Record<HatchPetRowState | "base", string> = {
+  base: "Base 立绘",
+  idle: "idle 待机",
+  "running-right": "running-right 右走",
+  "running-left": "running-left 左走",
+  waving: "waving 招手",
+  jumping: "jumping 跳跃",
+  failed: "failed 沮丧",
+  waiting: "waiting 等待",
+  running: "running 工作",
+  review: "review 审阅"
+};
+
+function reduceHatch(
+  state: HatchPanelState,
+  evt: HatchProgressEventDTO
+): HatchPanelState {
+  switch (evt.kind) {
+    case "start": {
+      const initialJobs: Record<string, HatchJobState> = {
+        base: { jobId: "base", rowState: "base", status: "pending" }
+      };
+      for (const row of HATCH_PET_ROW_STATES) {
+        initialJobs[`row-${row}`] = {
+          jobId: `row-${row}`,
+          rowState: row,
+          status: "pending"
+        };
+      }
+      return {
+        ...state,
+        started: true,
+        jobsCount: evt.jobsCount,
+        estimatedCostUsd: evt.estimatedCostUsd,
+        jobs: initialJobs
+      };
+    }
+    case "job_start":
+      return {
+        ...state,
+        jobs: {
+          ...state.jobs,
+          [evt.jobId]: {
+            jobId: evt.jobId,
+            rowState: evt.rowState as HatchPetRowState | "base",
+            status: "running"
+          }
+        }
+      };
+    case "job_done":
+      return {
+        ...state,
+        totalCostUsd: state.totalCostUsd + (evt.costUsd ?? 0),
+        jobs: {
+          ...state.jobs,
+          [evt.jobId]: {
+            jobId: evt.jobId,
+            rowState: evt.rowState as HatchPetRowState | "base",
+            status: "done",
+            durationMs: evt.durationMs,
+            costUsd: evt.costUsd
+          }
+        }
+      };
+    case "job_failed":
+      return {
+        ...state,
+        jobs: {
+          ...state.jobs,
+          [evt.jobId]: {
+            jobId: evt.jobId,
+            rowState: evt.rowState as HatchPetRowState | "base",
+            status: "failed",
+            reason: evt.reason
+          }
+        }
+      };
+    case "job_mirrored":
+      return {
+        ...state,
+        jobs: {
+          ...state.jobs,
+          [evt.jobId]: {
+            jobId: evt.jobId,
+            rowState: (evt.jobId.replace(/^row-/, "") as HatchPetRowState) ?? "base",
+            status: "mirrored",
+            mirroredFrom: evt.from
+          }
+        }
+      };
+    case "atlas_composed":
+      return {
+        ...state,
+        atlasOk: evt.ok,
+        atlasIssues: evt.issuesPreview
+      };
+    case "qa_ready":
+      return {
+        ...state,
+        contactSheetPath: evt.contactSheetPath,
+        previewPath: evt.previewPath,
+        atlasPath: evt.atlasPath
+      };
+    default:
+      return state;
+  }
+}
+
+function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
+  const total = state.jobsCount ?? 10;
+  const done = Object.values(state.jobs).filter(
+    (j) => j.status === "done" || j.status === "mirrored"
+  ).length;
+  const failed = Object.values(state.jobs).filter((j) => j.status === "failed").length;
+  const remaining = Math.max(0, total - done - failed);
+
+  const placeholder = (jobId: string, rowState: HatchPetRowState | "base"): HatchJobState => ({
+    jobId,
+    rowState,
+    status: "pending" as const
+  });
+  const orderedJobs: HatchJobState[] = [
+    state.jobs.base ?? placeholder("base", "base"),
+    ...HATCH_PET_ROW_STATES.map(
+      (row) => state.jobs[`row-${row}`] ?? placeholder(`row-${row}`, row)
+    )
+  ];
+
+  return (
+    <div className="card fade-in" style={{ padding: 16, marginBottom: 16 }}>
+      <div className="row row--between" style={{ marginBottom: 10 }}>
+        <div className="eyebrow">Phase 3 · Hatch-pet 精灵图集</div>
+        <div className="body-sm" style={{ color: "var(--ink-faint)" }}>
+          完成 {done}/{total}
+          {failed > 0 ? ` · 失败 ${failed}` : ""}
+          {remaining > 0 ? ` · 待生成 ${remaining}` : ""}
+        </div>
+      </div>
+      <div
+        className="body-sm"
+        style={{ color: "var(--ink-faint)", marginBottom: 10 }}
+      >
+        预估成本 ${state.estimatedCostUsd.toFixed(2)} · 当前累计 $
+        {state.totalCostUsd.toFixed(3)}
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: 8
+        }}
+      >
+        {orderedJobs.map((job) => (
+          <HatchJobCard key={job.jobId} job={job} />
+        ))}
+      </div>
+      {state.atlasOk != null ? (
+        <div
+          className="body-sm"
+          style={{
+            marginTop: 10,
+            color: state.atlasOk ? "var(--emerald)" : "var(--amber)"
+          }}
+        >
+          {state.atlasOk
+            ? "atlas 已拼装 ✓"
+            : `atlas 已拼装但有 ${state.atlasIssues?.length ?? 0} 项警告`}
+          {state.atlasIssues && state.atlasIssues.length > 0 ? (
+            <ul style={{ marginTop: 4, fontFamily: "var(--font-mono)" }}>
+              {state.atlasIssues.slice(0, 4).map((issue, i) => (
+                <li key={i}>{issue}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {state.contactSheetPath ? (
+        <div className="body-sm" style={{ marginTop: 10 }}>
+          QA 资产已落盘：
+          <code style={{ fontSize: 11 }}>{state.atlasPath}</code>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function HatchJobCard({ job }: { job: HatchJobState }): JSX.Element {
+  const color = (() => {
+    switch (job.status) {
+      case "pending":
+        return "var(--ink-faint)";
+      case "running":
+        return "var(--amber)";
+      case "done":
+        return "var(--emerald)";
+      case "mirrored":
+        return "var(--emerald)";
+      case "failed":
+        return "var(--magenta)";
+    }
+  })();
+  return (
+    <div
+      className="card"
+      style={{
+        padding: 10,
+        border: `1px solid ${
+          job.status === "running" ? "var(--amber)" : "var(--grid-strong)"
+        }`,
+        background:
+          job.status === "running" ? "rgba(217,154,58,0.08)" : "var(--paper)"
+      }}
+    >
+      <div className="row row--between" style={{ marginBottom: 4 }}>
+        <strong style={{ color, fontSize: 12 }}>
+          {HATCH_LABELS[job.rowState] ?? job.jobId}
+        </strong>
+        <span style={{ color, fontSize: 11 }} className="row gap-2">
+          {job.status === "running" ? <Spinner /> : null}
+          {labelForHatchStatus(job.status)}
+        </span>
+      </div>
+      <div
+        className="body-sm"
+        style={{ color: "var(--ink-faint)", minHeight: 14, fontSize: 11 }}
+      >
+        {job.status === "running"
+          ? "正在生成…"
+          : job.status === "done"
+            ? `${((job.durationMs ?? 0) / 1000).toFixed(1)}s${
+                job.costUsd != null ? ` · $${job.costUsd.toFixed(3)}` : ""
+              }`
+            : job.status === "mirrored"
+              ? `镜像自 ${job.mirroredFrom ?? "—"}`
+              : job.status === "failed"
+                ? job.reason ?? "失败"
+                : "排队中"}
+      </div>
+    </div>
+  );
+}
+
+function labelForHatchStatus(s: HatchJobStatus): string {
+  switch (s) {
+    case "pending":
+      return "排队";
+    case "running":
+      return "绘制中";
+    case "done":
+      return "完成";
+    case "mirrored":
+      return "镜像";
+    case "failed":
+      return "失败";
+  }
 }
 
 // 兼容旧导出

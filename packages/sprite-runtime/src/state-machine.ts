@@ -11,8 +11,34 @@ export interface StateMachineRuntime {
   setArrived(arrived: boolean): void;
 }
 
-export function createStateMachine(dsl: SpriteDSL): StateMachineRuntime {
-  let state: SpriteState = dsl.stateMachine.initial;
+/**
+ * createStateMachine 的最小输入契约：只需要状态机本体。
+ * DSL / layered-css / atlas 三种 SpriteProgram 都满足，因此各自渲染层
+ * 可以传同一个状态机给这个 runtime，而不用拼出完整的 SpriteDSL。
+ */
+export interface StateMachineHost {
+  stateMachine: {
+    initial: SpriteState;
+    states: Partial<
+      Record<
+        SpriteState,
+        {
+          transitions: Array<{
+            on: SpriteEvent;
+            to: SpriteState;
+            guard?: string;
+          }>;
+        }
+      >
+    >;
+  };
+}
+
+export function createStateMachine(
+  host: StateMachineHost | SpriteDSL
+): StateMachineRuntime {
+  const sm = host.stateMachine;
+  let state: SpriteState = sm.initial;
   let tick = 0;
   let idleMs = 0;
   let frameDone = false;
@@ -31,7 +57,7 @@ export function createStateMachine(dsl: SpriteDSL): StateMachineRuntime {
   }
 
   function send(event: SpriteEvent): void {
-    const def = dsl.stateMachine.states[state];
+    const def = sm.states[state];
     if (!def) return;
     const ctx = buildCtx();
     for (const t of def.transitions) {

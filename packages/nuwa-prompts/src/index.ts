@@ -2,6 +2,7 @@ export * from "./templates/appearance-research.js";
 export * from "./templates/character-creation.js";
 export * from "./templates/sprite-from-appearance.js";
 export * from "./templates/layered-pet-rig.js";
+export * from "./templates/hatch-pet.js";
 export * from "./templates/system-prompt.js";
 export * from "./templates/profile-extraction.js";
 export * from "./templates/research-agents.js";

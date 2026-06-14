@@ -18,6 +18,7 @@
   "dependencies": {
     "@nuwa-pet/character-protocol": "workspace:*",
     "@nuwa-pet/nuwa-prompts": "workspace:*",
+    "@nuwa-pet/pet-atlas-tools": "workspace:*",
     "@nuwa-pet/sprite-runtime": "workspace:*",
     "@nuwa-pet/starter-library": "workspace:*",
     "better-sqlite3": "^11.3.0",

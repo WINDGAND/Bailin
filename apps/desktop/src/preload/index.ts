@@ -13,6 +13,13 @@ const api = {
     testConnection: () => ipcRenderer.invoke(IPC.LlmTestConnection),
     clearKey: () => ipcRenderer.invoke(IPC.LlmClearKey)
   },
+  imageGen: {
+    getConfig: () => ipcRenderer.invoke(IPC.ImageGenGetConfig),
+    setConfig: (input: unknown) => ipcRenderer.invoke(IPC.ImageGenSetConfig, input),
+    detectCapability: () => ipcRenderer.invoke(IPC.ImageGenDetectCapability),
+    test: (tier?: string) => ipcRenderer.invoke(IPC.ImageGenTest, tier),
+    clearKey: () => ipcRenderer.invoke(IPC.ImageGenClearKey)
+  },
   characters: {
     list: () => ipcRenderer.invoke(IPC.CharactersList),
     get: (id: string) => ipcRenderer.invoke(IPC.CharactersGet, id),

@@ -23,11 +23,17 @@ process.on("unhandledRejection", (reason) => {
 import { LocalVault } from "./store/local-vault.js";
 import { applyDevSetup } from "./dev-setup.js";
 import { LLMAdapter } from "./adapters/llm-adapter.js";
+import { ImageGenerationAdapter } from "./adapters/image-generation-adapter.js";
 import { SafetyPolicy } from "./safety/safety-policy.js";
 import { MemoryStore } from "./runtime/memory-store.js";
 import { CharacterRuntime } from "./runtime/character-runtime.js";
 import { NuwaOrchestrator } from "./runtime/nuwa-orchestrator.js";
-import { broadcastToAllWindows, registerIpc, SETTING_PET_POS } from "./ipc/register.js";
+import {
+  broadcastToAllWindows,
+  readImageConfigForMain,
+  registerIpc,
+  SETTING_PET_POS
+} from "./ipc/register.js";
 import { createPetWindow } from "./windows/pet-window.js";
 import { createChatWindow, positionChatNear } from "./windows/chat-window.js";
 import { createSettingsWindow } from "./windows/settings-window.js";
@@ -126,7 +132,21 @@ void app.whenReady().then(() => {
   const safety = new SafetyPolicy();
   const memory = new MemoryStore(vault);
   const runtime = new CharacterRuntime(vault, memory, llm, safety);
-  const orchestrator = new NuwaOrchestrator(llm);
+  const imageGen = new ImageGenerationAdapter(
+    () => readImageConfigForMain(vault),
+    () => {
+      const json = vault.getSetting("llm_provider_json");
+      const key = vault.getEncryptedString("llm_api_key_enc");
+      if (!json || !key) return null;
+      try {
+        const rest = JSON.parse(json) as Omit<LLMProviderConfig, "apiKey">;
+        return { ...rest, apiKey: key } as LLMProviderConfig;
+      } catch {
+        return null;
+      }
+    }
+  );
+  const orchestrator = new NuwaOrchestrator(llm, { imageGen, vault });
 
   activeCharacterId = vault.getSetting("active_character_id") || null;
 
@@ -136,6 +156,7 @@ void app.whenReady().then(() => {
     runtime,
     orchestrator,
     llm,
+    imageGen,
     getActiveCharacterId: () => activeCharacterId,
     setActiveCharacterId: (id) => {
       activeCharacterId = id;

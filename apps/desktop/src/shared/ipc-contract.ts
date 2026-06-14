@@ -28,6 +28,30 @@ export interface BailinApi {
     clearKey(): Promise<void>;
   };
 
+  // ===== 生图提供商（hatch-pet 主路径专用） =====
+  imageGen: {
+    /** 当前生图配置（不含 apiKey；apiKey 由 vault DPAPI 加密单独存）。 */
+    getConfig(): Promise<ImageGenerationConfigDTO | null>;
+    /** 写入生图配置；apiKey 单独走加密存储。 */
+    setConfig(input: ImageGenerationConfigDTO): Promise<{ ok: boolean; error?: string }>;
+    /** 静态检测：当前 provider 是否就绪。 */
+    detectCapability(): Promise<{ ok: boolean; reason: string }>;
+    /**
+     * 实测：用 economy tier 生成一张小图，验证 baseUrl / apiKey / model 是否真能通。
+     * 不返回图片本体，只返回耗时和成本估算。
+     */
+    test(tier?: ImageTierName): Promise<{
+      ok: boolean;
+      latencyMs?: number;
+      tier?: ImageTierName;
+      model?: string;
+      estimatedCostUsd?: number;
+      error?: string;
+    }>;
+    /** 清空 image 单独的 apiKey；不影响 useLLMProvider=true 时的 LLM Key。 */
+    clearKey(): Promise<void>;
+  };
+
   // ===== 角色仓库 =====
   characters: {
     list(): Promise<CharacterListItem[]>;
@@ -129,6 +153,7 @@ export type DistillationProgressEvent =
   | { kind: "appearance_ready"; jobId: string; appearance: unknown }
   | { kind: "quality_report"; jobId: string; report: QualityReport }
   | { kind: "warning"; jobId: string; message: string }
+  | { kind: "hatch_progress"; jobId: string; event: HatchProgressEventDTO }
   | {
       kind: "done";
       jobId: string;
@@ -138,6 +163,45 @@ export type DistillationProgressEvent =
     }
   | { kind: "failed"; jobId: string; reason: string; warnings: string[] }
   | { kind: "cancelled"; jobId: string };
+
+/**
+ * Hatch-pet 进度 DTO（主进程到渲染层）。
+ * 与 HatchPetPipeline 的内部事件一致，但用扁平字段避免共享类型循环依赖。
+ */
+export type HatchProgressEventDTO =
+  | {
+      kind: "start";
+      runId: string;
+      jobsCount: number;
+      estimatedCostUsd: number;
+    }
+  | { kind: "job_start"; jobId: string; rowState: string }
+  | {
+      kind: "job_done";
+      jobId: string;
+      rowState: string;
+      durationMs: number;
+      costUsd?: number;
+    }
+  | {
+      kind: "job_failed";
+      jobId: string;
+      rowState: string;
+      reason: string;
+    }
+  | { kind: "job_mirrored"; jobId: string; from: string }
+  | {
+      kind: "atlas_composed";
+      ok: boolean;
+      issuesCount: number;
+      issuesPreview: string[];
+    }
+  | {
+      kind: "qa_ready";
+      contactSheetPath: string;
+      previewPath?: string;
+      atlasPath: string;
+    };
 
 export interface ResearchSummaryPayload {
   docs: Array<
@@ -167,6 +231,29 @@ export interface LLMProviderConfig {
   model: string;
   defaultTemperature?: number;
   defaultMaxTokens?: number;
+}
+
+export type ImageTierName = "economy" | "standard" | "premium";
+
+export interface ImageTierConfigDTO {
+  model: string;
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  quality?: "low" | "medium" | "high" | "standard" | "hd";
+  estimatedCostUsd?: number;
+}
+
+/**
+ * 写入 / 读取生图配置时的 DTO；apiKey 单独走 setConfig 的可选字段。
+ * - useLLMProvider=true：忽略 baseUrl / apiKey，复用 LLM 提供商
+ * - useLLMProvider=false：必须传 baseUrl，第一次必须传 apiKey
+ */
+export interface ImageGenerationConfigDTO {
+  useLLMProvider: boolean;
+  baseUrl?: string;
+  /** 仅在 setConfig 时使用；getConfig 永远返回 undefined（不回传密钥）。 */
+  apiKey?: string;
+  tiers: Record<ImageTierName, ImageTierConfigDTO>;
+  defaultTier: ImageTierName;
 }
 
 export interface CharacterListItem {
@@ -246,6 +333,12 @@ export const IPC = {
   LlmGetProvider: "nuwa.llm.getProvider",
   LlmTestConnection: "nuwa.llm.testConnection",
   LlmClearKey: "nuwa.llm.clearKey",
+
+  ImageGenGetConfig: "nuwa.imageGen.getConfig",
+  ImageGenSetConfig: "nuwa.imageGen.setConfig",
+  ImageGenDetectCapability: "nuwa.imageGen.detectCapability",
+  ImageGenTest: "nuwa.imageGen.test",
+  ImageGenClearKey: "nuwa.imageGen.clearKey",
 
   CharactersList: "nuwa.characters.list",
   CharactersGet: "nuwa.characters.get",

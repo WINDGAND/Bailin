@@ -34,6 +34,13 @@ import type { LLMAdapter, ChatContentPart } from "../adapters/llm-adapter.js";
 import { runResearchAgents } from "./research-pipeline.js";
 import { runQualityCheck } from "./quality-check.js";
 import { buildLayeredPetFromAppearance } from "./layered-pet-builder.js";
+import {
+  HatchPetPipeline,
+  type HatchProgressEvent
+} from "./hatch-pet-pipeline.js";
+import type { ImageGenerationAdapter } from "../adapters/image-generation-adapter.js";
+import type { LocalVault } from "../store/local-vault.js";
+import type { HatchProgressEventDTO } from "../../shared/ipc-contract.js";
 
 /** 一张供 vision pipeline 使用的参考图。 */
 export interface ReferenceImageInput {
@@ -86,6 +93,7 @@ export type DeepProgressEvent =
   | { kind: "appearance_ready"; jobId: string; appearance: AppearanceSpec }
   | { kind: "quality_report"; jobId: string; report: QualityReport }
   | { kind: "warning"; jobId: string; message: string }
+  | { kind: "hatch_progress"; jobId: string; event: HatchProgressEventDTO }
   | { kind: "done"; jobId: string; bundle: CharacterBundle; isSkeleton: boolean; warnings: string[] }
   | { kind: "failed"; jobId: string; reason: string; warnings: string[] }
   | { kind: "cancelled"; jobId: string };
@@ -117,11 +125,35 @@ export interface DeepOrchestrateInput {
   awaitApproval: (phase: "research" | "synthesis") => Promise<void>;
   /** 是否启用风格测试（额外 LLM 调用），默认 true。 */
   runVoiceTest?: boolean;
+  /**
+   * 可选「实时事件回调」：用于 hatch-pet 这种非 generator 的子流程把进度
+   * 即刻推到前端，而不必等 runVisualStep 整体完成再批量 yield。
+   * register.ts 会把它接成 broadcast(IPC.EventDistillationProgress, evt)。
+   */
+  liveBroadcast?: (evt: DeepProgressEvent) => void;
   signal?: AbortSignal;
 }
 
 export class NuwaOrchestrator {
-  constructor(private llm: LLMAdapter) {}
+  private hatchPipeline: HatchPetPipeline | null;
+
+  constructor(
+    private llm: LLMAdapter,
+    options?: {
+      imageGen?: ImageGenerationAdapter;
+      vault?: LocalVault;
+    }
+  ) {
+    this.hatchPipeline =
+      options?.imageGen && options?.vault
+        ? new HatchPetPipeline({ imageGen: options.imageGen, vault: options.vault })
+        : null;
+  }
+
+  /** 是否可以走 hatch-pet 主路径；UI 可据此切换提示。 */
+  hasHatchCapability(): boolean {
+    return this.hatchPipeline !== null;
+  }
 
   /**
    * 三步串行：
@@ -143,9 +175,10 @@ export class NuwaOrchestrator {
     // 否则退到纯文本 prompt（旧 runAppearanceStep）。
     const appearanceResult = await this.runAppearanceForQuick(input, warnings);
 
-    // ===== Step 3: CSS 分层桌宠（依赖 appearance + 参考图）=====
+    // ===== Step 3: 形象（atlas 优先，CSS 兜底）=====
     const spriteResult = appearanceResult
       ? await this.runVisualStep(
+          id,
           input.characterName,
           input.sourceType,
           appearanceResult,
@@ -225,6 +258,7 @@ export class NuwaOrchestrator {
       notes: r.notes
     }));
     const sprite = await this.runVisualStep(
+      input.card.id,
       input.card.meta.name,
       input.card.meta.sourceType,
       appearance,
@@ -456,16 +490,25 @@ export class NuwaOrchestrator {
       yield { kind: "appearance_ready", jobId, appearance };
     }
 
-    // ===== Phase 3c: CSS 分层桌宠 =====
-    yield phaseEvent(jobId, "building_sprite", 80, "把外貌转译为 CSS 分层桌宠…");
+    // ===== Phase 3c: 形象（atlas 优先，CSS 兜底）=====
+    yield phaseEvent(jobId, "building_sprite", 80, "正在画桌宠的 hatch-pet 精灵图…");
     const sprite =
       appearance != null
         ? await this.runVisualStep(
+            cardId,
             config.characterName,
             config.sourceType,
             appearance,
             refs,
-            warnings
+            warnings,
+            (evt) => {
+              // 实时把 hatch 事件推给 UI；避免等 5~10 分钟才看到第一行进度
+              input.liveBroadcast?.({
+                kind: "hatch_progress",
+                jobId,
+                event: toHatchDTO(evt)
+              });
+            }
           )
         : null;
     const finalSprite: SpriteProgram = sprite ?? skeleton.sprite;
@@ -1093,6 +1136,7 @@ export class NuwaOrchestrator {
       return { ok: false, error: "外貌生成失败", warnings };
     }
     const sprite = await this.runVisualStep(
+      input.card.id,
       input.card.meta.name,
       input.card.meta.sourceType,
       appearance,
@@ -1141,16 +1185,53 @@ export class NuwaOrchestrator {
   }
 
   /**
-   * 方案 B：参考图分层 + CSS 骨骼桌宠生成。
-   * 有参考图时 vision 提取 rig（眼位/边界）；无图时从 AppearanceSpec 生成 CSS 插画层。
+   * 视觉步骤：默认走 hatch-pet 主路径（如果已装配 ImageGenerationAdapter），
+   * 失败或未就绪时回退到 v0.1 的 CSS 分层桌宠。
+   *
+   * @param characterId 当前角色 id；hatch-pet 需要它来把 atlas / QA 资产落到 vault/characters/<id>/pet/
+   * @param onHatchProgress 可选；当 orchestrator 处于深度蒸馏流程时，可借此把 hatch 事件转发到 UI
    */
   private async runVisualStep(
+    characterId: string,
     characterName: string,
     sourceType: "public-figure" | "fictional" | "original",
     appearance: AppearanceSpec,
     referenceImages: ReferenceImageInput[],
-    warnings: string[]
+    warnings: string[],
+    onHatchProgress?: (evt: HatchProgressEvent) => void
   ): Promise<SpriteProgram | null> {
+    // 优先尝试 hatch-pet 主路径
+    if (this.hatchPipeline) {
+      try {
+        const result = await this.hatchPipeline.run({
+          characterId,
+          characterName,
+          appearance,
+          userReferences: referenceImages,
+          onProgress: onHatchProgress
+        });
+        for (const w of result.warnings) warnings.push(`[step3·hatch] ${w}`);
+        if (result.ok && result.program) {
+          const parsed = parseSprite(result.program);
+          if (parsed.ok && parsed.data) return parsed.data;
+          warnings.push(
+            `[step3·hatch] 生成的 atlas 未通过 schema：${(parsed.errors ?? [])
+              .map((e) => `${e.path}=${e.message}`)
+              .slice(0, 3)
+              .join(" | ")}`
+          );
+        } else if (result.errors.length > 0) {
+          warnings.push(`[step3·hatch] 失败：${result.errors.join(" | ")}`);
+        }
+        // hatch-pet 没成功 → fall through 到 layered-css fallback
+      } catch (e) {
+        warnings.push(
+          `[step3·hatch] 异常：${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    }
+
+    // Fallback：v0.1 CSS 分层
     try {
       let rigHints: LayeredRigHints | null = null;
       const vis = this.llm.detectVisionCapability();
@@ -1303,6 +1384,21 @@ function mergeSpecPatches(
     cur[path[path.length - 1]!] = val;
   }
   return out;
+}
+
+function toHatchDTO(evt: HatchProgressEvent): HatchProgressEventDTO {
+  switch (evt.kind) {
+    case "atlas_composed":
+      return {
+        kind: "atlas_composed",
+        ok: evt.report.ok,
+        issuesCount: evt.report.issues.length,
+        issuesPreview: evt.report.issues.slice(0, 4)
+      };
+    default:
+      // 其余事件结构一致，直接强转
+      return evt as unknown as HatchProgressEventDTO;
+  }
 }
 
 function extractJSON(raw: string): unknown | null {
