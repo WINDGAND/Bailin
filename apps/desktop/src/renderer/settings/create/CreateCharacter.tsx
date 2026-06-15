@@ -434,7 +434,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
           >
             <StatusDot kind={vision.vision ? "ok" : "warn"} />
             <span className="body-sm" style={{ flex: 1 }}>
-              视觉能力：{vision.vision ? "已识别为支持" : "未识别为支持"} · {vision.reason}
+              视觉读图：{vision.vision ? "已识别为支持" : "未识别为支持"} · {vision.reason}
             </span>
             {visionProbe ? (
               <span

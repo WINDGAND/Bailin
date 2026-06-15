@@ -244,7 +244,14 @@ export function CharacterLibrary({
           + 造一个新角色
         </button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 320px) 1fr", gap: 22 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 320px) 1fr",
+          gap: 22,
+          alignItems: "start"
+        }}
+      >
         {/* 列表 */}
         <div className="plain-list">
           {items === null ? (

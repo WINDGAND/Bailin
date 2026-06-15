@@ -89,8 +89,13 @@ export interface BailinApi {
     listStarters(): Promise<StarterMetaDto[]>;
     /** 探测当前 provider 是否支持 web_search（用于 UI 决定是否显示深度版）。 */
     detectCapabilities(): Promise<{ webSearch: boolean; reason: string }>;
-    /** 静态检查：当前 provider/model 是否声明支持 vision。 */
-    detectVisionCapability(): Promise<{ vision: boolean; reason: string }>;
+    /** 静态检查：读图模型（visionModel）是否声明支持 vision，与主模型分离。 */
+    detectVisionCapability(): Promise<{
+      vision: boolean;
+      reason: string;
+      visionModel: string;
+      mainModel: string;
+    }>;
     /** 实测：发一张 1x1 透明 PNG，验证代理 / 模型是否真能吃图。 */
     probeVision(): Promise<{ ok: boolean; latencyMs?: number; reason?: string }>;
     /** 实测：发一个最小 search ping，看代理是否真返回 annotations。 */

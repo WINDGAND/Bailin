@@ -1140,12 +1140,16 @@ body {
 
 .plain-list {
   display: grid;
+  align-content: start;
+  align-self: start;
+  width: 100%;
   border-top: 1px solid var(--grid-strong);
 }
 
 .plain-list__item {
   position: relative;
   width: 100%;
+  align-self: start;
   text-align: left;
   cursor: pointer;
   padding: 14px 14px 14px 16px;

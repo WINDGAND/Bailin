@@ -12,6 +12,7 @@ import type { MemoryStore } from "../runtime/memory-store.js";
 import type { CharacterRuntime } from "../runtime/character-runtime.js";
 import type { NuwaOrchestrator } from "../orchestration/nuwa-orchestrator.js";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
+import { DEFAULT_VISION_MODEL } from "../adapters/llm-adapter.js";
 import {
   DEFAULT_IMAGE_GENERATION_CONFIG,
   type ImageGenerationAdapter,
@@ -101,8 +102,12 @@ export function registerIpc(deps: IpcDeps): void {
     const key = vault.getEncryptedString(SETTING_LLM_API_KEY);
     if (!json || !key) return null;
     try {
-      const rest = JSON.parse(json);
-      return { ...rest, apiKey: key };
+      const rest = JSON.parse(json) as { visionModel?: string; [k: string]: unknown };
+      return {
+        ...rest,
+        apiKey: key,
+        visionModel: rest.visionModel?.trim() || DEFAULT_VISION_MODEL
+      };
     } catch {
       return null;
     }

@@ -60,7 +60,12 @@ interface NuwaWindow {
       getActive(): Promise<CharacterBundle | null>;
       listStarters(): Promise<Array<{ id: string; name: string; sourceName: string; track: "utility" | "companion"; blurb: string }>>;
       detectCapabilities(): Promise<{ webSearch: boolean; reason: string }>;
-      detectVisionCapability(): Promise<{ vision: boolean; reason: string }>;
+      detectVisionCapability(): Promise<{
+        vision: boolean;
+        reason: string;
+        visionModel: string;
+        mainModel: string;
+      }>;
       probeVision(): Promise<{ ok: boolean; latencyMs?: number; reason?: string }>;
       probeWebSearch(): Promise<{
         ok: boolean;
@@ -183,7 +188,12 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
         }));
       },
       detectCapabilities: async () => ({ webSearch: false, reason: "stub 环境" }),
-      detectVisionCapability: async () => ({ vision: false, reason: "stub 环境" }),
+      detectVisionCapability: async () => ({
+        vision: false,
+        reason: "stub 环境",
+        visionModel: "",
+        mainModel: ""
+      }),
       probeVision: async () => ({ ok: false, reason: "stub 环境" }),
       probeWebSearch: async () => ({ ok: false, realWebSearch: false, citations: 0 })
     },

@@ -137,6 +137,13 @@ function matchesVisionModel(model: string): boolean {
   return VISION_MODEL_KEYWORDS.some((k) => lower.includes(k));
 }
 
+function isSearchRelayBaseUrl(baseUrl: string): boolean {
+  return (
+    /(^|\.)openai\.(com|azure\.com)/.test(baseUrl) ||
+    /ohmygpt\.com|opapi\.win|ohmycdn\.com|hash070\.com/.test(baseUrl)
+  );
+}
+
 /**
  * 极简 LLM 适配器。
  *
@@ -166,27 +173,25 @@ export class LLMAdapter {
     const p = this.provider();
     if (!p) return { webSearch: false, reason: "未配置 LLM 提供商" };
     const model = (modelOverride ?? p.model ?? "").toLowerCase();
-    if (model.includes("deepseek")) {
-      return {
-        webSearch: false,
-        reason:
-          "DeepSeek 系列（含 V4 Flash）不支持 OpenAI search-preview 式内置联网；深度蒸馏将使用模型训练知识。需要联网请换 gpt-*-search-preview 或 Claude web_search 模型。"
-      };
-    }
+
     if (p.kind === "openai-compatible") {
-      // 当 model 已明确是 search 系列：直接 OK
       if (matchesSearchModel(model)) {
         return { webSearch: true, reason: `${model} 自带联网（chat/completions + web_search_options）` };
       }
-      // 当 model 是普通模型但 provider 是 OhMyGPT / OpenAI 系：UI 仍然可以提供「深度版」入口，
-      // 因为我们会在调研阶段切到 search-preview。
-      const allowsSearchModels =
-        /(^|\.)openai\.(com|azure\.com)/.test(p.baseUrl) ||
-        /ohmygpt\.com|opapi\.win|ohmycdn\.com|hash070\.com/.test(p.baseUrl);
-      if (allowsSearchModels) {
+      if (isSearchRelayBaseUrl(p.baseUrl)) {
+        const mainNote = model.includes("deepseek")
+          ? `主模型 ${model} 无内置联网，`
+          : "";
         return {
           webSearch: true,
-          reason: `${p.baseUrl} 支持 search-preview 系列；调研阶段会切到 gpt-4o-mini-search-preview`
+          reason: `${mainNote}${p.baseUrl} 支持 search-preview 系列；调研阶段会切到 gpt-4o-mini-search-preview`
+        };
+      }
+      if (model.includes("deepseek")) {
+        return {
+          webSearch: false,
+          reason:
+            "DeepSeek 直连不支持 OpenAI search-preview 式内置联网；深度蒸馏将使用模型训练知识。需要联网请换 OhMyGPT 等中转，或把 provider 模型改为 gpt-*-search-preview。"
         };
       }
       return {
@@ -209,20 +214,45 @@ export class LLMAdapter {
    * 静态检测当前 provider + model 是否声明支持视觉输入。
    * UI 用它决定是否允许用户上传参考图、是否在「真实视觉测试」按钮前显示禁用态。
    */
-  detectVisionCapability(modelOverride?: string): { vision: boolean; reason: string } {
+  detectVisionCapability(modelOverride?: string): {
+    vision: boolean;
+    reason: string;
+    visionModel: string;
+    mainModel: string;
+  } {
     const p = this.provider();
-    if (!p) return { vision: false, reason: "未配置 LLM 提供商" };
-    const model = this.getVisionModel(modelOverride).toLowerCase();
-    if (!model) return { vision: false, reason: "未配置视觉模型" };
+    if (!p) {
+      return {
+        vision: false,
+        reason: "未配置 LLM 提供商",
+        visionModel: "",
+        mainModel: ""
+      };
+    }
+    const visionModel = this.getVisionModel(modelOverride);
+    const model = visionModel.toLowerCase();
+    const mainModel = p.model ?? "";
+    if (!model) {
+      return {
+        vision: false,
+        reason: "未配置视觉模型",
+        visionModel,
+        mainModel
+      };
+    }
     if (matchesVisionModel(model)) {
       return {
         vision: true,
-        reason: `${model} 为参考图读图专用模型（主模型 ${p.model} 可仍为纯文本）`
+        reason: `读图模型 ${visionModel}（主模型 ${mainModel} 仅用于文本）`,
+        visionModel,
+        mainModel
       };
     }
     return {
       vision: false,
-      reason: `${model} 不在已知 vision 白名单（doubao-seed / gpt-4o / claude-3+ 等）`
+      reason: `读图模型 ${visionModel} 不在已知 vision 白名单（doubao-seed / gpt-4o / claude-3+ 等）`,
+      visionModel,
+      mainModel
     };
   }
 
