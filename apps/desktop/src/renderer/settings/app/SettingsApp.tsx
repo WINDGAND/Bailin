@@ -12,15 +12,14 @@ type Tab = "library" | "create" | "memory" | "key";
 interface TabDef {
   id: Tab;
   label: string;
-  combo: string;
   icon: (props: { size?: number }) => JSX.Element;
 }
 
 const TABS: TabDef[] = [
-  { id: "library", label: "角色仓库", combo: "1", icon: LibraryIcon },
-  { id: "create", label: "造一个角色", combo: "2", icon: ForgeIcon },
-  { id: "memory", label: "记忆 / 用户画像", combo: "3", icon: MemoryIcon },
-  { id: "key", label: "模型与 API Key", combo: "4", icon: KeyIcon }
+  { id: "library", label: "角色仓库", icon: LibraryIcon },
+  { id: "create", label: "造一个角色", icon: ForgeIcon },
+  { id: "memory", label: "记忆 / 用户画像", icon: MemoryIcon },
+  { id: "key", label: "模型与 API Key", icon: KeyIcon }
 ];
 
 export function SettingsApp(): JSX.Element {
@@ -110,7 +109,6 @@ export function SettingsApp(): JSX.Element {
             >
               <t.icon size={17} />
               <span>{t.label}</span>
-              <span className="kbd">{t.combo}</span>
             </button>
           ))}
         </nav>

@@ -237,7 +237,7 @@ export function CharacterLibrary({
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 320px) 1fr", gap: 22 }}>
         {/* 列表 */}
-        <div className="stack">
+        <div className="plain-list">
           {items === null ? (
             <>
               {[0, 1, 2].map((i) => (
@@ -255,13 +255,12 @@ export function CharacterLibrary({
             items.map((c, i) => (
               <button
                 key={c.id}
-                className="card card--interactive fade-in-up"
+                className={
+                  selectedId === c.id
+                    ? "plain-list__item is-selected fade-in-up"
+                    : "plain-list__item fade-in-up"
+                }
                 style={{
-                  textAlign: "left",
-                  cursor: "pointer",
-                  padding: 12,
-                  background: selectedId === c.id ? "var(--paper-deep)" : "var(--paper)",
-                  borderColor: c.isActive ? "var(--magenta)" : "var(--grid-strong)",
                   display: "flex",
                   gap: 12,
                   alignItems: "center",
@@ -305,9 +304,6 @@ export function CharacterLibrary({
                     >
                       {c.name}
                     </span>
-                    <span className={`badge badge--${c.track}`}>
-                      {c.track === "utility" ? "实用" : "陪伴"}
-                    </span>
                   </div>
                   <div className="row row--between gap-2" style={{ marginTop: 4 }}>
                     <span
@@ -322,12 +318,11 @@ export function CharacterLibrary({
                     >
                       {c.sourceName ?? "—"}
                     </span>
-                    <div className="row gap-1" style={{ flexShrink: 0 }}>
-                      {c.isSkeleton ? (
-                        <span className="badge badge--skeleton">SKELETON</span>
-                      ) : null}
-                      {c.isActive ? <span className="badge badge--active">ACTIVE</span> : null}
-                    </div>
+                    {c.isActive ? (
+                      <span className="body-sm" style={{ color: "var(--magenta)", flexShrink: 0 }}>
+                        当前
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </button>
@@ -340,17 +335,12 @@ export function CharacterLibrary({
             <EmptyDetail />
           ) : (
             <div className="stack stack--lg fade-in">
-              <div className="row gap-3 row--start-top">
+          <div className="row gap-3 row--start-top">
                 <PetPreview program={selected.sprite} width={88} height={108} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="eyebrow">
-                    {selected.card.meta.track === "utility"
-                      ? "utility · 思维顾问"
-                      : "companion · 桌面陪伴"}
-                  </div>
                   <div
                     className="display display--page"
-                    style={{ fontSize: 26, lineHeight: 1.1, marginTop: 4 }}
+                    style={{ fontSize: 26, lineHeight: 1.1 }}
                   >
                     {selected.card.meta.name}
                   </div>

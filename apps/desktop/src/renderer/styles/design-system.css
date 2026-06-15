@@ -1053,7 +1053,7 @@ body {
 
 .settings-nav__item {
   display: grid;
-  grid-template-columns: 20px 1fr auto;
+  grid-template-columns: 20px 1fr;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -1136,6 +1136,34 @@ body {
   color: var(--ink-soft);
   font-size: 12.5px;
   border-top: 1px solid var(--grid);
+}
+
+.plain-list {
+  display: grid;
+  border-top: 1px solid var(--grid-strong);
+}
+
+.plain-list__item {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  padding: 14px 14px 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--grid);
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.plain-list__item:hover {
+  background: rgba(31, 58, 58, 0.035);
+}
+
+.plain-list__item.is-selected {
+  background: rgba(178, 24, 88, 0.055);
+  border-left-color: var(--magenta);
 }
 
 .segmented {
