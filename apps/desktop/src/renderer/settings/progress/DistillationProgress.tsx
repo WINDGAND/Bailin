@@ -37,6 +37,14 @@ const INITIAL_AGENTS: AgentCardState[] = [
   { agentId: 6, agentName: "时间线", status: "pending" }
 ];
 
+const ACTIVITY_HINTS = [
+  "正在分头查资料，不需要停在这个窗口等。",
+  "如果某一路资料慢一点，系统会用其他结果继续推进。",
+  "调研阶段最耗时；后面会进入提炼、外貌和像素形象。",
+  "正在把碎片资料整理成角色的表达 DNA。",
+  "这不是卡住了，下面的卡片会随 agent 完成陆续更新。"
+];
+
 interface Props {
   jobId: string;
   characterName: string;
@@ -66,6 +74,7 @@ export function DistillationProgress({
     estimatedCostUsd: 0
   });
   const [showCheckpoint, setShowCheckpoint] = useState<null | "research" | "synthesis">(null);
+  const [hintIndex, setHintIndex] = useState(0);
   const [finalState, setFinalState] = useState<
     | null
     | { kind: "done"; characterId: string; isSkeleton: boolean }
@@ -130,7 +139,7 @@ export function DistillationProgress({
           setHatchState((prev) => reduceHatch(prev, evt.event));
           break;
         case "warning":
-          setWarnings((p) => [...p, evt.message]);
+          setWarnings((p) => [...p, userFacingProcessMessage(evt.message)]);
           break;
         case "done":
           setProgress(100);
@@ -142,7 +151,7 @@ export function DistillationProgress({
           });
           break;
         case "failed":
-          setFinalState({ kind: "failed", reason: evt.reason });
+          setFinalState({ kind: "failed", reason: userFacingProcessMessage(evt.reason) });
           break;
         case "cancelled":
           setFinalState({ kind: "cancelled" });
@@ -159,6 +168,14 @@ export function DistillationProgress({
 
   const running = finalState == null;
 
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => {
+      setHintIndex((i) => (i + 1) % ACTIVITY_HINTS.length);
+    }, 4200);
+    return () => window.clearInterval(id);
+  }, [running]);
+
   return (
     <div>
       <div className="eyebrow">Distillation</div>
@@ -168,6 +185,18 @@ export function DistillationProgress({
       <p className="body-sm" style={{ margin: "0 0 16px" }}>
         {phaseLabel}
       </p>
+
+      {running ? (
+        <div className="bl-status-strip is-running" style={{ marginBottom: 16 }}>
+          <div className="bl-status-strip__body">
+            <div className="bl-status-strip__title">百灵正在工作</div>
+            <div className="bl-status-strip__detail">{ACTIVITY_HINTS[hintIndex]}</div>
+          </div>
+          <div className="bl-status-strip__action">
+            <Spinner magenta />
+          </div>
+        </div>
+      ) : null}
 
       <div style={{ marginBottom: 16 }}>
         <div
@@ -243,31 +272,33 @@ export function DistillationProgress({
 
       {qualityReport ? <QualityReportCard report={qualityReport} /> : null}
 
-      {warnings.length > 0 ? (
-        <details
-          style={{
-            padding: 10,
-            borderRadius: 10,
-            background: "rgba(178,24,88,0.04)",
-            border: "1px solid var(--magenta-soft)",
-            marginBottom: 16
-          }}
-        >
-          <summary
-            className="eyebrow"
-            style={{ cursor: "pointer", color: "var(--magenta)" }}
+      {(() => {
+        const notes = filterUserVisibleNotes(warnings);
+        if (notes.length === 0) return null;
+        return (
+          <details
+            style={{
+              padding: 10,
+              borderRadius: 10,
+              background: "rgba(31,58,58,0.04)",
+              border: "1px solid var(--grid-strong)",
+              marginBottom: 16
+            }}
           >
-            {warnings.length} 条警告
-          </summary>
-          <ul className="body-sm" style={{ margin: "8px 0 0 16px", padding: 0 }}>
-            {warnings.map((w, i) => (
-              <li key={i}>
-                <code style={{ fontFamily: "var(--font-mono)" }}>{w}</code>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+            <summary
+              className="eyebrow"
+              style={{ cursor: "pointer", color: "var(--ink-soft)" }}
+            >
+              {notes.length} 条流程笔记
+            </summary>
+            <ul className="body-sm" style={{ margin: "8px 0 0 16px", padding: 0 }}>
+              {notes.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </details>
+        );
+      })()}
 
       {finalState ? (
         <div className="card fade-in-up" style={{ padding: 20 }}>
@@ -294,7 +325,7 @@ export function DistillationProgress({
                 蒸馏失败
               </div>
               <p className="body-md" style={{ margin: "0 0 12px" }}>
-                {finalState.reason}
+                {userFacingProcessMessage(finalState.reason)}
               </p>
               <div className="row row--end gap-2">
                 <CopyButton
@@ -410,7 +441,7 @@ function AgentCard({ state }: { state: AgentCardState }): JSX.Element {
         {state.status === "ok" || state.status === "timeout" || state.status === "error" ? (
           <>
             用时 {Math.round((state.durationMs ?? 0) / 1000)} 秒
-            {state.webSearchUsed ? " · 联网 ✓" : " · 无联网"}
+            {state.webSearchUsed ? " · 已拿到来源" : " · 来源待验证"}
             {state.confidence ? ` · ${state.confidence}` : ""}
             {state.sourcesCount != null ? ` · ${state.sourcesCount} 引用` : ""}
           </>
@@ -420,13 +451,77 @@ function AgentCard({ state }: { state: AgentCardState }): JSX.Element {
       {state.errorMessage ? (
         <p
           className="body-sm"
-          style={{ marginTop: 6, color: "var(--magenta)" }}
+          style={{
+            marginTop: 6,
+            color: state.status === "ok" ? "var(--ink-faint)" : "var(--magenta)"
+          }}
         >
-          {state.errorMessage}
+          {userFacingProcessMessage(state.errorMessage)}
         </p>
       ) : null}
     </div>
   );
+}
+
+/**
+ * 把后端推过来的 warnings 数组过滤+翻译成"对用户真正有用"的笔记。
+ *   - 丢弃只针对开发者的内部诊断行（[step3·hatch] / [phase3b·…] 之类）
+ *   - 丢弃纯英文堆栈、纯技术词
+ *   - 同义合并：联网类的几条只保留最后一条，避免刷屏
+ */
+function filterUserVisibleNotes(raw: string[]): string[] {
+  const out: string[] = [];
+  let seenWebSearchNote = false;
+  for (const r of raw) {
+    const text = r.trim();
+    if (!text) continue;
+    // 丢弃明显的开发者诊断
+    if (/^\[(step|phase|hatch|name|quote|programmatic|debug)/i.test(text)) continue;
+    // 联网类同义合并
+    if (
+      /search-preview|web_search|annotations|citation|url_citation|web_search_options|baseUrl|联网|网页来源/i.test(
+        text
+      )
+    ) {
+      if (seenWebSearchNote) continue;
+      seenWebSearchNote = true;
+    }
+    const friendly = userFacingProcessMessage(text);
+    if (friendly && !out.includes(friendly)) out.push(friendly);
+  }
+  return out;
+}
+
+/**
+ * 把任何上游错误文本翻译成"用户能看得懂、不会觉得产品坏掉"的一句话。
+ * 关键原则：
+ *   - 不暴露 search-preview / annotations / web_search_options / baseUrl 这种内部技术词
+ *   - 不要求用户"去某某面板做某某操作"——除非真的没有别的路可走
+ *   - 默认偏向"还在尝试中"而不是"已失败"
+ */
+function userFacingProcessMessage(raw: string): string {
+  const text = raw.trim();
+  if (
+    /search-preview|web_search|annotations|citation|url_citation|web_search_options|baseUrl/i.test(
+      text
+    )
+  ) {
+    return "这一路没有拿到额外的网页来源，已用其他材料继续。";
+  }
+  if (/401|403|unauthorized|invalid api key|AUTH_FAILED/i.test(text)) {
+    return "模型 Key 暂时被拒了，可以稍后再试一次。";
+  }
+  if (/429|rate limit|RATE_LIMITED/i.test(text)) {
+    return "模型这一刻在限流，自动稍候再试一次就好。";
+  }
+  if (/abort|timeout|timed out|超时/i.test(text)) {
+    return "这一步响应较慢，系统已尽量继续推进。";
+  }
+  // 兜底：不要把英文堆栈 / JSON 错误片段直接糊到 UI 上
+  if (/[{}<>]|stack|Error:|TypeError|\bcode\b/i.test(text)) {
+    return "这一步有个小插曲，系统已继续推进。";
+  }
+  return text.length > 140 ? text.slice(0, 140) + "…" : text;
 }
 
 function labelOf(s: AgentCardState["status"]): string {

@@ -29,9 +29,11 @@ import {
   type AtlasValidationReport
 } from "@nuwa-pet/pet-atlas-tools";
 import type { LocalVault } from "../store/local-vault.js";
-import type {
-  ImageGenerationAdapter,
-  ImageTierName
+import {
+  modelSupportsTransparent,
+  type ImageGenerationAdapter,
+  type ImageGenerationConfig,
+  type ImageTierName
 } from "../adapters/image-generation-adapter.js";
 
 /**
@@ -126,8 +128,16 @@ export type HatchProgressEvent =
       atlasPath: string;
     };
 
-/** 默认 chroma key（鲜艳的洋红，几乎不会出现在真实角色立绘里）。 */
-const DEFAULT_CHROMA = { r: 0, g: 255, b: 0 };
+/**
+ * 两套 chroma 方案，根据生图模型是否支持透明背景动态选：
+ *   - 模型支持 transparent（gpt-image-1 系列）→ 用 #00FF00 纯绿 chroma，
+ *     模型可能给 alpha 也可能给纯绿底，两种都能被 chromaRemoval 抠掉。
+ *   - 模型不支持 transparent（gpt-image-2）→ 用 #FFFFFF 白色 chroma，
+ *     模型几乎一定给白底，chromaRemoval 可以稳定抠掉。
+ */
+const CHROMA_GREEN = { r: 0, g: 255, b: 0 };
+const CHROMA_WHITE = { r: 255, g: 255, b: 255 };
+const DEFAULT_CHROMA = CHROMA_GREEN; // 旧字段，保留供 verify-hatch-pet 等回归用
 
 export class HatchPetPipeline {
   constructor(private deps: HatchPipelineDeps) {}
@@ -155,6 +165,20 @@ export class HatchPetPipeline {
       };
     }
 
+    // 关键决策：根据本次生图模型是否支持透明背景，选择整轮的 chroma key 策略。
+    // gpt-image-2 不支持透明 → 用白色 chroma，prompt 让模型画白底；
+    // gpt-image-1 支持透明 → 用绿色 chroma，模型给透明也能兼容。
+    // 这个决策对 base/row 所有调用统一生效，确保拼 atlas 时不会一半白底一半绿底。
+    const imgCfg = this.deps.imageGen.getConfig();
+    const tierCfg = imgCfg?.tiers?.[tier];
+    const useTransparent = tierCfg ? modelSupportsTransparent(tierCfg.model) : true;
+    const chroma = useTransparent ? CHROMA_GREEN : CHROMA_WHITE;
+    if (!useTransparent) {
+      warnings.push(
+        `生图模型 ${tierCfg?.model ?? "?"} 不支持透明背景，已切换到白底+chroma抠像方案。`
+      );
+    }
+
     const manifest = prepareHatchPetRun({
       runId,
       cell,
@@ -179,7 +203,7 @@ export class HatchPetPipeline {
     let basePng: Buffer;
     let baseCost = 0;
     try {
-      const { png, costUsd } = await this.generateBase(input, tier);
+      const { png, costUsd } = await this.generateBase(input, tier, chroma, useTransparent);
       basePng = makeCanonicalBase({ imagePng: png, cell });
       baseCost = costUsd ?? 0;
     } catch (e) {
@@ -249,7 +273,9 @@ export class HatchPetPipeline {
           cell,
           basePng,
           input,
-          tier
+          tier,
+          chroma,
+          useTransparent
         );
         rowResults[rowState] = { png: result.png, cost: result.costUsd };
         totalCost += result.costUsd ?? 0;
@@ -294,8 +320,9 @@ export class HatchPetPipeline {
             rowIndex: HATCH_PET_ROW_STATES.indexOf(rowState),
             frameCount: frameCounts[rowState],
             stripPng: r.png,
-            chromaKey: DEFAULT_CHROMA,
-            chromaThreshold: 80
+            chromaKey: chroma,
+            // 白色 chroma 需要更高阈值才能容忍模型给的"几乎白但不完全白"的背景
+            chromaThreshold: chroma === CHROMA_WHITE ? 40 : 80
           },
           cell
         );
@@ -448,20 +475,23 @@ export class HatchPetPipeline {
 
   private async generateBase(
     input: HatchPipelineInput,
-    tier: ImageTierName
+    tier: ImageTierName,
+    chroma: { r: number; g: number; b: number },
+    transparentBackground: boolean
   ): Promise<{ png: Buffer; costUsd?: number }> {
     const prompt = buildHatchPetBasePrompt({
       characterName: input.characterName,
       appearance: input.appearance,
       userHint: undefined,
       stylePreset: input.stylePreset ?? "auto",
-      chromaKey: DEFAULT_CHROMA
+      chromaKey: chroma
     });
 
     // 当前 ohmygpt /images/edits 对多图 multipart 支持不稳定：
     // image[0]/image[1] 会被识别为 0 张图，重复 image 会 500。
     // 所以 base 阶段只使用第一张主参考图；其它参考信息已被 AppearanceSpec 吸收。
     const userRefs = input.userReferences.slice(0, 1).map((r) => r.url);
+    const label = `hatch:${input.characterName.slice(0, 16)}:base`;
 
     const res =
       userRefs.length > 0
@@ -469,12 +499,14 @@ export class HatchPetPipeline {
             prompt,
             images: userRefs,
             tier,
-            transparentBackground: true
+            transparentBackground,
+            requestLabel: label
           })
         : await this.deps.imageGen.generate({
             prompt,
             tier,
-            transparentBackground: true
+            transparentBackground,
+            requestLabel: label
           });
     if (res.kind === "error") {
       throw new Error(`${res.code}: ${res.message}`);
@@ -488,7 +520,9 @@ export class HatchPetPipeline {
     cell: { width: number; height: number },
     canonicalBasePng: Buffer,
     input: HatchPipelineInput,
-    tier: ImageTierName
+    tier: ImageTierName,
+    chroma: { r: number; g: number; b: number },
+    transparentBackground: boolean
   ): Promise<{ png: Buffer; costUsd?: number }> {
     const prompt = buildHatchPetRowPrompt({
       characterName: input.characterName,
@@ -497,7 +531,7 @@ export class HatchPetPipeline {
       frameCount,
       cell,
       stylePreset: input.stylePreset ?? "auto",
-      chromaKey: DEFAULT_CHROMA
+      chromaKey: chroma
     });
     const images: string[] = [
       bufferToDataUrl(canonicalBasePng, "image/png")
@@ -506,10 +540,11 @@ export class HatchPetPipeline {
       prompt,
       images,
       tier,
-      transparentBackground: true,
+      transparentBackground,
       // row strip 是宽幅，OpenAI Images 不允许任意宽高比；这里按 1024×1024 兜底，
       // pet-atlas-tools 在裁帧时会 resize 到目标 cell。
-      size: "1024x1024"
+      size: "1024x1024",
+      requestLabel: `hatch:${input.characterName.slice(0, 16)}:row-${rowState}`
     });
     if (res.kind === "error") {
       throw new Error(`${res.code}: ${res.message}`);

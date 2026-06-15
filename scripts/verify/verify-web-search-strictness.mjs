@@ -58,8 +58,14 @@ try {
     "联网"
   );
 
-  globalThis.fetch = async () =>
-    new Response(
+  // 新行为：search-preview 拿不到 annotations 时，不再 hard-fail。
+  // 适配器尝试一次"短 query 重问"（前提：user message 中含「角色名」可以抠出来），
+  // 如果重问仍空，soft-degrade：返回 done + citations=[]。
+  // 由上层 research-pipeline 根据 sources.length=0 把 confidence 降到 low。
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(
       JSON.stringify({
         choices: [
           {
@@ -73,19 +79,104 @@ try {
       }),
       { status: 200, headers: { "content-type": "application/json" } }
     );
+  };
 
-  await expectError(
-    "search-preview without citations is rejected",
-    () =>
-      new LLMAdapter(() => provider("gpt-4o-mini-search-preview")).chatWithTools({
-        systemPrompt: "search",
-        messages: [{ role: "user", content: "who won the 2024 Nobel prize in physics?" }],
-        stream: false,
-        enableWebSearch: true,
-        maxTokens: 64,
-        searchContextSize: "low"
+  // user 必须带「角色名」「维度名」结构，buildShortReaskMessages 才会触发重试。
+  // 这模拟了 research-pipeline 真实发出的 prompt。
+  const noCite = await new LLMAdapter(() => provider("gpt-4o-mini-search-preview")).chatWithTools({
+    systemPrompt: "search",
+    messages: [
+      {
+        role: "user",
+        content:
+          "调研对象：「三笠」\n现在开始为「三笠」做「碎片表达与风格」调研。"
+      }
+    ],
+    stream: false,
+    enableWebSearch: true,
+    maxTokens: 64,
+    searchContextSize: "low"
+  });
+  if (noCite.kind !== "done") {
+    console.error("FAIL search-preview empty annotations should soft-degrade, got error:", noCite);
+    process.exit(1);
+  }
+  if (noCite.citations.length !== 0) {
+    console.error("FAIL expected empty citations, got:", noCite.citations);
+    process.exit(1);
+  }
+  if (fetchCalls !== 2) {
+    console.error(`FAIL expected short-reask retry once (fetchCalls=2), got fetchCalls=${fetchCalls}`);
+    process.exit(1);
+  }
+  console.log(
+    `OK search-preview empty annotations triggers short-reask retry: fetchCalls=${fetchCalls}, citations=0`
+  );
+
+  // 当 user message 没有「」结构（如英文 prompt），跳过 short-reask 重试，直接 soft-degrade。
+  // 避免无端付第二次费。
+  fetchCalls = 0;
+  const enNoCite = await new LLMAdapter(() => provider("gpt-4o-mini-search-preview")).chatWithTools({
+    systemPrompt: "search",
+    messages: [{ role: "user", content: "who won the 2024 Nobel prize in physics?" }],
+    stream: false,
+    enableWebSearch: true,
+    maxTokens: 64,
+    searchContextSize: "low"
+  });
+  if (enNoCite.kind !== "done") {
+    console.error("FAIL english prompt empty annotations should soft-degrade:", enNoCite);
+    process.exit(1);
+  }
+  if (fetchCalls !== 1) {
+    console.error(
+      `FAIL english prompt should skip short-reask (fetchCalls=1), got fetchCalls=${fetchCalls}`
+    );
+    process.exit(1);
+  }
+  console.log(
+    `OK english prompt skips short-reask retry to avoid wasted spend: fetchCalls=${fetchCalls}`
+  );
+
+  // 新行为：正文里有裸 URL 但 annotations 为空时，应该把 URL 抓为 citations。
+  // 这是为 OhMyGPT 等中转完全吞 annotations、但模型在 Markdown 里写了链接的兜底。
+  fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content:
+                "John Hopfield and Geoffrey Hinton won. See https://www.nobelprize.org/prizes/physics/2024/press-release/ for details.",
+              annotations: []
+            },
+            finish_reason: "stop"
+          }
+        ]
       }),
-    "citation"
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  };
+  const inlineCite = await new LLMAdapter(() => provider("gpt-4o-mini-search-preview")).chatWithTools({
+    systemPrompt: "search",
+    messages: [{ role: "user", content: "nobel?" }],
+    stream: false,
+    enableWebSearch: true,
+    maxTokens: 64,
+    searchContextSize: "low"
+  });
+  if (inlineCite.kind !== "done" || inlineCite.citations.length === 0) {
+    console.error("FAIL inline URL in body should be captured as citation, got:", inlineCite);
+    process.exit(1);
+  }
+  if (fetchCalls !== 1) {
+    console.error(`FAIL inline URL pickup should NOT trigger retry, fetchCalls=${fetchCalls}`);
+    process.exit(1);
+  }
+  console.log(
+    `OK inline URL captured as citation without retry: citations=${inlineCite.citations.length}`
   );
 
   globalThis.fetch = async () =>

@@ -45,6 +45,11 @@ export interface ChatWithToolsRequest extends ChatRequest {
   maxToolCalls?: number;
   /** OpenAI search-preview 的 search_context_size：low/medium/high。 */
   searchContextSize?: "low" | "medium" | "high";
+  /**
+   * 给主进程日志埋点用的可读标签（如 "research:writings:三笠"）。
+   * 不影响请求语义，纯为定位"哪个 agent 在哪个角色上拿不到 citations"。
+   */
+  requestLabel?: string;
 }
 
 /** 工具调用过程中产生的事件，UI 可以据此渲染「正在搜索 …」之类提示。 */
@@ -640,11 +645,78 @@ export class LLMAdapter {
    *     choices[0].message.content    → 正文
    *     choices[0].message.annotations → [{ type:"url_citation", url_citation:{url,title} }]
    * 这一类模型不支持 temperature / top_p / tools，body 中省略。
+   *
+   * 已验证的失败模式（scripts/debug/debug-research-prompts.mjs）：
+   *   在 819 tokens 的「长任务式 system prompt」下，OhMyGPT/OpenAI 中转的
+   *   search-preview 模型经常**跳过搜索直接靠训练知识硬编**——HTTP 200、
+   *   annotations=[]、正文也没有任何 URL，1255 tokens 的回答完全是编的。
+   *
+   * 修复策略（两层）：
+   *   1) prompt 层在 nuwa-prompts/research-agents.ts 顶部加强指令 + 候选 query
+   *      （让模型一开始就调用 web_search）。
+   *   2) 适配器层：首次拿不到 citations 时，用**短 query** 重问一次——
+   *      把 user 最后一条短指令重写为"请用 web_search 查 X 的 Y，给 5 个真实 URL"，
+   *      实测短指令命中率显著高于长任务式。
    */
   private async openAISearchPreview(
     p: LLMProviderConfig,
     model: string,
     req: ChatWithToolsRequest
+  ): Promise<ChatWithToolsResult | ChatWithToolsError> {
+    const requestId = (req.requestLabel ?? "anon") + "#" + ((Math.random() * 1e6) | 0).toString(36);
+    const first = await this.callOpenAISearchOnce(
+      p,
+      model,
+      req,
+      req.searchContextSize ?? "medium",
+      requestId,
+      "first"
+    );
+    if (first.kind === "error") return first;
+    if (first.citations.length > 0 || !first.text) return first;
+
+    // 没拿到任何来源：用更短、更直接的 query 重问一次（context 降到 low 加快重试）。
+    // 这个变体的命中率显著高，因为 short query 触发 search-preview 模型 query
+    // 改写为"搜索 query"的概率高，而长 task prompt 容易被改写为"任务规划"路径。
+    const shortReask = buildShortReaskMessages(req);
+    if (!shortReask) return first;
+    const retry = await this.callOpenAISearchOnce(
+      p,
+      model,
+      { ...req, messages: shortReask },
+      "low",
+      requestId,
+      "retry-short-reask"
+    );
+    if (retry.kind === "error") return first;
+    if (retry.citations.length > 0) {
+      // 用 retry 的 citations，但把首次的长 markdown 留住作为最终正文——
+      // 因为 short reask 只产出 5 个 URL，第一次的报告才是用户要看的内容。
+      // 把 retry citations 合并到 first.citations，让 toolEvents 反映到 UI。
+      const merged = new Set<string>([...first.citations, ...retry.citations]);
+      const allCites = Array.from(merged);
+      return {
+        kind: "done",
+        text: first.text + buildCitationFooter(retry.citations),
+        finishReason: first.finishReason,
+        toolEvents: [
+          { kind: "tool_start", tool: "web_search" },
+          { kind: "tool_end", tool: "web_search", sources: allCites }
+        ],
+        citations: allCites
+      };
+    }
+    // 第二次仍空：返回首次结果，上层会把 webSearchUsed=false 当低可信处理。
+    return first;
+  }
+
+  private async callOpenAISearchOnce(
+    p: LLMProviderConfig,
+    model: string,
+    req: ChatWithToolsRequest,
+    contextSize: "low" | "medium" | "high",
+    requestId?: string,
+    phase: "first" | "retry-short-reask" = "first"
   ): Promise<ChatWithToolsResult | ChatWithToolsError> {
     const url = chatCompletionsUrl(p);
     const body: Record<string, unknown> = {
@@ -659,10 +731,11 @@ export class LLMAdapter {
       max_tokens: req.maxTokens ?? p.defaultMaxTokens ?? 3500,
       stream: false,
       web_search_options: {
-        search_context_size: req.searchContextSize ?? "medium"
+        search_context_size: contextSize
       }
     };
 
+    const startedAt = Date.now();
     let res: Response;
     try {
       res = await fetch(url, {
@@ -675,6 +748,18 @@ export class LLMAdapter {
         signal: req.signal
       });
     } catch (e) {
+      const httpDt = Date.now() - startedAt;
+      logSearchCall({
+        requestId,
+        phase,
+        url,
+        model,
+        contextSize,
+        httpStatus: 0,
+        httpDt,
+        ok: false,
+        errorPreview: "NETWORK: " + (e instanceof Error ? e.message : String(e))
+      });
       return {
         kind: "error",
         code: "NETWORK_ERROR",
@@ -683,12 +768,25 @@ export class LLMAdapter {
       };
     }
 
+    const httpDt = Date.now() - startedAt;
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      logSearchCall({
+        requestId,
+        phase,
+        url,
+        model,
+        contextSize,
+        httpStatus: res.status,
+        httpDt,
+        ok: false,
+        errorPreview: text.slice(0, 200)
+      });
       return { kind: "error", code: mapHttpToCode(res.status), message: text.slice(0, 800), toolEvents: [] };
     }
 
-    const json = (await res.json().catch(() => null)) as {
+    const rawText = await res.text().catch(() => "");
+    let json: {
       choices?: Array<{
         message?: {
           content?: string;
@@ -702,8 +800,23 @@ export class LLMAdapter {
         };
         finish_reason?: string;
       }>;
-    } | null;
-
+    } | null = null;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      logSearchCall({
+        requestId,
+        phase,
+        url,
+        model,
+        contextSize,
+        httpStatus: res.status,
+        httpDt,
+        ok: false,
+        errorPreview: "BAD_JSON: " + rawText.slice(0, 200)
+      });
+      return { kind: "error", code: "BAD_RESPONSE", message: "search-preview 响应不可解析", toolEvents: [] };
+    }
     if (!json) {
       return { kind: "error", code: "BAD_RESPONSE", message: "search-preview 响应不可解析", toolEvents: [] };
     }
@@ -711,25 +824,55 @@ export class LLMAdapter {
     const choice = json.choices?.[0];
     const text = choice?.message?.content ?? "";
     const finishReason = mapFinishReason(choice?.finish_reason);
+    const annRaw = choice?.message?.annotations ?? [];
+    const messageKeys = choice?.message ? Object.keys(choice.message) : [];
     const citations = new Set<string>();
-    for (const ann of choice?.message?.annotations ?? []) {
+    for (const ann of annRaw) {
       const url1 = ann.url_citation?.url ?? ann.url;
       if (typeof url1 === "string" && url1.length > 0) citations.add(url1);
     }
+    const citationsFromAnnotations = citations.size;
+    // 部分中转完全不给 annotations，但模型在正文里用 Markdown 链接形式写了 URL。
+    // 兜底：把正文里裸露的 http(s)://... 也收为引用，让 webSearchUsed 不至于错判为 false。
+    if (citations.size === 0 && text.length > 0) {
+      const urlRegex = /https?:\/\/[^\s)\]\u4e00-\u9fff，。；：、！？]+/g;
+      const matches = text.match(urlRegex) ?? [];
+      for (const u of matches) {
+        const cleaned = u.replace(/[\]\)\.，。；：、]+$/, "");
+        if (cleaned.length > 8) citations.add(cleaned);
+        if (citations.size >= 6) break;
+      }
+    }
+    const citationsFromInline = citations.size - citationsFromAnnotations;
     const toolEvents: ToolEvent[] = [];
     if (citations.size > 0) {
       toolEvents.push({ kind: "tool_start", tool: "web_search" });
       toolEvents.push({ kind: "tool_end", tool: "web_search", sources: Array.from(citations) });
     }
-    if (req.enableWebSearch && citations.size === 0) {
-      return {
-        kind: "error",
-        code: "WEB_SEARCH_NOT_CONFIRMED",
-        message:
-          "search-preview 返回中没有 url_citation annotations，无法确认真实联网。当前 baseUrl 可能吞掉 web_search_options 或 annotations，请换 OpenAI 直连或支持 search 的代理。",
-        toolEvents: []
-      };
-    }
+    logSearchCall({
+      requestId,
+      phase,
+      url,
+      model,
+      contextSize,
+      httpStatus: res.status,
+      httpDt,
+      ok: true,
+      messageKeys,
+      annotationsRaw: annRaw.length,
+      citationsFromAnnotations,
+      citationsFromInline,
+      finalCitations: citations.size,
+      textLen: text.length,
+      verdict:
+        citations.size > 0
+          ? citationsFromAnnotations > 0
+            ? "OK_ANNOTATIONS"
+            : "OK_INLINE_FALLBACK"
+          : text.length > 0
+            ? "EMPTY_CITATIONS"
+            : "EMPTY_BODY"
+    });
     return {
       kind: "done",
       text,
@@ -927,6 +1070,137 @@ function toAnthropicContent(content: ChatMessageContent): unknown {
 function chatCompletionsUrl(p: LLMProviderConfig): string {
   const trimmed = trimRightSlash(p.baseUrl);
   return /\/v\d+$/.test(trimmed) ? trimmed + "/chat/completions" : trimmed + "/v1/chat/completions";
+}
+
+/**
+ * 把 messages 改写成「短 query 重问」用于 search-preview 失败重试。
+ *
+ * 取最后一条 user message，提取其中的人物名（如果有 `「XX」` 或 `「XX」「YY」` 这种结构），
+ * 把整段 user 替换成短指令式："请用 web_search 查 XX 的相关资料，给我 5 个真实可访问的 URL 来源。"
+ *
+ * 短指令的命中率显著高于长任务式（实测 3/3 vs 0/3，见 scripts/debug/debug-prompt-shape.mjs）。
+ * 同时把 system prompt 也缩短为单句"必须用 web_search"，避免长 system 再次诱导模型走训练知识。
+ */
+function buildShortReaskMessages(
+  req: ChatWithToolsRequest
+): ChatWithToolsRequest["messages"] | null {
+  const lastUser = req.messages.slice().reverse().find((m) => m.role === "user");
+  if (!lastUser || typeof lastUser.content !== "string") return null;
+  // 提取「」中第一个引文（人物名）
+  const m = lastUser.content.match(/「([^」]+)」/);
+  const characterName = m?.[1]?.trim();
+  // 提取角色维度（例如「碎片表达与风格」「人物时间线」），多用作搜索方向
+  const dimMatches = Array.from(lastUser.content.matchAll(/「([^」]+)」/g));
+  const dim = dimMatches.length >= 2 ? dimMatches[1]?.[1]?.trim() : undefined;
+  if (!characterName) return null;
+  const askParts = [
+    `请用 web_search 查询「${characterName}」` +
+      (dim ? `在「${dim}」维度上` : "") +
+      "的真实资料：",
+    "1. 调用 web_search 至少 2 次（中英文各一次）。",
+    "2. 在回答末尾用 Markdown 无序列表给我 **5 个真实可访问的 URL**，每个 URL 配一句话说明。",
+    "3. 严禁伪造 URL；如果某条搜索没结果，写「无可用来源」而不是编。"
+  ];
+  return [{ role: "user", content: askParts.join("\n") }];
+}
+
+/** 把 retry 拿到的 citations 追加到首次正文末尾，作为「补充来源」section。 */
+function buildCitationFooter(citations: string[]): string {
+  if (citations.length === 0) return "";
+  const lines = ["", "", "## 补充来源（重试搜索）"];
+  for (const u of citations.slice(0, 8)) {
+    lines.push(`- ${u}`);
+  }
+  return lines.join("\n");
+}
+
+interface SearchCallLog {
+  requestId?: string;
+  phase: "first" | "retry-short-reask";
+  url: string;
+  model: string;
+  contextSize: "low" | "medium" | "high";
+  httpStatus: number;
+  httpDt: number;
+  ok: boolean;
+  messageKeys?: string[];
+  annotationsRaw?: number;
+  citationsFromAnnotations?: number;
+  citationsFromInline?: number;
+  finalCitations?: number;
+  textLen?: number;
+  errorPreview?: string;
+  verdict?:
+    | "OK_ANNOTATIONS"
+    | "OK_INLINE_FALLBACK"
+    | "EMPTY_CITATIONS"
+    | "EMPTY_BODY";
+}
+
+/**
+ * 把每次 search-preview HTTP 调用的关键信号打到主进程控制台。
+ *
+ * 用户报「联网失败」时，让用户复制这些日志一行就能定位是哪一层吃掉了数据：
+ *   - http_status 500/429/403/400  → 中转挂了 / 限流 / 鉴权
+ *   - verdict=EMPTY_CITATIONS      → 中转吞 annotations 或模型没搜索
+ *   - verdict=OK_INLINE_FALLBACK   → 中转吞 annotations 但模型给了内联 URL，被我们捞回来了
+ *   - verdict=OK_ANNOTATIONS       → 正常路径
+ */
+/**
+ * 日志输出双通道：
+ *   - dev 终端能立刻看到；
+ *   - 同时调 electron-log（如果可用）→ 写入 %APPDATA%/Bailin/logs/main.log，
+ *     用户可直接发我文件诊断"调研失败"现场。
+ *
+ * electron-log 必须 lazy import：本文件也被独立 verify 脚本 require，
+ * 那种情境下没有 Electron app 实例，不能在模块顶层 import 否则报错。
+ */
+let cachedLogger: { info: (s: string) => void; warn: (s: string) => void } | null = null;
+function getElectronLog():
+  | { info: (s: string) => void; warn: (s: string) => void }
+  | null {
+  if (cachedLogger) return cachedLogger;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const mod = require("electron-log/main") as {
+      info: (s: string) => void;
+      warn: (s: string) => void;
+    };
+    cachedLogger = mod;
+    return cachedLogger;
+  } catch {
+    return null;
+  }
+}
+
+function logSearchCall(info: SearchCallLog): void {
+  const tag = `[LLM.search-preview]`;
+  const head = `${tag} ${info.requestId ?? "-"} phase=${info.phase} model=${info.model} ctx=${info.contextSize} http=${info.httpStatus} dt=${info.httpDt}ms`;
+  const elog = getElectronLog();
+  if (!info.ok) {
+    const line = `${head} FAIL err="${info.errorPreview ?? ""}"`;
+    console.warn(line);
+    elog?.warn(line);
+    return;
+  }
+  const parts = [
+    `keys=[${(info.messageKeys ?? []).join(",")}]`,
+    `annRaw=${info.annotationsRaw ?? 0}`,
+    `citAnn=${info.citationsFromAnnotations ?? 0}`,
+    `citInline=${info.citationsFromInline ?? 0}`,
+    `citFinal=${info.finalCitations ?? 0}`,
+    `textLen=${info.textLen ?? 0}`,
+    `verdict=${info.verdict ?? "-"}`
+  ];
+  const line = `${head} ${parts.join(" ")}`;
+  const isOk = info.verdict === "OK_ANNOTATIONS" || info.verdict === "OK_INLINE_FALLBACK";
+  if (isOk) {
+    console.log(line);
+    elog?.info(line);
+  } else {
+    console.warn(line);
+    elog?.warn(line);
+  }
 }
 
 function trimRightSlash(s: string): string {

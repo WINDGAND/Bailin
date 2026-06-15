@@ -41,6 +41,11 @@ import type { LLMProviderConfig } from "../shared/ipc-contract.js";
 
 log.initialize();
 log.info("[main] Bailin starting...");
+// 启动横幅：如果用户重启后看到 web-search-v2 字样，就说明新代码已加载。
+// v2 = 强制搜索 prompt + 短 query 重试 + sourceContext 消歧义 + 主进程埋点日志。
+log.info(
+  "[main] build-tag: web-search-v2 (forced-search prompt + short-reask retry + source-context disambiguation + LLM.search-preview logs)"
+);
 
 let tray: Tray | null = null;
 let petWin: BrowserWindow | null = null;

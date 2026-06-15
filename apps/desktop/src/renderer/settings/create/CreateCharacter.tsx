@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { DistillationProgress } from "../progress/DistillationProgress.js";
-import { StatusDot, useToast } from "../../shared/feedback.js";
+import { useToast } from "../../shared/feedback.js";
 
 type Mode = "deep" | "quick";
+type SourceType = "public-figure" | "fictional" | "original";
+type Track = "utility" | "companion";
 
 const MAX_NAME = 40;
 const MAX_USER_HINT = 200;
@@ -12,9 +14,20 @@ const MAX_REFERENCE_IMAGES = 4;
 /** 单图大小上限（base64 字符长度，对应约 3MB 原图）。 */
 const MAX_REFERENCE_IMAGE_BYTES = 4 * 1024 * 1024;
 
+const SOURCE_OPTIONS: Array<{ id: SourceType; label: string }> = [
+  { id: "public-figure", label: "公众人物" },
+  { id: "fictional", label: "虚构角色" },
+  { id: "original", label: "原创角色" }
+];
+
+const TRACK_OPTIONS: Array<{ id: Track; label: string }> = [
+  { id: "utility", label: "思维顾问" },
+  { id: "companion", label: "情感陪伴" }
+];
+
 interface ReferenceImage {
   id: string;
-  url: string; // https:// 或 data URI
+  url: string;
   source: "user-upload" | "web";
   role: "primary" | "reference";
   label: string;
@@ -25,28 +38,13 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const { showToast } = useToast();
 
   const [name, setName] = useState("");
-  const [sourceType, setSourceType] =
-    useState<"public-figure" | "fictional" | "original">("public-figure");
-  const [track, setTrack] = useState<"utility" | "companion">("utility");
+  const [sourceType, setSourceType] = useState<SourceType>("public-figure");
+  const [track, setTrack] = useState<Track>("utility");
   const [userHint, setUserHint] = useState("");
   const [userMaterial, setUserMaterial] = useState("");
-  const [userImageRef, setUserImageRef] = useState("");
   const [mode, setMode] = useState<Mode>("deep");
-  const [concurrency, setConcurrency] = useState(2);
-  const [enableWebSearch, setEnableWebSearch] = useState(true);
-  const [researchModel, setResearchModel] = useState("gpt-4o-mini-search-preview");
   const [caps, setCaps] = useState<{ webSearch: boolean; reason: string } | null>(null);
   const [vision, setVision] = useState<{ vision: boolean; reason: string } | null>(null);
-  const [probe, setProbe] = useState<
-    | null
-    | { ok: boolean; realWebSearch: boolean; citations: number; reason?: string }
-  >(null);
-  const [visionProbe, setVisionProbe] = useState<
-    | null
-    | { ok: boolean; reason?: string }
-  >(null);
-  const [probing, setProbing] = useState(false);
-  const [visionProbing, setVisionProbing] = useState(false);
 
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -67,7 +65,6 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         setCaps(c);
         setVision(v);
         if (!c.webSearch) {
-          setEnableWebSearch(false);
           if (mode === "deep") setMode("quick");
         }
       } catch {
@@ -75,24 +72,6 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       }
     })();
   }, [nuwa]);
-
-  async function runVisionProbe(): Promise<void> {
-    setVisionProbing(true);
-    try {
-      const r = await nuwa.characters.probeVision();
-      setVisionProbe({ ok: r.ok, reason: r.reason });
-      if (r.ok) {
-        showToast({ kind: "success", text: "视觉能力实测通过，可上传参考图" });
-      } else {
-        showToast({
-          kind: "warn",
-          text: r.reason ?? "当前模型/代理拒绝多模态请求；参考图将被忽略"
-        });
-      }
-    } finally {
-      setVisionProbing(false);
-    }
-  }
 
   const addReferenceImage = useCallback(
     (img: Omit<ReferenceImage, "id" | "role">) => {
@@ -117,7 +96,6 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const removeReferenceImage = useCallback((id: string) => {
     setReferenceImages((prev) => {
       const next = prev.filter((r) => r.id !== id);
-      // 重新分配 primary
       if (next.length > 0 && !next.some((r) => r.role === "primary")) {
         next[0] = { ...next[0]!, role: "primary" };
       }
@@ -170,42 +148,10 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     setUrlDraft("");
   }
 
-  async function runProbe(): Promise<void> {
-    setProbing(true);
-    try {
-      const r = await nuwa.characters.probeWebSearch();
-      setProbe({
-        ok: r.ok,
-        realWebSearch: r.realWebSearch,
-        citations: r.citations,
-        reason: r.reason
-      });
-      if (r.ok && !r.realWebSearch) {
-        showToast({
-          kind: "warn",
-          text: "代理实际不返回 url_citation：可联网模型变成了 \"凭训练知识硬编\""
-        });
-      } else if (r.ok) {
-        showToast({
-          kind: "success",
-          text: `真联网验证通过 · ${r.citations} 引用`
-        });
-      } else {
-        showToast({ kind: "error", text: r.reason ?? "实测失败" });
-      }
-    } finally {
-      setProbing(false);
-    }
-  }
-
   const trimmedName = name.trim();
   const deepDisabled = caps != null && !caps.webSearch;
-  const submitDisabledHint =
-    trimmedName.length === 0
-      ? "先填角色名"
-      : deepDisabled && mode === "deep"
-        ? "当前 LLM 不支持联网"
-        : "";
+  const visionUnavailable = vision != null && !vision.vision;
+  const hasUploadedRefs = referenceImages.length > 0;
 
   async function submitQuick(): Promise<void> {
     setBusy(true);
@@ -248,13 +194,8 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       characterName: trimmedName,
       sourceType,
       track,
-      enableWebSearch,
-      concurrency,
-      agentTimeoutMs: 300000,
-      researchModel,
       userHint: userHint.trim() || undefined,
       userMaterial: userMaterial.trim() || undefined,
-      userImageRef: userImageRef.trim() || undefined,
       referenceImages: referenceImagesForIpc()
     });
     setBusy(false);
@@ -299,223 +240,157 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     );
   }
 
+  const submitLabel = busy
+    ? "启动中…"
+    : mode === "deep"
+      ? "开始造人"
+      : "试做一只";
+
+  const actionsHint =
+    trimmedName.length > 0
+      ? mode === "deep"
+        ? `准备为「${trimmedName}」造一只完整桌宠。大约 5-15 分钟，期间你会确认两次。`
+        : `先为「${trimmedName}」试做一只，约 1 分钟。喜欢的话之后再升级完整版。`
+      : mode === "deep"
+        ? "大约 5-15 分钟。期间你会确认两次：调研后、提炼后。"
+        : "约 1 分钟。先上桌看看，回到角色仓库随时可以重生。";
+
   return (
     <div>
-      <div className="eyebrow">Forge</div>
-      <div className="display display--page" style={{ marginBottom: 18 }}>
-        造一个角色
+      <div className="apple-page-header">
+        <div className="eyebrow">Forge</div>
+        <div className="display display--page">造一个角色</div>
+        <p className="apple-page-subtitle">
+          填一个名字，选择它的来源和用途。其余细节可以之后慢慢补。
+        </p>
       </div>
 
       <form
-        className="card stack stack--lg"
-        style={{ padding: 24 }}
+        className="forge-form apple-single-column"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
-        {/* 模式 */}
-        <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
-          <legend className="eyebrow" style={{ marginBottom: 8 }}>
-            蒸馏模式
-          </legend>
-          <div className="row gap-2">
-            <ModeCard
-              active={mode === "deep"}
-              disabled={deepDisabled}
-              onClick={() => !deepDisabled && setMode("deep")}
-              title="深度"
-              caption="5-15 分钟 · 对齐女娲完整流程 · 需联网"
-            />
-            <ModeCard
-              active={mode === "quick"}
-              onClick={() => setMode("quick")}
-              title="快速"
-              caption="60-120 秒 · 纯训练知识"
-            />
-          </div>
-          {caps && !caps.webSearch ? (
-            <div className="row gap-2" style={{ marginTop: 8 }}>
-              <StatusDot kind="warn" />
-              <span className="body-sm">当前 LLM 不支持联网：{caps.reason}</span>
-            </div>
-          ) : null}
-
-          {mode === "deep" && caps?.webSearch ? (
-            <div
-              className="row gap-2 row--wrap"
-              style={{
-                marginTop: 10,
-                padding: 10,
-                borderRadius: 10,
-                background: probe?.ok && !probe.realWebSearch
-                  ? "rgba(178, 24, 88, 0.08)"
-                  : "rgba(31, 58, 58, 0.04)",
-                border: `1px solid ${
-                  probe?.ok && !probe.realWebSearch
-                    ? "var(--magenta-soft)"
-                    : "var(--grid-strong)"
-                }`
-              }}
+        {/* —————— 角色名（视觉主体） —————— */}
+        <div className="forge-field-name">
+          <div className="forge-field-name__label-row">
+            <label className="bl-field-label" htmlFor="forge-name">
+              角色名
+            </label>
+            <span
+              className={`char-count ${name.length > MAX_NAME ? "char-count--danger" : ""}`}
             >
-              {probe == null ? (
-                <>
-                  <span className="body-sm" style={{ flex: 1 }}>
-                    深度版依赖联网搜索。OhMyGPT 等中转可能"声明支持但实际吞 annotations"，
-                    建议先实测一次。
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => void runProbe()}
-                    disabled={probing}
-                  >
-                    {probing ? "测试中…" : "实测联网"}
-                  </button>
-                </>
-              ) : probe.ok && probe.realWebSearch ? (
-                <>
-                  <StatusDot kind="ok" />
-                  <span className="body-sm">
-                    真联网验证通过 · 拿到 {probe.citations} 个 URL
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => void runProbe()}
-                    disabled={probing}
-                    style={{ marginLeft: "auto" }}
-                  >
-                    重测
-                  </button>
-                </>
-              ) : probe.ok && !probe.realWebSearch ? (
-                <>
-                  <StatusDot kind="warn" />
-                  <span className="body-sm" style={{ flex: 1 }}>
-                    <strong>当前 baseUrl 实际不联网</strong>：代理返回了内容但没有 url_citation。
-                    深度蒸馏会回退到"模型训练知识"，结果可能不可信。
-                    建议在 模型 / API Key 页换成 OpenAI / Anthropic 直连。
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => void runProbe()}
-                    disabled={probing}
-                  >
-                    重测
-                  </button>
-                </>
-              ) : (
-                <>
-                  <StatusDot kind="error" />
-                  <span className="body-sm">实测失败：{probe.reason ?? "未知"}</span>
-                </>
-              )}
-            </div>
-          ) : null}
-        </fieldset>
-
-        {/* 视觉能力状态条 */}
-        {vision ? (
-          <div
-            className="row gap-2"
-            style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              background: vision.vision
-                ? "rgba(60, 130, 90, 0.06)"
-                : "rgba(178, 24, 88, 0.06)",
-              border: `1px solid ${
-                vision.vision ? "rgba(60, 130, 90, 0.25)" : "var(--magenta-soft)"
-              }`,
-              alignItems: "center"
-            }}
-          >
-            <StatusDot kind={vision.vision ? "ok" : "warn"} />
-            <span className="body-sm" style={{ flex: 1 }}>
-              视觉读图：{vision.vision ? "已识别为支持" : "未识别为支持"} · {vision.reason}
+              {name.length} / {MAX_NAME}
             </span>
-            {visionProbe ? (
-              <span
-                className="body-sm"
-                style={{
-                  color: visionProbe.ok ? "var(--ink)" : "var(--magenta)",
-                  fontWeight: 600
-                }}
-              >
-                实测：{visionProbe.ok ? "通过" : visionProbe.reason ?? "失败"}
-              </span>
-            ) : null}
+          </div>
+          <input
+            id="forge-name"
+            className="forge-field-name__input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="芒格 / 张小龙 / 绫波丽"
+            autoFocus
+            maxLength={MAX_NAME + 20}
+          />
+          <div className="forge-field-name__hint">建议中文 2-6 字 / 英文 ≤ 30 字</div>
+        </div>
+
+        {/* —————— 来源 / 定位 chips —————— */}
+        <div className="forge-meta-row">
+          <div className="forge-chip-group">
+            <span className="bl-field-label">来源</span>
+            <div className="forge-chips" role="radiogroup" aria-label="角色来源类型">
+              {SOURCE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={sourceType === opt.id}
+                  className={`forge-chip ${sourceType === opt.id ? "is-active" : ""}`}
+                  onClick={() => setSourceType(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="forge-chip-group">
+            <span className="bl-field-label">定位</span>
+            <div className="forge-chips" role="radiogroup" aria-label="角色定位">
+              {TRACK_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={track === opt.id}
+                  className={`forge-chip ${track === opt.id ? "is-active" : ""}`}
+                  onClick={() => setTrack(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* —————— 蒸馏模式 —————— */}
+        <div className="forge-section">
+          <div className="forge-section__head">
+            <span className="bl-field-label">造人方式</span>
+          </div>
+          <div className="forge-mode">
             <button
               type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={() => void runVisionProbe()}
-              disabled={visionProbing}
+              disabled={deepDisabled}
+              className={`forge-mode__card ${mode === "deep" ? "is-active" : ""}`}
+              onClick={() => !deepDisabled && setMode("deep")}
             >
-              {visionProbing ? "实测中…" : visionProbe ? "重测" : "实测视觉"}
+              <div className="forge-mode__title">完整版</div>
+              <div className="forge-mode__caption">
+                联网调研 + 框架提炼 + 你来确认两次
+              </div>
+              <div className="forge-mode__hint">5–15 min · 推荐</div>
+            </button>
+            <button
+              type="button"
+              className={`forge-mode__card ${mode === "quick" ? "is-active" : ""}`}
+              onClick={() => setMode("quick")}
+            >
+              <div className="forge-mode__title">试做版</div>
+              <div className="forge-mode__caption">
+                凭模型训练知识快速出一只，先上桌看看
+              </div>
+              <div className="forge-mode__hint">~1 min</div>
             </button>
           </div>
-        ) : null}
-
-        {/* 基本信息 */}
-        <fieldset
-          style={{
-            border: "none",
-            margin: 0,
-            padding: 0,
-            display: "grid",
-            gap: 12
-          }}
-        >
-          <legend className="eyebrow" style={{ marginBottom: 8 }}>
-            基本信息
-          </legend>
-          <CountedField
-            label="角色名"
-            hint="建议 中文 2-6 字 / 英文 ≤ 30 字"
-            value={name}
-            onChange={setName}
-            max={MAX_NAME}
-            placeholder="例如：芒格 / 张小龙 / 绫波丽"
-            autoFocus
-          />
-          <div className="row gap-3">
-            <div style={{ flex: 1 }}>
-              <label className="eyebrow">来源类型</label>
-              <select
-                className="select"
-                value={sourceType}
-                onChange={(e) => setSourceType(e.target.value as typeof sourceType)}
-              >
-                <option value="public-figure">公众人物（真人，受其启发）</option>
-                <option value="fictional">虚构 / 二次元角色</option>
-                <option value="original">原创角色</option>
-              </select>
+          {deepDisabled ? (
+            <div className="bl-status-strip is-warn">
+              <div className="bl-status-strip__body">
+                <div className="bl-status-strip__title">完整版需要联网调研</div>
+                <div className="bl-status-strip__detail">
+                  当前模型不支持联网。可以先用试做版上桌，或在
+                  <a
+                    href="#"
+                    style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      nuwa.pet.openSettings();
+                    }}
+                  >
+                    模型与 API Key
+                  </a>
+                  切到 OpenAI / Anthropic 直连。
+                </div>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <label className="eyebrow">定位</label>
-              <select
-                className="select"
-                value={track}
-                onChange={(e) => setTrack(e.target.value as typeof track)}
-              >
-                <option value="utility">实用 · 思维顾问</option>
-                <option value="companion">陪伴 · 情感角色</option>
-              </select>
-            </div>
-          </div>
-        </fieldset>
+          ) : null}
+        </div>
 
-        {/* 参考图（vision pipeline 的关键输入） */}
+        {/* —————— 参考图 —————— */}
         <fieldset
-          style={{
-            border: "none",
-            margin: 0,
-            padding: 0,
-            display: "grid",
-            gap: 8
-          }}
+          className="forge-section"
+          style={{ border: "none", margin: 0, padding: 0 }}
           onDragOver={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -526,26 +401,27 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             void handleFiles(e.dataTransfer?.files ?? null);
           }}
         >
-          <legend className="eyebrow" style={{ marginBottom: 4 }}>
-            参考图 · 可选（上传 / 拖拽 / 粘贴 URL）
-          </legend>
-          <p className="body-sm" style={{ margin: 0, color: "var(--ink-soft)" }}>
-            上传 1-{MAX_REFERENCE_IMAGES} 张角色图能让形象比文字描述准 10 倍。
-            没上传时，若启用联网，会自动搜官方人设图。
-            {vision && !vision.vision ? (
-              <span style={{ color: "var(--magenta)" }}>
-                {" "}视觉读图模型不可用，上传的图会被忽略（可在设置 → Provider 配置参考图读图模型）。
-              </span>
-            ) : null}
-          </p>
-          <div className="row gap-2 row--wrap">
+          <div className="forge-section__head">
+            <span className="bl-field-label">参考图 · 可选</span>
+            <span className="forge-section__lede">
+              一张图比文字描述准 10 倍
+            </span>
+          </div>
+          <div className="apple-dropzone">
+            <div style={{ marginBottom: 10 }}>
+              <div className="apple-dropzone__title">拖拽图片到这里</div>
+              <div className="apple-dropzone__hint">
+                或选择文件 / 粘贴图片 URL。最多 {MAX_REFERENCE_IMAGES} 张。
+              </div>
+            </div>
+            <div className="forge-ref-controls">
             <button
               type="button"
               className="btn btn--ghost btn--sm"
               onClick={() => fileInputRef.current?.click()}
               disabled={referenceImages.length >= MAX_REFERENCE_IMAGES}
             >
-              选择图片文件
+              选择文件
             </button>
             <input
               ref={fileInputRef}
@@ -555,35 +431,34 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
               style={{ display: "none" }}
               onChange={(e) => void handleFiles(e.target.files)}
             />
-            <div className="row gap-2" style={{ flex: 1, minWidth: 240 }}>
-              <input
-                className="input"
-                placeholder="或粘贴图片 URL（https://...）"
-                value={urlDraft}
-                onChange={(e) => setUrlDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddUrl();
-                  }
-                }}
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={handleAddUrl}
-                disabled={
-                  urlDraft.trim().length === 0 ||
-                  referenceImages.length >= MAX_REFERENCE_IMAGES
+            <input
+              className="input"
+              placeholder="或粘贴图片 URL"
+              value={urlDraft}
+              onChange={(e) => setUrlDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddUrl();
                 }
-              >
-                添加 URL
-              </button>
+              }}
+              style={{ flex: 1, minWidth: 220 }}
+            />
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={handleAddUrl}
+              disabled={
+                urlDraft.trim().length === 0 ||
+                referenceImages.length >= MAX_REFERENCE_IMAGES
+              }
+            >
+              添加
+            </button>
             </div>
           </div>
           {referenceImages.length > 0 ? (
-            <div className="row gap-2 row--wrap" style={{ marginTop: 4 }}>
+            <div className="forge-ref-thumbs">
               {referenceImages.map((img) => (
                 <ReferenceThumb
                   key={img.id}
@@ -594,128 +469,66 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
               ))}
             </div>
           ) : null}
-        </fieldset>
-
-        {/* 深度版参数（默认折叠） */}
-        {mode === "deep" ? (
-          <details
-            className="card fade-in"
-            style={{
-              padding: 14,
-              background: "rgba(178,24,88,0.04)",
-              border: "1px solid var(--magenta-soft)"
-            }}
-          >
-            <summary
-              className="eyebrow"
-              style={{ cursor: "pointer", userSelect: "none", marginBottom: 8 }}
-            >
-              深度版参数（高级，可不动）
-            </summary>
-            <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
-              <label className="row gap-2" style={{ alignItems: "center" }}>
-                <input
-                  type="checkbox"
-                  checked={enableWebSearch}
-                  onChange={(e) => setEnableWebSearch(e.target.checked)}
-                  disabled={deepDisabled}
-                />
-                <span>启用联网搜索（用模型原生 web_search）</span>
-              </label>
-              <div>
-                <label className="eyebrow">并发数（1-6）</label>
-                <div className="row gap-2" style={{ marginTop: 6 }}>
-                  <input
-                    type="range"
-                    min={1}
-                    max={6}
-                    step={1}
-                    value={concurrency}
-                    onChange={(e) => setConcurrency(parseInt(e.target.value, 10))}
-                    style={{ flex: 1 }}
-                  />
-                  <span className="mono" style={{ minWidth: 22, textAlign: "right" }}>
-                    {concurrency}
-                  </span>
+          {visionUnavailable && hasUploadedRefs ? (
+            <div className="bl-status-strip is-warn">
+              <div className="bl-status-strip__body">
+                <div className="bl-status-strip__title">视觉读图模型不可用</div>
+                <div className="bl-status-strip__detail">
+                  上传的图会被忽略。可在
+                  <a
+                    href="#"
+                    style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      nuwa.pet.openSettings();
+                    }}
+                  >
+                    模型与 API Key
+                  </a>
+                  配置支持读图的模型。
                 </div>
               </div>
-              <div>
-                <label className="eyebrow">调研模型</label>
-                <select
-                  className="select"
-                  value={researchModel}
-                  onChange={(e) => setResearchModel(e.target.value)}
-                  disabled={!enableWebSearch || deepDisabled}
-                >
-                  <option value="gpt-4o-mini-search-preview">
-                    gpt-4o-mini-search-preview · 推荐（最便宜）
-                  </option>
-                  <option value="gpt-4o-search-preview">
-                    gpt-4o-search-preview · 质量更高
-                  </option>
-                  <option value="gpt-5-search-api">
-                    gpt-5-search-api · 实验性
-                  </option>
-                  <option value="claude-haiku-4-5">
-                    claude-haiku-4-5 · Anthropic 路线
-                  </option>
-                </select>
-                <p className="body-sm" style={{ margin: "4px 0 0" }}>
-                  只影响 6 路调研 + 外貌联网搜图；其他阶段沿用主模型。
-                </p>
-              </div>
-              <CountedField
-                label="参考图 URL（可选）"
-                hint="深度外貌阶段会优先采用"
-                value={userImageRef}
-                onChange={setUserImageRef}
-                max={500}
-                placeholder="例如：https://example.com/portrait.jpg"
-              />
             </div>
-          </details>
-        ) : null}
+          ) : null}
+        </fieldset>
 
-        {/* 补充信息（折叠） */}
-        <details>
-          <summary
-            className="eyebrow"
-            style={{ cursor: "pointer", userSelect: "none", marginBottom: 8 }}
-          >
-            可选：补充外貌 / 文本素材
-          </summary>
-          <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
+        {/* —————— 折叠：补充素材 —————— */}
+        <details className="forge-disclosure">
+          <summary>补充素材（可选）</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <CountedField
-              label="外貌补充"
-              hint="一句话即可，权威性高于训练知识"
+              label="一句话外貌"
+              hint="比模型猜的更准，例如：短发 / 黑色高领 / 红领带"
               value={userHint}
               onChange={setUserHint}
               max={MAX_USER_HINT}
-              placeholder="例如：短发 / 黑色高领毛衣 / 红色领带 / 戴眼镜"
+              placeholder="一句话即可"
             />
             <CountedTextarea
               label="文本素材"
-              hint="一段访谈、博客、设定集摘录都可以。素材会留在本机，仅用于这次造人。"
+              hint="一段访谈、博客、设定集摘录都行。仅用于这次造人，不上传。"
               value={userMaterial}
               onChange={setUserMaterial}
               max={MAX_USER_MATERIAL}
-              placeholder="粘贴 ≤ 2000 字的补充素材..."
+              placeholder="粘贴 ≤ 2000 字…"
             />
           </div>
         </details>
 
-        {/* 失败回退提示 */}
+        {/* —————— 失败回退提示 / 警告 —————— */}
         {skeletonNote ? (
           <div
             className="fade-in"
             style={{
               padding: 12,
               borderRadius: 10,
-              background: "rgba(178, 24, 88, 0.08)",
+              background: "rgba(178, 24, 88, 0.06)",
               border: "1px solid var(--magenta-soft)"
             }}
           >
-            <strong style={{ color: "var(--magenta)" }}>骨架角色</strong>
+            <strong style={{ color: "var(--magenta)", fontFamily: "var(--font-display)" }}>
+              骨架角色
+            </strong>
             <p className="body-sm" style={{ margin: "4px 0 0", color: "var(--ink-soft)" }}>
               {skeletonNote}
             </p>
@@ -748,78 +561,25 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                 className="btn btn--ghost btn--sm"
                 onClick={() => onDone()}
               >
-                知道了，进角色仓库
+                进角色仓库
               </button>
             </div>
           </details>
         ) : null}
 
-        {/* 行动栏 */}
-        <div className="row row--between" style={{ marginTop: 4 }}>
-          <p className="body-sm" style={{ margin: 0, maxWidth: 420 }}>
-            {mode === "deep"
-              ? "深度版会跑 6 路并行调研 + 2 个用户确认点 + 外貌三步法 + 自检。"
-              : "快速版仅 1-3 次 LLM 调用；约 30~120 秒；纯靠模型训练知识。"}
-          </p>
+        {/* —————— 行动栏 —————— */}
+        <div className="forge-actions">
+          <p className="forge-actions__hint">{actionsHint}</p>
           <button
             type="submit"
             className="btn btn--magenta"
             disabled={busy || trimmedName.length === 0 || (mode === "deep" && deepDisabled)}
-            data-hint={submitDisabledHint}
           >
-            {busy ? "启动中…" : mode === "deep" ? "开始深度蒸馏" : "开始造人"}
+            {submitLabel}
           </button>
         </div>
       </form>
     </div>
-  );
-}
-
-function ModeCard({
-  active,
-  disabled,
-  onClick,
-  title,
-  caption
-}: {
-  active: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  title: string;
-  caption: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        flex: 1,
-        textAlign: "left",
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: `1px solid ${active ? "var(--magenta)" : "var(--grid-strong)"}`,
-        background: active ? "rgba(178,24,88,0.06)" : "var(--paper)",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        transition:
-          "border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out)"
-      }}
-    >
-      <div
-        className="display display--section"
-        style={{
-          fontSize: 16,
-          color: active ? "var(--magenta)" : "var(--ink)",
-          marginBottom: 2
-        }}
-      >
-        {title}
-      </div>
-      <div className="body-sm" style={{ margin: 0 }}>
-        {caption}
-      </div>
-    </button>
   );
 }
 
@@ -829,8 +589,7 @@ function CountedField({
   value,
   onChange,
   max,
-  placeholder,
-  autoFocus
+  placeholder
 }: {
   label: string;
   hint?: string;
@@ -838,7 +597,6 @@ function CountedField({
   onChange: (v: string) => void;
   max: number;
   placeholder?: string;
-  autoFocus?: boolean;
 }) {
   const overflow = value.length > max;
   const warn = !overflow && value.length > max * 0.9;
@@ -859,7 +617,6 @@ function CountedField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        autoFocus={autoFocus}
         maxLength={max + 80}
       />
       {hint ? (
@@ -885,11 +642,11 @@ function ReferenceThumb({
     <div
       style={{
         position: "relative",
-        width: 96,
-        height: 96,
-        borderRadius: 10,
+        width: 84,
+        height: 84,
+        borderRadius: 8,
         overflow: "hidden",
-        border: `2px solid ${isPrimary ? "var(--magenta)" : "var(--grid-strong)"}`,
+        border: `1.5px solid ${isPrimary ? "var(--magenta)" : "var(--grid-strong)"}`,
         background: "var(--paper)"
       }}
       title={img.label}
@@ -914,8 +671,8 @@ function ReferenceThumb({
           right: 0,
           bottom: 0,
           padding: "2px 4px",
-          background: "rgba(0,0,0,0.55)",
-          color: "white",
+          background: "rgba(23, 38, 38, 0.65)",
+          color: "var(--paper)",
           fontSize: 10,
           display: "flex",
           alignItems: "center",
@@ -932,7 +689,7 @@ function ReferenceThumb({
             style={{
               background: "none",
               border: "none",
-              color: "white",
+              color: "inherit",
               padding: 0,
               cursor: "pointer",
               fontSize: 10
@@ -948,7 +705,7 @@ function ReferenceThumb({
           style={{
             background: "none",
             border: "none",
-            color: "white",
+            color: "inherit",
             padding: 0,
             cursor: "pointer",
             fontSize: 12,

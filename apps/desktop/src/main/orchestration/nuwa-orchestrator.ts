@@ -46,6 +46,7 @@ import {
 import type { ImageGenerationAdapter } from "../adapters/image-generation-adapter.js";
 import type { LocalVault } from "../store/local-vault.js";
 import type { HatchProgressEventDTO } from "../../shared/ipc-contract.js";
+import { buildSpriteFromAppearance } from "../runtime/sprite-builder.js";
 
 /** 一张供 vision pipeline 使用的参考图。 */
 export interface ReferenceImageInput {
@@ -333,11 +334,29 @@ export class NuwaOrchestrator {
       }
     }
     const agentEventBuffer: DeepProgressEvent[] = [];
+    // 在调研前先做一次"原作上下文 + 英文名"的智能解析，让 6 路调研都能用稳定的消歧义短语。
+    // 单字/二字角色名（"三笠"、"绫波"）在不带原作上下文时，搜索结果几乎必然漂移到同名地名/战舰。
+    const { sourceContext, englishName } = await this.resolveResearchContext(
+      config,
+      warnings
+    );
+    if (sourceContext || englishName) {
+      yield phaseEvent(
+        jobId,
+        "researching",
+        8,
+        `已锁定调研对象：${config.characterName}` +
+          (englishName ? ` / ${englishName}` : "") +
+          (sourceContext ? `（${sourceContext}）` : "")
+      );
+    }
     const research = await runResearchAgents(this.llm, {
       characterName: config.characterName,
       sourceType: config.sourceType,
       track: config.track,
       userMaterial: config.userMaterial,
+      sourceContext,
+      englishName,
       webSearchEnabled: config.enableWebSearch,
       concurrency: config.concurrency,
       timeoutMs: config.agentTimeoutMs,
@@ -345,10 +364,14 @@ export class NuwaOrchestrator {
       onAgentStart: (slug, agentName) => {
         const id = AGENT_SLUG_TO_ID[slug];
         if (id == null) return;
-        agentEventBuffer.push({ kind: "agent_start", jobId, agentId: id, agentName });
+        const evt: DeepProgressEvent = { kind: "agent_start", jobId, agentId: id, agentName };
+        agentEventBuffer.push(evt);
+        input.liveBroadcast?.(evt);
       },
       onAgentDone: (doc) => {
-        agentEventBuffer.push({ kind: "agent_done", jobId, doc });
+        const evt: DeepProgressEvent = { kind: "agent_done", jobId, doc };
+        agentEventBuffer.push(evt);
+        input.liveBroadcast?.(evt);
       }
     });
     // 把缓存的事件按顺序 yield 出来（runResearchAgents 是 await 整个完成的，事件回调期间没法 yield，
@@ -384,28 +407,10 @@ export class NuwaOrchestrator {
       `调研完成（成功 ${research.okCount}/6，失败 ${research.failedCount}），等待你确认`
     );
 
-    if (research.failedCount >= 3) {
-      yield yieldWarn(`6 个 agent 中有 ${research.failedCount} 个失败/超时，仍可继续，但建议关注调研质量`);
-    }
-
-    // 关键：检查"开了联网但实际没真触发"——这意味着模型只是用训练知识硬编，
-    // 用户应该被告知"这次结果可能是模型瞎编的"。
-    if (config.enableWebSearch) {
-      const realWebUsed = research.docs.filter((d) => d.webSearchUsed).length;
-      if (realWebUsed === 0 && research.okCount > 0) {
-        yield yieldWarn(
-          `调研阶段开了联网，但 0/${research.okCount} 个 agent 实际触发 web_search —— ` +
-            `这通常意味着中转站没把 web_search_options 透传给 OpenAI（OhMyGPT 等代理可能如此），` +
-            `结果可能基于模型训练知识"瞎编"。建议换 baseUrl 到 https://api.openai.com 直连，` +
-            `或换支持 server-side web_search 的 Anthropic 模型。`
-        );
-      } else if (realWebUsed > 0 && realWebUsed < Math.ceil(research.okCount / 2)) {
-        yield yieldWarn(
-          `只有 ${realWebUsed}/${research.okCount} 个 agent 真触发了联网，其余靠训练知识。` +
-            `建议在角色仓库中确认信息可信度。`
-        );
-      }
-    }
+    // 调研质量信号统一在 QualityReport 里给用户看（CharacterLibrary 详情面板），
+    // 不在主流程 yieldWarn 里弹"联网验证没通过"之类的硬话——那种文案会让用户以为
+    // 产品坏了。failedCount / realWebUsed 的事实会被 doc.webSearchUsed / doc.sources
+    // 自然反映到调研档案 + 质量自检里。
 
     // 等待用户在 UI 上点「确认」
     try {
@@ -533,25 +538,33 @@ export class NuwaOrchestrator {
 
     // ===== Phase 3c: 形象（atlas 优先，CSS 兜底）=====
     yield phaseEvent(jobId, "building_sprite", 80, "正在画桌宠的 hatch-pet 精灵图…");
-    const sprite =
-      appearance != null
-        ? await this.runVisualStep(
-            cardId,
-            config.characterName,
-            config.sourceType,
-            appearance,
-            refs,
-            warnings,
-            (evt) => {
-              // 实时把 hatch 事件推给 UI；避免等 5~10 分钟才看到第一行进度
-              input.liveBroadcast?.({
-                kind: "hatch_progress",
-                jobId,
-                event: toHatchDTO(evt)
-              });
-            }
-          )
-        : null;
+    // 关键：即使 phase3b 的 vision 链路失败、appearance 为 null，也要给一个最小默认 appearance，
+    // 让 gpt-image-2 始终有机会跑起来。这样用户至少能拿到一只"AI 画的桌宠"，
+    // 而不是骨架占位图。重新生成形象时还可以补素材。
+    const appearanceForSprite: AppearanceSpec =
+      appearance ??
+      makeMinimalAppearance(config.characterName, config.sourceType, config.track);
+    if (appearance == null) {
+      // 把这个最小外貌也写回到 card 上，避免「重画形象」按钮没东西可用
+      card.meta.appearance = appearanceForSprite;
+      card.meta.avatarHint = summarizeAppearance(appearanceForSprite);
+    }
+    const sprite = await this.runVisualStep(
+      cardId,
+      config.characterName,
+      config.sourceType,
+      appearanceForSprite,
+      refs,
+      warnings,
+      (evt) => {
+        // 实时把 hatch 事件推给 UI；避免等 5~10 分钟才看到第一行进度
+        input.liveBroadcast?.({
+          kind: "hatch_progress",
+          jobId,
+          event: toHatchDTO(evt)
+        });
+      }
+    );
     const finalSprite: SpriteProgram = sprite ?? skeleton.sprite;
     finalSprite.schemaVersion = SCHEMA_VERSION;
 
@@ -571,6 +584,8 @@ export class NuwaOrchestrator {
       );
     }
 
+    // 注意：appearance 即使为 null 也会用 minimalAppearance 兜底进 sprite，
+    // 因此 sprite 通常非 null。"骨架"严格定义为「人格 + 真实外貌 + sprite 三步全失败」。
     const isSkeleton =
       synthCard == null && appearance == null && sprite == null;
 
@@ -753,6 +768,75 @@ export class NuwaOrchestrator {
     }
 
     applyCharacterNamesToMeta(card.meta, names);
+  }
+
+  /**
+   * 调研开始前的"消歧义解析"：拿到角色的英文名 + 原作上下文，
+   * 用最便宜的方式（不联网，纯 LLM 一次调用）让后续 6 路 search-preview 都能搜对人。
+   *
+   * 来源优先级：
+   *   1. userMaterial / userHint 第一段中含「《XX》」「(XX)」「《XX》中的」之类显式上下文 → 抠出来
+   *   2. 否则用 provider.model（DeepSeek 等便宜模型）跑一次 lookup
+   *   3. 解析失败 → 返回 undefined，调研走纯名字搜索（仍可用，只是更可能漂移）
+   */
+  private async resolveResearchContext(
+    config: DistillationJobConfig,
+    warnings: string[]
+  ): Promise<{ sourceContext?: string; englishName?: string }> {
+    // Step 1: 显式 hint 解析
+    const extra = `${config.userHint ?? ""}\n${config.userMaterial ?? ""}`.slice(0, 600);
+    const m1 = extra.match(/[《<【](.+?)[》>】]/);
+    const m2 = extra.match(/\(([^)]+)\)|（([^）]+)）/);
+    const hintWork = m1?.[1]?.trim();
+    const parenHint = m2?.[1]?.trim() ?? m2?.[2]?.trim();
+    if (hintWork && hintWork.length <= 40) {
+      return { sourceContext: hintWork, englishName: undefined };
+    }
+
+    // Step 2: 原创角色不需要解析（用户自定义，没有原作可查）
+    if (config.sourceType === "original") {
+      return {};
+    }
+
+    // Step 3: 不联网的 LLM 一次调用，让模型回答"这个名字最广为人知的身份是什么 + 英文/原文名"
+    const sys =
+      "你是消歧义助手。只返回严格 JSON：{ \"sourceContext\": \"<最广为人知的作品/职业/身份，1-12 字>\", \"englishName\": \"<英文或原文名，若无则空字符串>\" }。" +
+      "不要解释，不要 Markdown。如果该名字有多个常见身份，选最广为人知的一个。";
+    const promptName =
+      config.sourceType === "fictional"
+        ? `角色名：「${config.characterName}」（已知是虚构 / 二次元角色）`
+        : `人物名：「${config.characterName}」（已知是公众人物 / 真人）`;
+    const user = `${promptName}\n请回答 sourceContext（所属作品 / 职业 / 国家+身份）和 englishName。`;
+    try {
+      const r = await this.llm.chatOnce({
+        systemPrompt: sys,
+        messages: [{ role: "user", content: user }],
+        temperature: 0.1,
+        maxTokens: 200,
+        stream: false
+      });
+      if (r.kind === "error") {
+        warnings.push(`[research·context-resolve] LLM 失败：${r.message.slice(0, 100)}`);
+        return parenHint ? { sourceContext: parenHint } : {};
+      }
+      const json = extractJSON(r.text) as
+        | { sourceContext?: unknown; englishName?: unknown }
+        | null;
+      const sourceContext =
+        typeof json?.sourceContext === "string" && json.sourceContext.trim().length > 0
+          ? json.sourceContext.trim().slice(0, 40)
+          : parenHint;
+      const englishName =
+        typeof json?.englishName === "string" && json.englishName.trim().length > 0
+          ? json.englishName.trim().slice(0, 60)
+          : undefined;
+      return { sourceContext, englishName };
+    } catch (e) {
+      warnings.push(
+        `[research·context-resolve] 异常：${e instanceof Error ? e.message : String(e)}`
+      );
+      return parenHint ? { sourceContext: parenHint } : {};
+    }
   }
 
   private async runNameResolutionStep(
@@ -1397,14 +1481,13 @@ export class NuwaOrchestrator {
       searchContextSize: "low"
     });
     if (result.kind === "error") {
-      return `联网调研实测失败：${result.message}`;
+      return `联网通道暂时不可用：${toUserFacingProviderError(result.message)}`;
     }
     const usedTool = result.toolEvents.some((e) => e.kind === "tool_start");
     if (!usedTool || result.citations.length === 0) {
-      return (
-        "联网调研实测失败：模型没有返回可验证的 web_search 工具事件和 URL citation。" +
-        "请切换到 OpenAI 直连 search-preview/search-api 模型，或支持 server-side web_search 的 Anthropic 模型。"
-      );
+      // 不阻断流程。部分中转会吞掉 annotations，但仍可能返回有用文本。
+      // 后续 research 阶段会通过 webSearchUsed=false / sources=0 降低可信度提示。
+      return null;
     }
     return null;
   }
@@ -1455,6 +1538,21 @@ export class NuwaOrchestrator {
     } else {
       warnings.push("[step3·hatch] 生图 pipeline 未初始化：缺少 ImageGenerationAdapter 或 Vault");
     }
+    try {
+      const fallback = buildSpriteFromAppearance(appearance);
+      const parsed = parseSprite(fallback);
+      if (parsed.ok && parsed.data) {
+        warnings.push(
+          "图像生成暂时没有完成，已先生成一只程序化像素形象；之后可在角色仓库点「重画形象」。"
+        );
+        return parsed.data;
+      }
+      warnings.push("[step3·programmatic] 程序化像素形象未通过 schema");
+    } catch (e) {
+      warnings.push(
+        `[step3·programmatic] 程序化像素形象失败：${e instanceof Error ? e.message : String(e)}`
+      );
+    }
     return null;
   }
 
@@ -1476,6 +1574,23 @@ function phaseEvent(
   message: string
 ): DeepProgressEvent {
   return { kind: "phase", jobId, phase, progress, message };
+}
+
+function toUserFacingProviderError(raw: string): string {
+  const text = raw.trim();
+  if (/401|403|unauthorized|invalid api key|AUTH_FAILED/i.test(text)) {
+    return "API Key 无效或没有权限，请在「模型与 API Key」里重新保存并测试。";
+  }
+  if (/429|rate limit|RATE_LIMITED/i.test(text)) {
+    return "模型供应商限流了。请稍等后重试，或降低并发 / 换一个供应商。";
+  }
+  if (/abort|timeout|timed out/i.test(text)) {
+    return "模型响应超时。请稍后重试，或换一个更稳定的供应商。";
+  }
+  if (/search-preview|web_search|annotations|citation|url_citation|web_search_options|baseUrl/i.test(text)) {
+    return "联网来源验证没有通过。系统可以继续造人，但调研可信度会偏低。";
+  }
+  return text.slice(0, 180);
 }
 
 /**
@@ -1522,6 +1637,72 @@ function toHatchDTO(evt: HatchProgressEvent): HatchProgressEventDTO {
   }
 }
 
+/**
+ * 当深度外貌管道失败、用户也没传参考图、联网搜图也没找到可用图时的最小默认 AppearanceSpec。
+ * 关键作用：保证 hatch-pet 一定有 spec 可吃，gpt-image-2 一定会被尝试调用——
+ * 用户至少能拿到一只"AI 画的桌宠"而不是骨架占位。
+ *
+ * 颜色按 track 走和 makeSkeletonSprite 相同的两套调色板，保持视觉一致。
+ */
+function makeMinimalAppearance(
+  characterName: string,
+  sourceType: "public-figure" | "fictional" | "original",
+  track: "utility" | "companion"
+): AppearanceSpec {
+  const palette =
+    track === "utility"
+      ? [
+          { role: "outline" as const, hex: "#1f2933" },
+          { role: "skin" as const, hex: "#f3d3b1" },
+          { role: "shirt" as const, hex: "#1a3a3a" },
+          { role: "accent" as const, hex: "#d94f70" },
+          { role: "hair" as const, hex: "#3d2c1a" },
+          { role: "eye" as const, hex: "#3d2c1a" }
+        ]
+      : [
+          { role: "outline" as const, hex: "#2b2233" },
+          { role: "skin" as const, hex: "#f8d3c5" },
+          { role: "shirt" as const, hex: "#9b7bd4" },
+          { role: "accent" as const, hex: "#ffd166" },
+          { role: "hair" as const, hex: "#5a3e2a" },
+          { role: "eye" as const, hex: "#5a3e2a" }
+        ];
+  return {
+    schemaVersion: "0.1",
+    build: "average",
+    ageBand: "young-adult",
+    gender: "unknown",
+    animeStyle: "chibi",
+    faceShape: "圆润",
+    skinTone: { name: "skin", hex: palette[1]!.hex },
+    hair: { style: "短发", color: { name: "hair", hex: palette[4]!.hex } },
+    eyes: {
+      color: { name: "eye", hex: palette[5]!.hex },
+      shape: "圆眼",
+      expression: track === "utility" ? "专注" : "温柔"
+    },
+    facialFeatures: [],
+    outfit: {
+      iconic: false,
+      top: {
+        name: track === "utility" ? "深色立领" : "柔色毛衣",
+        color: { name: "shirt", hex: palette[2]!.hex },
+        details: []
+      },
+      accessories: []
+    },
+    gear: [],
+    palette,
+    styleTokens: ["chibi", "friendly", "minimal"],
+    typicalScene: "",
+    sourceConfidence: "low",
+    citationNotes: [
+      `${characterName}（${sourceType}）·最小默认外貌：调研未能拿到可信视觉信息，已用通用 chibi 模板`
+    ],
+    referenceImages: []
+  };
+}
+
 function extractJSON(raw: string): unknown | null {
   const trimmed = raw.trim();
   if (trimmed.startsWith("{")) {
@@ -1551,6 +1732,3 @@ function extractJSON(raw: string): unknown | null {
   return null;
 }
 
-function clamp01(n: number): number {
-  return Math.max(0, Math.min(1, n));
-}

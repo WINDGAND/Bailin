@@ -82,7 +82,13 @@ export interface ImageGenerationRequest {
   prompt: string;
   /** 经济/标准/精品；不传则用 config.defaultTier。 */
   tier?: ImageTierName;
-  /** 透明背景，OpenAI gpt-image-* 支持；其它 provider 忽略。 */
+  /**
+   * 透明背景。注意：
+   *   - gpt-image-1 / gpt-image-1-mini ✅ 支持
+   *   - gpt-image-2 ❌ 不支持（实测会被 OpenAI 400 BAD_REQUEST 拒绝）
+   * 当请求透明背景但模型不支持时，adapter 会**自动跳过这个字段并继续请求**，
+   * 不会让整次生图失败；上层（hatch-pet）应在拿到非透明图后通过 chroma 抠白边。
+   */
   transparentBackground?: boolean;
   /** 覆盖 tier.size。 */
   size?: ImageTierConfig["size"];
@@ -90,6 +96,8 @@ export interface ImageGenerationRequest {
   quality?: ImageTierConfig["quality"];
   /** 超时（毫秒），默认 120s。生图通常需要 5-30s。 */
   timeoutMs?: number;
+  /** 给主进程日志埋点用的可读标签（如 "hatch:三笠:base"），不影响请求语义。 */
+  requestLabel?: string;
 }
 
 export interface ImageEditRequest extends ImageGenerationRequest {
@@ -136,6 +144,15 @@ export class ImageGenerationAdapter {
   ) {}
 
   /**
+   * 暴露当前生效的 ImageGenerationConfig（含 tiers / defaultTier），
+   * 给上层（hatch-pet pipeline）根据具体 tier 的 model 决定 chroma 策略用。
+   * 不包含 apiKey；不修改任何状态。
+   */
+  getConfig(): ImageGenerationConfig {
+    return this.config();
+  }
+
+  /**
    * 当前 provider 是否准备好生图。
    * 用于 UI 在 hatch-pet 按钮上显示「未配置生图模型」灰色态。
    */
@@ -163,26 +180,68 @@ export class ImageGenerationAdapter {
     const config = this.config();
     const tierName = req.tier ?? config.defaultTier;
     const tier = config.tiers[tierName];
-    const body: Record<string, unknown> = {
+    const supportsTransparent = modelSupportsTransparent(tier.model);
+    const body = buildGenerationBody({
       model: tier.model,
       prompt: req.prompt,
       size: req.size ?? tier.size ?? "1024x1024",
-      n: 1,
-      response_format: "b64_json"
+      quality: req.quality ?? tier.quality,
+      transparentBackground: req.transparentBackground === true && supportsTransparent
+    });
+    const requestId = `gen#${Math.random().toString(36).slice(2, 7)}`;
+    const requestUrl = joinUrl(resolved.baseUrl, "images/generations");
+    const logCtx = {
+      requestId,
+      label: req.requestLabel ?? "anon",
+      endpoint: "generations" as const,
+      url: requestUrl,
+      model: tier.model,
+      tier: tierName,
+      bodyKeys: Object.keys(body),
+      supportsTransparent,
+      transparentWanted: req.transparentBackground === true
     };
-    const quality = req.quality ?? tier.quality;
-    if (quality) body.quality = quality;
-    if (req.transparentBackground) body.background = "transparent";
 
-    return this.postJsonAndDecodeImage(
-      joinUrl(resolved.baseUrl, "images/generations"),
+    const first = await this.postJsonAndDecodeImage(
+      requestUrl,
       resolved.apiKey,
       body,
       tierName,
       tier,
       req.timeoutMs ?? 120_000,
-      startedAt
+      startedAt,
+      logCtx
     );
+
+    // 关键 fallback：gpt-image-2 不支持 background:transparent，碰到 400 自动去掉重试。
+    // 我们提前用 modelSupportsTransparent 拦掉了大部分；这里兜底拦运行时新出限制。
+    if (first.kind === "error" && shouldRetryWithoutTransparent(first.message, body)) {
+      logImageCall({
+        ...logCtx,
+        phase: "retry-no-transparent",
+        ok: false,
+        httpDt: first.durationMs,
+        note: "first try rejected by provider, retry without background:transparent"
+      });
+      const retryBody = buildGenerationBody({
+        model: tier.model,
+        prompt: req.prompt,
+        size: req.size ?? tier.size ?? "1024x1024",
+        quality: req.quality ?? tier.quality,
+        transparentBackground: false
+      });
+      return this.postJsonAndDecodeImage(
+        requestUrl,
+        resolved.apiKey,
+        retryBody,
+        tierName,
+        tier,
+        req.timeoutMs ?? 120_000,
+        Date.now(),
+        { ...logCtx, phase: "retry-no-transparent", bodyKeys: Object.keys(retryBody) }
+      );
+    }
+    return first;
   }
 
   /**
@@ -203,38 +262,96 @@ export class ImageGenerationAdapter {
     const config = this.config();
     const tierName = req.tier ?? config.defaultTier;
     const tier = config.tiers[tierName];
+    const supportsTransparent = modelSupportsTransparent(tier.model);
+    const wantTransparent = req.transparentBackground === true && supportsTransparent;
 
-    const form = new FormData();
-    form.set("model", tier.model);
-    form.set("prompt", req.prompt);
-    form.set("size", req.size ?? tier.size ?? "1024x1024");
-    form.set("n", "1");
-    form.set("response_format", "b64_json");
-    const quality = req.quality ?? tier.quality;
-    if (quality) form.set("quality", quality);
-    if (req.transparentBackground) form.set("background", "transparent");
+    const buildForm = async (transparent: boolean): Promise<FormData> => {
+      const form = new FormData();
+      form.set("model", tier.model);
+      form.set("prompt", req.prompt);
+      form.set("size", req.size ?? tier.size ?? "1024x1024");
+      form.set("n", "1");
+      form.set("response_format", "b64_json");
+      const quality = req.quality ?? tier.quality;
+      if (quality) form.set("quality", quality);
+      if (transparent) form.set("background", "transparent");
+      for (let i = 0; i < req.images.length; i += 1) {
+        const src = req.images[i];
+        if (!src) continue;
+        const blob = await dataUrlOrUrlToBlob(src);
+        form.set(req.images.length === 1 ? "image" : `image[${i}]`, blob, `ref-${i}.png`);
+      }
+      if (req.mask) {
+        const blob = await dataUrlOrUrlToBlob(req.mask);
+        form.set("mask", blob, "mask.png");
+      }
+      return form;
+    };
 
-    // 把每张 image 转成 Blob（PNG 默认），按 image[0] / image[1] 上传
-    for (let i = 0; i < req.images.length; i += 1) {
-      const src = req.images[i];
-      if (!src) continue;
-      const blob = await dataUrlOrUrlToBlob(src);
-      form.set(req.images.length === 1 ? "image" : `image[${i}]`, blob, `ref-${i}.png`);
-    }
-    if (req.mask) {
-      const blob = await dataUrlOrUrlToBlob(req.mask);
-      form.set("mask", blob, "mask.png");
-    }
+    const requestId = `edit#${Math.random().toString(36).slice(2, 7)}`;
+    const requestUrl = joinUrl(resolved.baseUrl, "images/edits");
+    const logCtx = {
+      requestId,
+      label: req.requestLabel ?? "anon",
+      endpoint: "edits" as const,
+      url: requestUrl,
+      model: tier.model,
+      tier: tierName,
+      bodyKeys: [
+        "model",
+        "prompt",
+        "size",
+        "n",
+        "response_format",
+        ...((req.quality ?? tier.quality) ? ["quality"] : []),
+        ...(wantTransparent ? ["background"] : []),
+        `images(${req.images.length})`,
+        ...(req.mask ? ["mask"] : [])
+      ],
+      supportsTransparent,
+      transparentWanted: req.transparentBackground === true
+    };
 
-    return this.postFormAndDecodeImage(
-      joinUrl(resolved.baseUrl, "images/edits"),
+    const form = await buildForm(wantTransparent);
+    const first = await this.postFormAndDecodeImage(
+      requestUrl,
       resolved.apiKey,
       form,
       tierName,
       tier,
       req.timeoutMs ?? 180_000,
-      startedAt
+      startedAt,
+      logCtx
     );
+    if (
+      first.kind === "error" &&
+      wantTransparent &&
+      shouldRetryWithoutTransparent(first.message, { background: "transparent" })
+    ) {
+      logImageCall({
+        ...logCtx,
+        phase: "retry-no-transparent",
+        ok: false,
+        httpDt: first.durationMs,
+        note: "first edit rejected by provider, retry without background:transparent"
+      });
+      const retryForm = await buildForm(false);
+      return this.postFormAndDecodeImage(
+        requestUrl,
+        resolved.apiKey,
+        retryForm,
+        tierName,
+        tier,
+        req.timeoutMs ?? 180_000,
+        Date.now(),
+        {
+          ...logCtx,
+          phase: "retry-no-transparent",
+          bodyKeys: logCtx.bodyKeys.filter((k) => k !== "background")
+        }
+      );
+    }
+    return first;
   }
 
   /** 配置文件解析；缺失字段用默认填补。 */
@@ -261,7 +378,8 @@ export class ImageGenerationAdapter {
     tier: ImageTierName,
     tierCfg: ImageTierConfig,
     timeoutMs: number,
-    startedAt: number
+    startedAt: number,
+    logCtx: ImageLogCtx
   ): Promise<ImageGenerationResponse> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -275,16 +393,21 @@ export class ImageGenerationAdapter {
         body: JSON.stringify(body),
         signal: controller.signal
       });
-      return await this.decodeImageResponse(
-        res,
-        tier,
-        tierCfg,
-        startedAt
-      );
+      return await this.decodeImageResponse(res, tier, tierCfg, startedAt, logCtx);
     } catch (err) {
+      const httpDt = Date.now() - startedAt;
+      const msg = err instanceof Error ? err.message : String(err);
+      logImageCall({
+        ...logCtx,
+        phase: logCtx.phase ?? "first",
+        ok: false,
+        httpDt,
+        httpStatus: 0,
+        errorPreview: (controller.signal.aborted ? "TIMEOUT: " : "NETWORK: ") + msg
+      });
       return errorResult(
         controller.signal.aborted ? "TIMEOUT" : "NETWORK_ERROR",
-        err instanceof Error ? err.message : String(err),
+        msg,
         startedAt
       );
     } finally {
@@ -299,7 +422,8 @@ export class ImageGenerationAdapter {
     tier: ImageTierName,
     tierCfg: ImageTierConfig,
     timeoutMs: number,
-    startedAt: number
+    startedAt: number,
+    logCtx: ImageLogCtx
   ): Promise<ImageGenerationResponse> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -310,11 +434,21 @@ export class ImageGenerationAdapter {
         body: form,
         signal: controller.signal
       });
-      return await this.decodeImageResponse(res, tier, tierCfg, startedAt);
+      return await this.decodeImageResponse(res, tier, tierCfg, startedAt, logCtx);
     } catch (err) {
+      const httpDt = Date.now() - startedAt;
+      const msg = err instanceof Error ? err.message : String(err);
+      logImageCall({
+        ...logCtx,
+        phase: logCtx.phase ?? "first",
+        ok: false,
+        httpDt,
+        httpStatus: 0,
+        errorPreview: (controller.signal.aborted ? "TIMEOUT: " : "NETWORK: ") + msg
+      });
       return errorResult(
         controller.signal.aborted ? "TIMEOUT" : "NETWORK_ERROR",
-        err instanceof Error ? err.message : String(err),
+        msg,
         startedAt
       );
     } finally {
@@ -326,10 +460,20 @@ export class ImageGenerationAdapter {
     res: Response,
     tier: ImageTierName,
     tierCfg: ImageTierConfig,
-    startedAt: number
+    startedAt: number,
+    logCtx: ImageLogCtx
   ): Promise<ImageGenerationResponse> {
+    const httpDt = Date.now() - startedAt;
     if (!res.ok) {
       const text = await safeReadText(res);
+      logImageCall({
+        ...logCtx,
+        phase: logCtx.phase ?? "first",
+        ok: false,
+        httpStatus: res.status,
+        httpDt,
+        errorPreview: text.slice(0, 300)
+      });
       return errorResult(
         mapStatusToCode(res.status),
         `HTTP ${res.status}: ${truncate(text, 600)}`,
@@ -343,6 +487,14 @@ export class ImageGenerationAdapter {
         error?: { message?: string; code?: string };
       };
       if (json.error) {
+        logImageCall({
+          ...logCtx,
+          phase: logCtx.phase ?? "first",
+          ok: false,
+          httpStatus: res.status,
+          httpDt,
+          errorPreview: json.error.message ?? "unknown provider error"
+        });
         return errorResult(
           json.error.code ?? "PROVIDER_ERROR",
           json.error.message ?? "Provider returned an error",
@@ -352,6 +504,15 @@ export class ImageGenerationAdapter {
       const first = json.data?.[0];
       if (first?.b64_json) {
         const buf = Buffer.from(first.b64_json, "base64");
+        logImageCall({
+          ...logCtx,
+          phase: logCtx.phase ?? "first",
+          ok: true,
+          httpStatus: res.status,
+          httpDt,
+          bytes: buf.length,
+          mime: "image/png(b64)"
+        });
         return {
           kind: "done",
           buffer: buf,
@@ -365,12 +526,29 @@ export class ImageGenerationAdapter {
       if (first?.url) {
         const buf = await fetchUrlBuffer(first.url);
         if (!buf) {
+          logImageCall({
+            ...logCtx,
+            phase: logCtx.phase ?? "first",
+            ok: false,
+            httpStatus: res.status,
+            httpDt,
+            errorPreview: "URL_DOWNLOAD_FAILED: " + first.url.slice(0, 100)
+          });
           return errorResult(
             "DECODE_FAILED",
             "provider returned a URL but it could not be downloaded",
             startedAt
           );
         }
+        logImageCall({
+          ...logCtx,
+          phase: logCtx.phase ?? "first",
+          ok: true,
+          httpStatus: res.status,
+          httpDt,
+          bytes: buf.length,
+          mime: "json.data[0].url"
+        });
         return {
           kind: "done",
           buffer: buf,
@@ -381,16 +559,32 @@ export class ImageGenerationAdapter {
           estimatedCostUsd: tierCfg.estimatedCostUsd
         };
       }
+      logImageCall({
+        ...logCtx,
+        phase: logCtx.phase ?? "first",
+        ok: false,
+        httpStatus: res.status,
+        httpDt,
+        errorPreview: "JSON missing b64_json/url"
+      });
       return errorResult(
         "DECODE_FAILED",
         "provider returned JSON without b64_json or url",
         startedAt
       );
     }
-    // 直接返回 image/* 二进制（少数 provider）
     if (ct.startsWith("image/")) {
       const ab = await res.arrayBuffer();
       const buf = Buffer.from(ab);
+      logImageCall({
+        ...logCtx,
+        phase: logCtx.phase ?? "first",
+        ok: true,
+        httpStatus: res.status,
+        httpDt,
+        bytes: buf.length,
+        mime: ct
+      });
       return {
         kind: "done",
         buffer: buf,
@@ -402,6 +596,14 @@ export class ImageGenerationAdapter {
       };
     }
     const text = await safeReadText(res);
+    logImageCall({
+      ...logCtx,
+      phase: logCtx.phase ?? "first",
+      ok: false,
+      httpStatus: res.status,
+      httpDt,
+      errorPreview: `unknown ct=${ct}: ${text.slice(0, 150)}`
+    });
     return errorResult(
       "UNKNOWN_RESPONSE",
       `unexpected content-type=${ct}, body=${truncate(text, 600)}`,
@@ -482,6 +684,129 @@ async function fetchUrlBuffer(url: string): Promise<Buffer | null> {
 /**
  * 简易 magic number 探测：仅区分 PNG / WebP / JPEG，足够 hatch-pet 用。
  */
+/**
+ * 已知支持 `background:"transparent"` 的生图模型清单（白名单）。
+ *
+ * 实测：
+ *   ✅ gpt-image-1, gpt-image-1-mini → 接受 background:transparent，返回透明 PNG
+ *   ❌ gpt-image-2 → HTTP 400 "Transparent background is not supported for this model"
+ *
+ * 其它 provider 模型默认按"不支持"处理；adapter 在 transparent=true 时会自动 fallback。
+ */
+const TRANSPARENT_BG_MODELS: ReadonlyArray<string> = [
+  "gpt-image-1",
+  "gpt-image-1-mini"
+];
+
+export function modelSupportsTransparent(model: string): boolean {
+  const lower = model.toLowerCase();
+  return TRANSPARENT_BG_MODELS.some((m) => lower === m || lower.startsWith(m + "-"));
+}
+
+/**
+ * 根据 provider 的报错文本判断"如果重试时不传 background:transparent，是否可能成功"。
+ *
+ * 触发条件：
+ *   - body 里曾经传过 background:transparent（不传就没意义重试）
+ *   - 错误信息提及 background / transparent / image_generation_user_error
+ */
+export function shouldRetryWithoutTransparent(
+  errorMessage: string,
+  body: Record<string, unknown>
+): boolean {
+  if (body.background !== "transparent") return false;
+  const text = errorMessage.toLowerCase();
+  return (
+    text.includes("transparent") ||
+    text.includes("background") ||
+    text.includes("image_generation_user_error")
+  );
+}
+
+function buildGenerationBody(p: {
+  model: string;
+  prompt: string;
+  size: string;
+  quality?: ImageTierConfig["quality"];
+  transparentBackground: boolean;
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: p.model,
+    prompt: p.prompt,
+    size: p.size,
+    n: 1,
+    response_format: "b64_json"
+  };
+  if (p.quality) body.quality = p.quality;
+  if (p.transparentBackground) body.background = "transparent";
+  return body;
+}
+
+/** 日志上下文，所有 image adapter 调用共享。 */
+export interface ImageLogCtx {
+  requestId: string;
+  /** 调用方语义标签，如 "hatch:三笠:base"。 */
+  label: string;
+  endpoint: "generations" | "edits";
+  url: string;
+  model: string;
+  tier: ImageTierName;
+  bodyKeys: string[];
+  supportsTransparent: boolean;
+  transparentWanted: boolean;
+  /** "first" / "retry-no-transparent" 之类的阶段标记。 */
+  phase?: "first" | "retry-no-transparent";
+}
+
+interface ImageCallLog extends ImageLogCtx {
+  phase: NonNullable<ImageLogCtx["phase"]>;
+  ok: boolean;
+  httpStatus?: number;
+  httpDt: number;
+  bytes?: number;
+  mime?: string;
+  errorPreview?: string;
+  note?: string;
+}
+
+let cachedImgLogger: { info: (s: string) => void; warn: (s: string) => void } | null = null;
+function getImageLog(): { info: (s: string) => void; warn: (s: string) => void } | null {
+  if (cachedImgLogger) return cachedImgLogger;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const mod = require("electron-log/main") as {
+      info: (s: string) => void;
+      warn: (s: string) => void;
+    };
+    cachedImgLogger = mod;
+    return cachedImgLogger;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 双通道日志：dev 终端 + %APPDATA%/Bailin/logs/main.log，
+ * 让用户报"生图失败"时一行就能告诉我们：是 400/429/500、是 transparent 被拒、还是 timeout。
+ */
+function logImageCall(info: ImageCallLog): void {
+  const tag = "[ImageGen]";
+  const head =
+    `${tag} ${info.requestId} label=${info.label} ep=${info.endpoint} model=${info.model} ` +
+    `tier=${info.tier} phase=${info.phase} http=${info.httpStatus ?? 0} dt=${info.httpDt}ms`;
+  const meta = `bodyKeys=[${info.bodyKeys.join(",")}] tparWant=${info.transparentWanted} tparOk=${info.supportsTransparent}`;
+  const elog = getImageLog();
+  if (info.ok) {
+    const line = `${head} ${meta} bytes=${info.bytes ?? 0} mime=${info.mime ?? "?"}`;
+    console.log(line);
+    elog?.info(line);
+    return;
+  }
+  const line = `${head} ${meta} ERR="${info.errorPreview ?? "?"}"${info.note ? ` note=${info.note}` : ""}`;
+  console.warn(line);
+  elog?.warn(line);
+}
+
 function detectMime(buf: Buffer): string {
   if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
     return "image/png";

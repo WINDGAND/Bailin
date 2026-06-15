@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC } from "../shared/ipc-contract.js";
+import { IPC, type ImageTierName } from "../shared/ipc-contract.js";
 
 const api = {
   app: {
@@ -17,7 +17,7 @@ const api = {
     getConfig: () => ipcRenderer.invoke(IPC.ImageGenGetConfig),
     setConfig: (input: unknown) => ipcRenderer.invoke(IPC.ImageGenSetConfig, input),
     detectCapability: () => ipcRenderer.invoke(IPC.ImageGenDetectCapability),
-    test: (tier?: string) => ipcRenderer.invoke(IPC.ImageGenTest, tier),
+    test: (tier?: ImageTierName) => ipcRenderer.invoke(IPC.ImageGenTest, tier),
     clearKey: () => ipcRenderer.invoke(IPC.ImageGenClearKey)
   },
   characters: {

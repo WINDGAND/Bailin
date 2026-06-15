@@ -55,5 +55,9 @@ desktop.ini
 coverage/
 .smoke-out/
 
+# Debug / smoke run artifacts（脚本本身受 git 管理，运行产物不进库）
+scripts/debug/_*
+scripts/verify/_*
+
 # Cursor plan / chat scratch
 .cursor/plans/scratch/

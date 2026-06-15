@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { ulid } from "ulid";
 import log from "electron-log/main";
 import { STARTER_BUNDLES } from "@nuwa-pet/starter-library";
@@ -177,5 +177,3 @@ function loadDotEnvDev(): void {
 
 // 用于让 TypeScript 在 CommonJS 环境识别 __dirname
 declare const __dirname: string;
-// 用于避免 join 未使用的提示
-void join;

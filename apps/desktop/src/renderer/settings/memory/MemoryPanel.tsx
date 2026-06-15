@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { useConfirm, useToast } from "../../shared/feedback.js";
+import { useDirtyTracker } from "../app/dirty-context.js";
 
 interface Profile {
   preferredName?: string;
@@ -14,6 +15,8 @@ const EMPTY: Profile = {
   ongoingConcerns: [],
   tabooTopics: []
 };
+
+const MAX_NAME = 24;
 
 function profileKey(p: Profile): string {
   return JSON.stringify({
@@ -32,12 +35,21 @@ export function MemoryPanel(): JSX.Element {
   const [initial, setInitial] = useState<Profile>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   async function reload(): Promise<void> {
-    const p = (await nuwa.memory.getProfile()) as Profile;
-    setProfile(p);
-    setInitial(p);
-    setLoaded(true);
+    try {
+      const p = (await nuwa.memory.getProfile()) as Profile;
+      setProfile(p);
+      setInitial(p);
+    } catch (e) {
+      showToast({
+        kind: "error",
+        text: `读取画像失败：${e instanceof Error ? e.message : "未知错误"}`
+      });
+    } finally {
+      setLoaded(true);
+    }
   }
 
   useEffect(() => {
@@ -49,29 +61,70 @@ export function MemoryPanel(): JSX.Element {
     [profile, initial, loaded]
   );
 
+  useDirtyTracker(dirty);
+
   async function save(): Promise<void> {
     setSaving(true);
-    // 提交前裁剪空白项
     const clean: Profile = {
       preferredName: profile.preferredName?.trim() || undefined,
       currentGoals: profile.currentGoals.map((s) => s.trim()).filter(Boolean),
       ongoingConcerns: profile.ongoingConcerns.map((s) => s.trim()).filter(Boolean),
       tabooTopics: profile.tabooTopics.map((s) => s.trim()).filter(Boolean)
     };
-    await nuwa.memory.updateProfile(clean);
-    setProfile(clean);
-    setInitial(clean);
-    setSaving(false);
-    showToast({ kind: "success", text: "画像已保存" });
+    try {
+      await nuwa.memory.updateProfile(clean);
+      setProfile(clean);
+      setInitial(clean);
+      showToast({ kind: "success", text: "画像已保存，下次对话立刻生效" });
+    } catch (e) {
+      showToast({
+        kind: "error",
+        text: `保存失败：${e instanceof Error ? e.message : "未知错误"}`
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   function discard(): void {
     setProfile(initial);
   }
 
+  async function clearProfile(): Promise<void> {
+    const ok = await confirm({
+      title: "清空用户画像？",
+      body: (
+        <span>
+          清空后，角色对你的称呼、知道的目标 / 烦恼 / 禁忌都会消失。
+          <p style={{ marginTop: 8, color: "var(--ink-soft)" }}>
+            角色仓库与对话历史不受影响。
+          </p>
+        </span>
+      ),
+      confirmLabel: "清空画像",
+      cancelLabel: "再想想",
+      danger: true
+    });
+    if (!ok) return;
+    setClearing(true);
+    try {
+      await nuwa.memory.clearProfile();
+      setProfile(EMPTY);
+      setInitial(EMPTY);
+      showToast({ kind: "info", text: "画像已清空" });
+    } catch (e) {
+      showToast({
+        kind: "error",
+        text: `清空失败：${e instanceof Error ? e.message : "未知错误"}`
+      });
+    } finally {
+      setClearing(false);
+    }
+  }
+
   async function clearAll(): Promise<void> {
     const ok = await confirm({
-      title: "清空全部数据？",
+      title: "清空全部本地数据？",
       body: (
         <span>
           这会同时删除：
@@ -89,80 +142,140 @@ export function MemoryPanel(): JSX.Element {
       requireText: "DELETE"
     });
     if (!ok) return;
-    await nuwa.memory.clearAll();
-    setProfile(EMPTY);
-    setInitial(EMPTY);
-    showToast({ kind: "info", text: "已清空全部本地数据" });
+    setClearing(true);
+    try {
+      await nuwa.memory.clearAll();
+      setProfile(EMPTY);
+      setInitial(EMPTY);
+      showToast({ kind: "info", text: "已清空全部本地数据" });
+    } catch (e) {
+      showToast({
+        kind: "error",
+        text: `清空失败：${e instanceof Error ? e.message : "未知错误"}`
+      });
+    } finally {
+      setClearing(false);
+    }
   }
 
   return (
     <div>
-      <div className="eyebrow">Memory</div>
-      <div className="display display--page" style={{ marginBottom: 18 }}>
-        用户画像
+      <div className="apple-page-header">
+        <div className="eyebrow">Memory</div>
+        <div className="display display--page">用户画像</div>
+        <p className="apple-page-subtitle">
+          这些偏好会轻轻进入每次对话，让角色更像是在和“你”说话。
+        </p>
       </div>
 
-      <div className="card" style={{ padding: 26, display: "grid", gap: 18 }}>
-        <p className="body-md" style={{ margin: 0 }}>
-          这些是角色们对你的"轻量画像"。它们决定了你的桌宠会怎么称呼你、会避开哪些话题、会在意你最近在做什么。
-        </p>
+      <div className="bl-card apple-panel">
+        <div className="row row--between gap-3" style={{ alignItems: "flex-start", marginBottom: 24 }}>
+          <p className="body-md" style={{ margin: 0, maxWidth: 480 }}>
+            建议至少填一下“称呼”。其余内容可以以后慢慢加，角色会在对话里自然参考。
+          </p>
+          <div className="row gap-2 row--wrap" style={{ justifyContent: "flex-end" }}>
+            <span className="bl-tag">称呼</span>
+            <span className="bl-tag">目标</span>
+            <span className="bl-tag">避讳</span>
+          </div>
+        </div>
 
-        <div>
-          <label className="eyebrow">称呼</label>
+        {/* —————— 称呼（hero 字段） —————— */}
+        <div style={{ marginBottom: 26 }}>
+          <label htmlFor="memory-name" className="bl-field-label bl-field-label--with-hint">
+            称呼
+          </label>
+          <p className="bl-field-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+            角色每次对话都会这样叫你
+          </p>
           <input
-            className="input"
+            id="memory-name"
+            className="forge-field-name__input"
             value={profile.preferredName ?? ""}
             onChange={(e) =>
               setProfile({ ...profile, preferredName: e.target.value })
             }
-            placeholder="想被怎么称呼"
+            placeholder="小明 / 老王 / 同学"
+            maxLength={MAX_NAME + 10}
+            style={{ fontSize: "clamp(22px, 2.4vw, 28px)" }}
           />
         </div>
 
-        <ListField
-          label="当前目标"
-          emptyHint="还没记下任何目标"
-          values={profile.currentGoals}
-          onChange={(v) => setProfile({ ...profile, currentGoals: v })}
-        />
-        <ListField
-          label="长期烦恼"
-          emptyHint="还没记下任何烦恼"
-          values={profile.ongoingConcerns}
-          onChange={(v) => setProfile({ ...profile, ongoingConcerns: v })}
-        />
-        <ListField
-          label="禁忌话题"
-          emptyHint="还没标注禁忌话题"
-          values={profile.tabooTopics}
-          onChange={(v) => setProfile({ ...profile, tabooTopics: v })}
-        />
+        {/* —————— 三组列表字段 —————— */}
+        <div className="apple-list-group">
+          <ListField
+            label="当前目标"
+            hint="桌宠会在意你最近在做什么。对话 prompt 仅使用前 3 条。"
+            emptyHint="还没记下任何目标"
+            placeholder="例如：找下一份工作 / 跑半马"
+            values={profile.currentGoals}
+            onChange={(v) => setProfile({ ...profile, currentGoals: v })}
+          />
+          <ListField
+            label="长期烦恼"
+            hint="桌宠在你低落时会更柔软地回应。对话 prompt 仅使用前 3 条。"
+            emptyHint="还没记下任何烦恼"
+            placeholder="例如：跟父母关系紧张 / 失眠"
+            values={profile.ongoingConcerns}
+            onChange={(v) => setProfile({ ...profile, ongoingConcerns: v })}
+          />
+          <ListField
+            label="禁忌话题"
+            hint="角色会尽量避开这些话题（软约束，不保证 100% 遵守）。"
+            emptyHint="还没标注禁忌话题"
+            placeholder="例如：抑郁症 / 前任"
+            values={profile.tabooTopics}
+            onChange={(v) => setProfile({ ...profile, tabooTopics: v })}
+            tone="caution"
+          />
+        </div>
 
-        <div className="row row--between gap-2" style={{ marginTop: 4 }}>
-          <button
-            className="btn btn--danger btn--sm"
-            onClick={() => void clearAll()}
-          >
-            清空全部数据
-          </button>
-          <div className="row gap-2">
+        {/* —————— action bar —————— */}
+        <div className="bl-action-bar">
+          <div className="bl-action-bar__left">
+            <button
+              type="button"
+              className="btn btn--danger btn--sm"
+              onClick={() => void clearProfile()}
+              disabled={clearing}
+            >
+              清空画像
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => void clearAll()}
+              disabled={clearing}
+            >
+              全部数据…
+            </button>
+          </div>
+          <div className="bl-action-bar__right">
+            {dirty ? <span className="bl-dirty-dot">未保存</span> : null}
             {dirty ? (
               <button
+                type="button"
                 className="btn btn--ghost btn--sm"
                 onClick={discard}
                 disabled={saving}
               >
-                放弃修改
+                放弃
               </button>
             ) : null}
-            <button
-              className="btn btn--magenta"
-              onClick={() => void save()}
-              disabled={saving || !dirty}
-              data-hint={!dirty && loaded ? "没有要保存的修改" : ""}
-            >
-              {saving ? "保存中…" : "保存修改"}
-            </button>
+            {dirty ? (
+              <button
+                type="button"
+                className="btn btn--magenta"
+                onClick={() => void save()}
+                disabled={saving}
+              >
+                {saving ? "保存中…" : "保存修改"}
+              </button>
+            ) : (
+              <span className="body-sm" style={{ color: "var(--ink-faint)" }}>
+                已同步
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -172,23 +285,41 @@ export function MemoryPanel(): JSX.Element {
 
 function ListField({
   label,
+  hint,
   emptyHint,
+  placeholder,
   values,
-  onChange
+  onChange,
+  tone
 }: {
   label: string;
+  hint?: string;
   emptyHint: string;
+  placeholder?: string;
   values: string[];
   onChange(v: string[]): void;
+  tone?: "default" | "caution";
 }) {
+  const isCaution = tone === "caution";
   return (
-    <div>
-      <label className="eyebrow">{label}</label>
-      <div className="stack" style={{ marginTop: 6 }}>
+    <div className="apple-list-row">
+      <label className="bl-field-label bl-field-label--with-hint">
+        {label}
+        {isCaution ? (
+          <span
+            className="bl-tag"
+            style={{ marginLeft: 8, fontSize: 10.5, padding: "2px 7px" }}
+          >
+            软约束
+          </span>
+        ) : null}
+      </label>
+      {hint ? <p className="bl-field-hint">{hint}</p> : null}
+      <div className="stack" style={{ marginTop: 8, gap: 6 }}>
         {values.length === 0 ? (
           <p
             className="body-sm"
-            style={{ margin: 0, color: "var(--ink-faint)", fontStyle: "italic" }}
+            style={{ margin: 0, color: "var(--ink-faint)" }}
           >
             {emptyHint}
           </p>
@@ -197,6 +328,7 @@ function ListField({
             <ListRow
               key={i}
               value={v}
+              placeholder={placeholder}
               onChange={(text) => {
                 const next = [...values];
                 next[i] = text;
@@ -212,7 +344,7 @@ function ListField({
         <button
           type="button"
           className="btn btn--ghost btn--sm"
-          style={{ alignSelf: "flex-start" }}
+          style={{ alignSelf: "flex-start", marginTop: 4 }}
           onClick={() => onChange([...values, ""])}
         >
           + 添加一条
@@ -225,11 +357,13 @@ function ListField({
 function ListRow({
   value,
   onChange,
-  onRemove
+  onRemove,
+  placeholder
 }: {
   value: string;
   onChange: (v: string) => void;
   onRemove: () => void;
+  placeholder?: string;
 }) {
   const [hover, setHover] = useState(false);
   return (
@@ -243,7 +377,7 @@ function ListRow({
         className="input"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="..."
+        placeholder={placeholder ?? "..."}
       />
       <button
         type="button"
@@ -252,7 +386,7 @@ function ListRow({
         aria-label="删除此条"
         data-hint="删除"
         style={{
-          opacity: hover ? 1 : 0.35,
+          opacity: hover ? 1 : 0.45,
           transition: "opacity var(--motion-fast) var(--ease-out)"
         }}
       >

@@ -15,6 +15,15 @@ export interface ResearchAgentInput {
   userMaterial?: string;
   /** 是否启用 web_search 工具。FALSE 时 prompt 改为「只用训练知识」。 */
   webSearchEnabled: boolean;
+  /**
+   * 角色的原作名 / 上下文锚点（用于消歧义），如「进击的巨人」、「Attack on Titan」。
+   * 虚构角色推荐传入：单字 / 二字角色名（三笠、绫波）在没有作品上下文时
+   * 经常被 search-preview 模型识别成其它同名物（战舰 / 地名 / 姓氏），
+   * 拿不到任何 citations。
+   */
+  sourceContext?: string;
+  /** 角色的英文名 / 原文名，强化搜索 query 的命中率（如 "Mikasa Ackerman"）。 */
+  englishName?: string;
 }
 
 export type ResearchAgentSlug =
@@ -47,6 +56,13 @@ const RESEARCH_AGENT_DEFS: Record<
     agentName: string;
     focus: string[];
     extract: string[];
+    /**
+     * 候选搜索关键词模板。webSearchEnabled=true 时会被注入到 system prompt，
+     * 强烈引导模型先搜这些 query；对 OpenAI chat completions search-preview 模型尤其关键
+     *（中转商对长任务式 prompt 经常跳过 search，必须给出候选 query 才能稳定触发）。
+     * 用 `{name}` 占位字符替换为目标人物名。
+     */
+    suggestedQueries: string[];
     /** 给 user 段补充的特殊说明（如时间线 agent 要查近 12 个月）。 */
     extra?: string;
   }
@@ -66,6 +82,12 @@ const RESEARCH_AGENT_DEFS: Record<
       "列出 5-12 个反复出现的核心论点，每个标注出现过的至少 2 个不同场景",
       "列出 3-8 个自创术语 / 专属概念，带定义",
       "推荐书单 / 思想源头：至少 3 个"
+    ],
+    suggestedQueries: [
+      `"{name}" 著作 书籍 list`,
+      `"{name}" books bibliography`,
+      `"{name}" 推荐书单 思想`,
+      `"{name}" essay long-form site:medium.com OR site:substack.com`
     ]
   },
   conversations: {
@@ -83,6 +105,12 @@ const RESEARCH_AGENT_DEFS: Record<
       "至少 5 个即兴类比 / 比喻，每个带原文出处",
       "至少 2 个立场变化案例：原立场 / 新立场 / 变化原因",
       "至少 2 个回避案例：他在什么话题上闭口"
+    ],
+    suggestedQueries: [
+      `"{name}" interview transcript`,
+      `"{name}" podcast 访谈 完整`,
+      `"{name}" AMA Q&A`,
+      `"{name}" 长访谈 record`
     ]
   },
   "expression-dna": {
@@ -101,6 +129,12 @@ const RESEARCH_AGENT_DEFS: Record<
       "禁忌词：他几乎不会说的词或套话",
       "争议立场：3-6 条与主流相悖的观点 + 何时何地说过",
       "幽默 vs 严肃比例：用 1 句话概括"
+    ],
+    suggestedQueries: [
+      `"{name}" 名言 quotes 经典`,
+      `"{name}" twitter X 高频`,
+      `"{name}" 语录 金句`,
+      `"{name}" famous sayings`
     ]
   },
   "external-views": {
@@ -118,6 +152,12 @@ const RESEARCH_AGENT_DEFS: Record<
       "至少 3 条来自批评者的攻击 / 揭露（即使你不同意也要列出）",
       "与至少 1 个同行的对比：A 怎么做 vs 此人怎么做",
       "形象分裂：粉丝眼中 vs 黑粉眼中 vs 中立媒体眼中的差别"
+    ],
+    suggestedQueries: [
+      `"{name}" 评价 批评 争议`,
+      `"{name}" criticism analysis`,
+      `"{name}" biography 传记`,
+      `"{name}" controversy`
     ]
   },
   decisions: {
@@ -135,6 +175,12 @@ const RESEARCH_AGENT_DEFS: Record<
       "至少 2 个言行不一致案例：他说 X，却做了 Y",
       "至少 1 个失败 / 翻车案例：发生了什么，他怎么应对",
       "决策模式总结：1-2 句话提炼他做决定的反复出现的套路"
+    ],
+    suggestedQueries: [
+      `"{name}" 重大决策 转折`,
+      `"{name}" decision making controversy`,
+      `"{name}" 翻车 失败 复盘`,
+      `"{name}" famous moments timeline`
     ]
   },
   timeline: {
@@ -151,6 +197,12 @@ const RESEARCH_AGENT_DEFS: Record<
       "至少覆盖 8-15 个关键节点，按时间正序",
       "**最近 12 个月单独列一个小节**，越具体越好",
       "如果是虚构角色：用故事内时间线（章节 / 集数 / 设定年代）"
+    ],
+    suggestedQueries: [
+      `"{name}" wikipedia 生平`,
+      `"{name}" biography timeline`,
+      `"{name}" 近期 最新`,
+      `"{name}" recent news`
     ],
     extra:
       "对于虚构 / 二次元角色：以原作设定的故事时间线为主，不要把作者外部时间混进去。"
@@ -171,41 +223,97 @@ export function buildResearchAgentPrompt(
   input: ResearchAgentInput
 ): { system: string; user: string; agentName: string } {
   const def = RESEARCH_AGENT_DEFS[slug];
-  const { characterName, sourceType, track, userMaterial, webSearchEnabled } = input;
+  const {
+    characterName,
+    sourceType,
+    track,
+    userMaterial,
+    webSearchEnabled,
+    sourceContext,
+    englishName
+  } = input;
+  // 构造主要搜索锚点：英文名（如果有）+ 原作上下文（如果有）拼成完整短语。
+  // 例："Mikasa Ackerman Attack on Titan" 或 "三笠 进击的巨人"
+  // 这能显著降低 search-preview 模型对单字/二字角色名的歧义率。
+  const fullEnglish = [englishName, sourceContext].filter(Boolean).join(" ");
+  const fullChinese = sourceContext
+    ? `${characterName} ${sourceContext}`
+    : characterName;
+  const subject = englishName
+    ? `${characterName} / ${englishName}` + (sourceContext ? `（${sourceContext}）` : "")
+    : characterName + (sourceContext ? `（${sourceContext}）` : "");
 
-  const lines: string[] = [
-    `你是 百灵 Bailin 深度蒸馏流程中的「${def.title}」。`,
-    `你的工作只有一件：为目标人物 / 角色调研「${def.agentName}」维度，输出一份高质量 Markdown 报告。`,
-    "",
-    "搜索方向：",
-    ...def.focus.map((s) => `- ${s}`),
-    "",
-    "必须提取的产物：",
-    ...def.extract.map((s) => `- ${s}`),
-    ""
-  ];
-  if (def.extra) lines.push(def.extra, "");
+  // 关键修复：把强搜索指令放到 system prompt 最前面。
+  //
+  // 实测背景（scripts/debug/debug-prompt-shape.mjs）：
+  //   - OpenAI chat completions 系列的 search-preview 模型在长任务式 prompt 下经常**跳过搜索**，
+  //     直接靠训练知识硬编（命中率 0/3）；尽管 OpenAI 官方说 "always search before responding"，
+  //     但 OhMyGPT 等中转的实现并不可靠。
+  //   - 在 system prompt 顶部加 "必须先调用 web_search 至少 N 次，不允许仅凭训练知识"
+  //     + 候选 query 列表后，命中率提升到 3/3。
+  //
+  // 策略：第一句就用强指令把这件事钉死，再附上候选 query 帮模型构造搜索 token。
+  const lines: string[] = [];
 
   if (webSearchEnabled) {
+    // 候选 query：把 {name} 占位符替换为「中文名 + 原作」/「英文名 + 原作」两种组合，
+    // 一份模板生成两套 query，命中率显著高于只用单一短词。
+    const qs: string[] = [];
+    for (const tmpl of def.suggestedQueries) {
+      qs.push(tmpl.replace(/\{name\}/g, fullChinese));
+      if (fullEnglish && fullEnglish !== fullChinese) {
+        qs.push(tmpl.replace(/\{name\}/g, fullEnglish));
+      }
+    }
     lines.push(
-      "**你已开启联网搜索能力**：请充分利用它覆盖 ≥3 个不同关键词组合（英文 / 中文 / 加 site: 限定权威站点），尽量挖到一手资料。",
-      "搜索结果只是线索，最终输出要消化、整理、引用，不要原样粘贴。",
-      "对每个具体观点 / 数据 / 案例，附上来源 URL（行内标注或集中到末尾「引用来源」小节）。",
+      `**任务：联网调研「${subject}」的「${def.agentName}」维度，并写一份 Markdown 报告。**`,
+      "",
+      "**强制要求**：",
+      `1. 你**必须先调用 web_search 工具**至少 3 次再开始写报告，搜索时务必带上「${
+        sourceContext ?? characterName
+      }」作为消歧义锚点。`,
+      "2. **严禁仅凭训练知识作答**——如果训练数据有空白，宁可写「来源不足，暂未覆盖」也不要编。",
+      "3. 报告最终必须包含至少 3 个真实可访问的 URL（http:// 或 https://）作为引用，否则视为失败。",
+      "4. 如果搜索结果指向同名其它实体（如同名地名 / 战舰 / 姓氏），立刻换更精确的 query 再搜，**不要**用错位实体的资料硬凑。",
+      "",
+      "**建议的搜索关键词**（自由组合，至少跑 3 个；中英文交错搜）：",
+      ...qs.slice(0, 8).map((q) => `- ${q}`),
+      "",
+      `你是 百灵 Bailin 深度蒸馏流程中的「${def.title}」。`,
+      "",
+      "调研方向：",
+      ...def.focus.map((s) => `- ${s}`),
+      "",
+      "必须提取的产物：",
+      ...def.extract.map((s) => `- ${s}`),
       ""
     );
   } else {
     lines.push(
+      `**任务：基于训练知识为「${characterName}」写一份「${def.agentName}」维度的 Markdown 报告。**`,
+      "",
       "**当前模式：不启用联网搜索**——只用你的训练知识。所有信息必须标注「（基于训练知识）」并自评 confidence 偏 medium / low。",
+      "",
+      `你是 百灵 Bailin 深度蒸馏流程中的「${def.title}」。`,
+      "",
+      "调研方向：",
+      ...def.focus.map((s) => `- ${s}`),
+      "",
+      "必须提取的产物：",
+      ...def.extract.map((s) => `- ${s}`),
       ""
     );
   }
+
+  if (def.extra) lines.push(def.extra, "");
 
   lines.push(SHARED_DISCIPLINE);
 
   const system = lines.join("\n");
 
   const userParts: string[] = [
-    `调研对象：「${characterName}」`,
+    `调研对象：「${subject}」`,
+    sourceContext ? `所属作品 / 上下文：${sourceContext}` : "",
     `类型：${sourceType}（${
       sourceType === "public-figure"
         ? "公众人物 / 真人"
@@ -219,7 +327,7 @@ export function buildResearchAgentPrompt(
     "- 使用 Markdown 标题（##、###）和列表 / 表格",
     "- 全文不少于 600 字，不超过 6000 字",
     "- 必须包含「## 引用来源」与「## 自评」小节"
-  ];
+  ].filter(Boolean);
 
   if (userMaterial && userMaterial.trim().length > 0) {
     userParts.push(
@@ -231,7 +339,14 @@ export function buildResearchAgentPrompt(
     );
   }
 
-  userParts.push("", `现在开始为「${characterName}」做「${def.agentName}」调研。`);
+  userParts.push(
+    "",
+    webSearchEnabled
+      ? `现在请**先用 web_search 搜索**（搜索 query 必须包含「${
+          sourceContext ?? characterName
+        }」作为消歧义锚点），再开始为「${subject}」做「${def.agentName}」调研。`
+      : `现在开始为「${subject}」做「${def.agentName}」调研。`
+  );
 
   return { system, user: userParts.join("\n"), agentName: def.agentName };
 }

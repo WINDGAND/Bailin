@@ -4,6 +4,7 @@ import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
+import { PROVIDER_PRESETS, type ProviderPreset } from "../provider/presets.js";
 
 interface SetupWizardProps {
   onDone(): void | Promise<void>;
@@ -156,56 +157,6 @@ function SimpleStep({
     </div>
   );
 }
-
-interface ProviderPreset {
-  id: string;
-  label: string;
-  kind: "openai-compatible" | "anthropic-compatible";
-  baseUrl: string;
-  model: string;
-  note?: string;
-}
-
-const PROVIDER_PRESETS: ProviderPreset[] = [
-  {
-    id: "openai",
-    label: "OpenAI",
-    kind: "openai-compatible",
-    baseUrl: "https://api.openai.com",
-    model: "gpt-4o-mini",
-    note: "官方接口"
-  },
-  {
-    id: "deepseek",
-    label: "DeepSeek",
-    kind: "openai-compatible",
-    baseUrl: "https://api.deepseek.com",
-    model: "deepseek-v4-flash",
-    note: "主模型推荐；不支持内置联网"
-  },
-  {
-    id: "moonshot",
-    label: "Moonshot",
-    kind: "openai-compatible",
-    baseUrl: "https://api.moonshot.cn",
-    model: "moonshot-v1-8k"
-  },
-  {
-    id: "ohmygpt",
-    label: "OhMyGPT",
-    kind: "openai-compatible",
-    baseUrl: "https://api.ohmygpt.com",
-    model: "deepseek-v4-flash",
-    note: "中转；主模型 DeepSeek，调研用 search-preview"
-  },
-  {
-    id: "claude",
-    label: "Claude",
-    kind: "anthropic-compatible",
-    baseUrl: "https://api.anthropic.com",
-    model: "claude-3-5-sonnet-latest"
-  }
-];
 
 function ProviderStep({
   onNext,

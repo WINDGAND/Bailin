@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { useShortcut, useKeyboard } from "../../shared/keyboard.js";
+import { useConfirm } from "../../shared/feedback.js";
 import { SetupWizard } from "../setup/SetupWizard.js";
 import { CharacterLibrary } from "../library/CharacterLibrary.js";
 import { CreateCharacter } from "../create/CreateCharacter.js";
 import { MemoryPanel } from "../memory/MemoryPanel.js";
 import { ApiKeyPanel } from "../provider/ApiKeyPanel.js";
+import { DirtyContext, type DirtyContextValue } from "./dirty-context.js";
 
 type Tab = "library" | "create" | "memory" | "key";
 
@@ -25,41 +27,70 @@ const TABS: TabDef[] = [
 export function SettingsApp(): JSX.Element {
   const nuwa = useNuwa();
   const kb = useKeyboard();
+  const confirm = useConfirm();
   const [firstRun, setFirstRun] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>("library");
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     void nuwa.app.isFirstRun().then((v) => setFirstRun(v));
   }, [nuwa]);
 
-  // 注册 1234 切 tab
+  const dirtyCtx = useMemo<DirtyContextValue>(
+    () => ({
+      setDirty: (d: boolean) => {
+        dirtyRef.current = d;
+      }
+    }),
+    []
+  );
+
+  const tryGoTab = useCallback(
+    async (next: Tab) => {
+      if (next === tab) return;
+      if (dirtyRef.current) {
+        const ok = await confirm({
+          title: "丢弃未保存的修改？",
+          body: "当前页有未保存的修改。切换后这些修改会丢失。",
+          confirmLabel: "丢弃并切换",
+          cancelLabel: "继续编辑",
+          danger: true
+        });
+        if (!ok) return;
+        dirtyRef.current = false;
+      }
+      setTab(next);
+    },
+    [tab, confirm]
+  );
+
   useShortcut({
     id: "tab-1",
     combo: "1",
     scope: "Settings",
     label: "切到 角色仓库",
-    handler: () => setTab("library")
+    handler: () => void tryGoTab("library")
   });
   useShortcut({
     id: "tab-2",
     combo: "2",
     scope: "Settings",
     label: "切到 造一个角色",
-    handler: () => setTab("create")
+    handler: () => void tryGoTab("create")
   });
   useShortcut({
     id: "tab-3",
     combo: "3",
     scope: "Settings",
     label: "切到 记忆 / 用户画像",
-    handler: () => setTab("memory")
+    handler: () => void tryGoTab("memory")
   });
   useShortcut({
     id: "tab-4",
     combo: "4",
     scope: "Settings",
     label: "切到 模型与 API Key",
-    handler: () => setTab("key")
+    handler: () => void tryGoTab("key")
   });
   useShortcut({
     id: "help",
@@ -89,39 +120,41 @@ export function SettingsApp(): JSX.Element {
   }
 
   return (
-    <div className="settings-shell">
-      <aside className="settings-sidebar" aria-label="设置侧边栏">
-        <div className="settings-brand">
-          <div className="eyebrow">Bailin · 0.0.1</div>
-          <div className="display display--section" style={{ marginTop: 4 }}>
-            百灵
+    <DirtyContext.Provider value={dirtyCtx}>
+      <div className="settings-shell">
+        <aside className="settings-sidebar" aria-label="设置侧边栏">
+          <div className="settings-brand">
+            <div className="eyebrow">Bailin · 0.0.1</div>
+            <div className="display display--section" style={{ marginTop: 4 }}>
+              百灵
+            </div>
           </div>
-        </div>
 
-        <nav className="settings-nav" aria-label="设置导航">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={tab === t.id ? "settings-nav__item is-active" : "settings-nav__item"}
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? "page" : undefined}
-            >
-              <t.icon size={17} />
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
-      <main key={tab} className="settings-main fade-in-up">
-        <div className="settings-page">
-          {tab === "library" ? <CharacterLibrary onNewClick={() => setTab("create")} /> : null}
-          {tab === "create" ? <CreateCharacter onDone={() => setTab("library")} /> : null}
-          {tab === "memory" ? <MemoryPanel /> : null}
-          {tab === "key" ? <ApiKeyPanel /> : null}
-        </div>
-      </main>
-    </div>
+          <nav className="settings-nav" aria-label="设置导航">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={tab === t.id ? "settings-nav__item is-active" : "settings-nav__item"}
+                onClick={() => void tryGoTab(t.id)}
+                aria-current={tab === t.id ? "page" : undefined}
+              >
+                <t.icon size={17} />
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
+        <main key={tab} className="settings-main fade-in-up">
+          <div className="settings-page settings-page--centered">
+            {tab === "library" ? <CharacterLibrary onNewClick={() => void tryGoTab("create")} /> : null}
+            {tab === "create" ? <CreateCharacter onDone={() => void tryGoTab("library")} /> : null}
+            {tab === "memory" ? <MemoryPanel /> : null}
+            {tab === "key" ? <ApiKeyPanel /> : null}
+          </div>
+        </main>
+      </div>
+    </DirtyContext.Provider>
   );
 }
 

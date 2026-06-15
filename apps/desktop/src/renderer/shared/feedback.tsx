@@ -400,6 +400,7 @@ export function CopyButton({
 }): JSX.Element {
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     return () => {
@@ -413,10 +414,11 @@ export function CopyButton({
       setCopied(true);
       if (timer.current != null) window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => setCopied(false), 1200);
+      showToast({ kind: "success", text: "已复制到剪贴板" });
     } catch {
-      // 复制失败时静默：用户可以手动选中
+      showToast({ kind: "warn", text: "复制失败，请手动选中文本" });
     }
-  }, [text]);
+  }, [text, showToast]);
 
   return (
     <button

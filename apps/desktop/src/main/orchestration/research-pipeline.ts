@@ -21,6 +21,14 @@ export interface RunResearchAgentsInput {
   sourceType: ResearchAgentInput["sourceType"];
   track: ResearchAgentInput["track"];
   userMaterial?: string;
+  /**
+   * 角色的原作上下文 / 消歧义锚点（如「进击的巨人」、「Berkshire Hathaway 副董事长」）。
+   * 透传给 prompt，用于让 search-preview 模型能正确识别角色，
+   * 避免「三笠 → 战舰」「绫波 → 驱逐舰」这种灾难性搜索结果。
+   */
+  sourceContext?: string;
+  /** 角色的英文名 / 原名，用于多语言交叉搜索（如 "Mikasa Ackerman"）。 */
+  englishName?: string;
   webSearchEnabled: boolean;
   /** 1..6，默认 2。 */
   concurrency: number;
@@ -64,13 +72,16 @@ export async function runResearchAgents(
       sourceType: input.sourceType,
       track: input.track,
       userMaterial: input.userMaterial,
-      webSearchEnabled: input.webSearchEnabled
+      webSearchEnabled: input.webSearchEnabled,
+      sourceContext: input.sourceContext,
+      englishName: input.englishName
     });
     input.onAgentStart?.(slug, agentName);
     const agentStartedAt = Date.now();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), input.timeoutMs);
 
+    const requestLabel = `research:${slug}:${truncateForLabel(input.characterName)}`;
     try {
       const result = await llm.chatWithTools({
         systemPrompt: system,
@@ -82,22 +93,27 @@ export async function runResearchAgents(
         enableWebSearch: input.webSearchEnabled,
         maxToolCalls: 6,
         modelOverride: input.webSearchEnabled ? input.researchModel : undefined,
-        searchContextSize: "medium"
+        searchContextSize: "medium",
+        requestLabel
       });
 
       const durationMs = Date.now() - agentStartedAt;
       if (result.kind === "error") {
         const isTimeout = controller.signal.aborted;
+        const safeMessage = researchErrorToUserMessage(result.message, isTimeout);
+        const errLine = `[research-pipeline] ${requestLabel} FAILED kind=error code=${result.code} dt=${durationMs}ms`;
+        console.warn(errLine);
+        pipelineLog()?.warn(errLine);
         const doc: ResearchDoc = {
           agentId,
           agentName,
-          markdown: `> Agent ${agentId} (${agentName}) ${isTimeout ? "超时" : "失败"}：${result.message}`,
+          markdown: `> ${safeMessage}`,
           sources: [],
           confidence: "low",
           webSearchUsed: false,
           durationMs,
           status: isTimeout ? "timeout" : "error",
-          errorMessage: result.message
+          errorMessage: safeMessage
         };
         docs.push(doc);
         input.onAgentDone?.(doc);
@@ -107,7 +123,15 @@ export async function runResearchAgents(
       const markdown = (result.text || "").trim();
       const sources = dedupe(result.citations);
       const confidence = inferConfidence(markdown);
-      const webSearchUsed = result.toolEvents.some((e) => e.kind === "tool_start");
+      // 判定"真触发联网"：以 citations 为准（更稳健），同时兼容旧 toolEvents 信号。
+      // 这样即使中转吞了 server_tool_use 块、但仍透传了 url_citation annotations，也算真联网。
+      const webSearchUsed =
+        sources.length > 0 || result.toolEvents.some((e) => e.kind === "tool_start");
+      const okLine =
+        `[research-pipeline] ${requestLabel} dt=${durationMs}ms textLen=${markdown.length} ` +
+        `sources=${sources.length} webSearchUsed=${webSearchUsed} confidence=${confidence}`;
+      console.log(okLine);
+      pipelineLog()?.info(okLine);
       const doc: ResearchDoc = {
         agentId,
         agentName,
@@ -122,16 +146,20 @@ export async function runResearchAgents(
       docs.push(doc);
       input.onAgentDone?.(doc);
     } catch (e) {
+      const safeMessage = researchErrorToUserMessage(
+        e instanceof Error ? e.message : String(e),
+        false
+      );
       const doc: ResearchDoc = {
         agentId,
         agentName,
-        markdown: `> Agent ${agentId} 异常：${e instanceof Error ? e.message : String(e)}`,
+        markdown: `> ${safeMessage}`,
         sources: [],
         confidence: "low",
         webSearchUsed: false,
         durationMs: Date.now() - agentStartedAt,
         status: "error",
-        errorMessage: e instanceof Error ? e.message : String(e)
+        errorMessage: safeMessage
       };
       docs.push(doc);
       input.onAgentDone?.(doc);
@@ -160,6 +188,49 @@ export async function runResearchAgents(
     failedCount: docs.filter((d) => d.status !== "ok").length,
     totalDurationMs: Date.now() - startedAt
   };
+}
+
+function researchErrorToUserMessage(raw: string, timeout: boolean): string {
+  if (timeout) {
+    return "这一路调研响应太慢，已跳过。系统会用其他调研结果继续完成造人。";
+  }
+  if (/401|403|unauthorized|invalid api key|AUTH_FAILED/i.test(raw)) {
+    return "模型 Key 无效或没有权限，这一路调研已跳过。";
+  }
+  if (/429|rate limit|RATE_LIMITED/i.test(raw)) {
+    return "模型供应商临时限流，这一路调研已跳过。";
+  }
+  if (/search-preview|web_search|annotations|citation|url_citation|web_search_options|baseUrl/i.test(raw)) {
+    return "这一路没有拿到可验证的网页来源，已降级为低可信调研。";
+  }
+  if (/abort|timeout|timed out/i.test(raw)) {
+    return "这一路调研超时，已跳过。";
+  }
+  return `这一路调研失败：${raw.slice(0, 120)}`;
+}
+
+function truncateForLabel(s: string): string {
+  return s.slice(0, 32).replace(/\s+/g, "_");
+}
+
+/**
+ * 与 llm-adapter 一样的双通道日志：同时写 dev 终端和 %APPDATA%/Bailin/logs/main.log。
+ * lazy require 是因为这个文件也被独立 verify 脚本 require（脚本里没有 Electron app）。
+ */
+let cachedPipelineLogger: { info: (s: string) => void; warn: (s: string) => void } | null = null;
+function pipelineLog(): { info: (s: string) => void; warn: (s: string) => void } | null {
+  if (cachedPipelineLogger) return cachedPipelineLogger;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const mod = require("electron-log/main") as {
+      info: (s: string) => void;
+      warn: (s: string) => void;
+    };
+    cachedPipelineLogger = mod;
+    return cachedPipelineLogger;
+  } catch {
+    return null;
+  }
 }
 
 function dedupe(arr: string[]): string[] {
