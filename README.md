@@ -42,11 +42,15 @@ bailin/                             # monorepo 根目录（pnpm workspace）
 │   ├── character-protocol/         # CharacterCard / AppearanceSpec / SpriteProgram schema
 │   ├── sprite-runtime/             # DSL 渲染器 + 状态机 + guard 沙箱
 │   ├── nuwa-prompts/               # 造人 / 调研 / 外貌 vision / 对话 prompt
+│   ├── pet-atlas-tools/            # hatch-pet atlas 裁帧 / 拼图 / 校验工具
 │   └── starter-library/            # 6 个内置示例角色
 ├── docs/
 │   ├── product/                    # PRD、技术路线、协议、路线图
 │   └── skills/                     # 与女娲 Skill 的关系说明
-└── scripts/                        # verify-sprite-builder、verify-llm-multimodal 等
+└── scripts/
+    ├── verify/                     # verify-hatch-pet、verify-starters 等
+    ├── debug/                      # 调试编排 / 端到端脚本
+    └── smoke/                      # 外部 provider 冒烟脚本
 ```
 
 > 内部 npm 包作用域仍为 `@nuwa-pet/*`（历史命名），计划在 v0.1 统一为 `@bailin/*`。
@@ -97,9 +101,10 @@ pnpm dev
 ### 验证脚本
 
 ```bash
-node scripts/verify-sprite-builder.mjs    # sprite-builder + starter 兼容
-node scripts/verify-llm-multimodal.mjs    # LLM 多模态 adapter（需配置 Key）
-node scripts/verify-starters.mjs          # 内置角色 bundle 校验
+node scripts/verify/verify-hatch-pet.mjs       # hatch-pet atlas 裁帧 / 拼图 / schema
+node scripts/verify/verify-sprite-builder.mjs  # sprite-builder + starter 兼容
+node scripts/verify/verify-llm-multimodal.mjs  # LLM 多模态 adapter（需配置 Key）
+node scripts/verify/verify-starters.mjs        # 内置角色 bundle 校验
 ```
 
 ### 首次运行

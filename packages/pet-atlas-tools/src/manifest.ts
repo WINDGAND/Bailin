@@ -243,11 +243,6 @@ export function mirrorStripHorizontally(input: {
   cell: { width: number; height: number };
 }): Buffer {
   const src = decodePng(input.stripPng);
-  if (src.height !== input.cell.height) {
-    throw new Error(
-      `mirrorStripHorizontally: strip 高度 ${src.height} ≠ cell ${input.cell.height}`
-    );
-  }
   const slotWidth = src.width / input.frameCount;
   const out = blankImage(src.width, src.height);
   for (let i = 0; i < input.frameCount; i += 1) {

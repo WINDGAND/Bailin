@@ -64,38 +64,26 @@ export function extractStripFrames(
   slot: RowSlot,
   cell: CellSpec
 ): ExtractedFrame[] {
-  const strip = decodePng(slot.stripPng);
-  if (strip.height !== cell.height) {
-    throw new Error(
-      `extractStripFrames: strip 高度 ${strip.height} 与 cell.height ${cell.height} 不一致`
+  let strip = decodePng(slot.stripPng);
+  if (slot.chromaKey) {
+    strip = removeChromaBackground(
+      strip,
+      slot.chromaKey,
+      slot.chromaThreshold ?? 60
     );
   }
+  strip = normalizeTransparentRgb(strip);
+
+  const componentFrames = extractComponentFrames(strip, slot.frameCount, cell);
+  if (componentFrames) return componentFrames;
+
   const slotWidth = strip.width / slot.frameCount;
-  if (Math.abs(slotWidth - cell.width) > 1) {
-    throw new Error(
-      `extractStripFrames: strip 宽 ${strip.width} / frameCount ${slot.frameCount} ≈ ${slotWidth}，` +
-        `与 cell.width ${cell.width} 偏差过大`
-    );
-  }
   const frames: ExtractedFrame[] = [];
   for (let i = 0; i < slot.frameCount; i += 1) {
     const left = Math.round(i * slotWidth);
     const right = Math.round((i + 1) * slotWidth);
-    let frame = extract(strip, left, 0, right - left, cell.height);
-    if (frame.width !== cell.width) {
-      // 由于浮点 + round 偏差，最后一帧可能多 1 / 少 1 像素；居中 paste 到 cell.width
-      const fitted = blankImage(cell.width, cell.height);
-      const dx = Math.floor((cell.width - frame.width) / 2);
-      paste(fitted, frame, dx, 0);
-      frame = fitted;
-    }
-    if (slot.chromaKey) {
-      frame = removeChromaBackground(
-        frame,
-        slot.chromaKey,
-        slot.chromaThreshold ?? 60
-      );
-    }
+    let frame = extract(strip, left, 0, right - left, strip.height);
+    frame = fitFrameToCell(frame, cell);
     frame = normalizeTransparentRgb(frame);
     frames.push({
       index: i,
@@ -104,6 +92,301 @@ export function extractStripFrames(
     });
   }
   return frames;
+}
+
+/**
+ * 组件级裁帧：真实 image model 很难严格输出 (192×N)×208 strip。
+ * 它常在 1024×1024 方图里画出 N 个独立小人，且小人可能跨越等宽 slot 边界。
+ *
+ * 这里先用「非透明列投影」找出独立角色块，再按 x 坐标排序取前 frameCount 个。
+ * 如果找不到足够块，才回退到等宽 slot 裁切。
+ */
+function extractComponentFrames(
+  strip: RawImage,
+  frameCount: number,
+  cell: CellSpec
+): ExtractedFrame[] | null {
+  const ranges = findConnectedComponents(strip, {
+    minOpaquePixels: Math.max(24, Math.floor(strip.width * strip.height * 0.0002)),
+    minWidth: Math.max(4, Math.floor(strip.width * 0.01)),
+    minHeight: Math.max(4, Math.floor(strip.height * 0.01))
+  });
+  if (ranges.length === 0) return null;
+
+  const edgeMargin = Math.max(8, Math.floor(strip.width * 0.015));
+  const nonEdge = ranges.filter(
+    (r) => r.x0 > edgeMargin && r.x1 < strip.width - 1 - edgeMargin
+  );
+  const plausibleSingleSprites = nonEdge.filter((r) => {
+    const w = r.x1 - r.x0 + 1;
+    const h = r.y1 - r.y0 + 1;
+    return (
+      w <= strip.width * 0.45 &&
+      h <= strip.height * 0.92 &&
+      w / Math.max(1, h) <= 1.1
+    );
+  });
+  const center = centerOpaqueRange(strip);
+  const source =
+    plausibleSingleSprites.length >= 1
+      ? plausibleSingleSprites
+      : nonEdge.length >= 1
+        ? nonEdge
+        : pickEdgeOrCenter(ranges, center, strip);
+  if (source.length < 1) return null;
+
+  const expanded = buildCandidateFrames(strip, source, frameCount, cell);
+  return expanded.map((frame, index) => {
+    return {
+      index,
+      png: encodePng(frame),
+      opaquePixelCount: countOpaquePixels(frame)
+    };
+  });
+}
+
+function buildCandidateFrames(
+  strip: RawImage,
+  source: OpaqueRange[],
+  frameCount: number,
+  cell: CellSpec
+): RawImage[] {
+  const pickedComponents = source
+    .slice()
+    .sort((a, b) => b.opaquePixels - a.opaquePixels)
+    .slice(0, Math.min(frameCount, source.length))
+    .sort((a, b) => a.x0 - b.x0);
+
+  const frames = pickedComponents.map((range) => {
+    let frame = extract(
+      strip,
+      range.x0,
+      range.y0,
+      range.x1 - range.x0 + 1,
+      range.y1 - range.y0 + 1
+    );
+    frame = fitFrameToCell(frame, cell);
+    return normalizeTransparentRgb(frame);
+  });
+  return resampleFrames(frames, frameCount);
+}
+
+function pickEdgeOrCenter(
+  ranges: OpaqueRange[],
+  center: OpaqueRange | null,
+  strip: RawImage
+): OpaqueRange[] {
+  if (ranges.length === 0) return center ? [center] : [];
+  const sorted = ranges.slice().sort((a, b) => b.opaquePixels - a.opaquePixels);
+  const a = sorted[0];
+  const b = sorted[1];
+  if (a && b) {
+    const aw = a.x1 - a.x0 + 1;
+    const bw = b.x1 - b.x0 + 1;
+    const areaRatio = b.opaquePixels / Math.max(1, a.opaquePixels);
+    const bothPlausible =
+      aw <= strip.width * 0.55 &&
+      bw <= strip.width * 0.55 &&
+      areaRatio >= 0.62;
+    if (bothPlausible) {
+      return [a, b].sort((x, y) => x.x0 - y.x0);
+    }
+  }
+  return center ? [center] : sorted.slice(0, 1);
+}
+
+function resampleFrames(frames: RawImage[], frameCount: number): RawImage[] {
+  if (frames.length === frameCount) return frames;
+  if (frames.length === 0) return [];
+  if (frames.length === 1) return Array.from({ length: frameCount }, () => frames[0]!);
+  return Array.from({ length: frameCount }, (_, i) => {
+    const srcIndex = Math.round((i / Math.max(1, frameCount - 1)) * (frames.length - 1));
+    return frames[Math.min(frames.length - 1, srcIndex)]!;
+  });
+}
+
+function centerOpaqueRange(img: RawImage): OpaqueRange | null {
+  // 当模型只给出「左半个 + 中间完整 + 右半个」且边缘组件粘连时，
+  // 选择画面中心区域通常能保住唯一完整角色，避免把左右边缘半身写进 atlas。
+  const maxW = Math.floor(img.width * 0.42);
+  const cx = Math.floor(img.width / 2);
+  const x0 = Math.max(0, cx - Math.floor(maxW / 2));
+  const x1 = Math.min(img.width - 1, x0 + maxW - 1);
+  let y0 = img.height;
+  let y1 = -1;
+  let minX = x1;
+  let maxX = x0;
+  let opaquePixels = 0;
+  for (let y = 0; y < img.height; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) === 0) continue;
+      opaquePixels += 1;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  if (opaquePixels === 0 || y1 < y0 || maxX < minX) return null;
+  return { x0: minX, x1: maxX, y0, y1, opaquePixels };
+}
+
+interface OpaqueRange {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  opaquePixels: number;
+}
+
+function findConnectedComponents(
+  img: RawImage,
+  opts: { minOpaquePixels: number; minWidth: number; minHeight: number }
+): OpaqueRange[] {
+  const width = img.width;
+  const height = img.height;
+  const visited = new Uint8Array(width * height);
+  const components: OpaqueRange[] = [];
+  const queueX = new Int32Array(width * height);
+  const queueY = new Int32Array(width * height);
+
+  const isOpaque = (x: number, y: number): boolean =>
+    (img.data[(y * width + x) * 4 + 3] ?? 0) > 0;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const startIdx = y * width + x;
+      if (visited[startIdx] || !isOpaque(x, y)) continue;
+
+      let head = 0;
+      let tail = 0;
+      queueX[tail] = x;
+      queueY[tail] = y;
+      tail += 1;
+      visited[startIdx] = 1;
+
+      let x0 = x;
+      let x1 = x;
+      let y0 = y;
+      let y1 = y;
+      let opaquePixels = 0;
+
+      while (head < tail) {
+        const cx = queueX[head]!;
+        const cy = queueY[head]!;
+        head += 1;
+        opaquePixels += 1;
+        if (cx < x0) x0 = cx;
+        if (cx > x1) x1 = cx;
+        if (cy < y0) y0 = cy;
+        if (cy > y1) y1 = cy;
+
+        for (const [nx, ny] of [
+          [cx + 1, cy],
+          [cx - 1, cy],
+          [cx, cy + 1],
+          [cx, cy - 1]
+        ] as const) {
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const idx = ny * width + nx;
+          if (visited[idx] || !isOpaque(nx, ny)) continue;
+          visited[idx] = 1;
+          queueX[tail] = nx;
+          queueY[tail] = ny;
+          tail += 1;
+        }
+      }
+
+      const w = x1 - x0 + 1;
+      const h = y1 - y0 + 1;
+      if (
+        opaquePixels >= opts.minOpaquePixels &&
+        w >= opts.minWidth &&
+        h >= opts.minHeight
+      ) {
+        components.push({ x0, x1, y0, y1, opaquePixels });
+      }
+    }
+  }
+
+  return components;
+}
+
+/**
+ * 把任意尺寸的 slot 等比缩放到目标 cell 中间。
+ *
+ * 真实生图 API（包括 gpt-image）通常只能返回 1024×1024 等固定尺寸；
+ * 即使 prompt 要求生成「水平 strip」，模型也往往把 strip 画在方图里。
+ * 因此裁帧器不能假设 slot 已经是 192×208，必须容忍任意 slot 尺寸。
+ */
+function fitFrameToCell(frame: RawImage, cell: CellSpec): RawImage {
+  frame = keepDominantComponent(frame);
+  frame = cropOpaqueBounds(frame, 8);
+  if (frame.width === cell.width && frame.height === cell.height) {
+    return frame;
+  }
+  const scale = Math.min(cell.width / frame.width, cell.height / frame.height);
+  const w = Math.max(1, Math.round(frame.width * scale));
+  const h = Math.max(1, Math.round(frame.height * scale));
+  const resized = resize(frame, w, h);
+  const out = blankImage(cell.width, cell.height);
+  paste(out, resized, Math.floor((cell.width - w) / 2), Math.floor((cell.height - h) / 2));
+  return out;
+}
+
+function keepDominantComponent(frame: RawImage): RawImage {
+  const components = findConnectedComponents(frame, {
+    minOpaquePixels: Math.max(8, Math.floor(frame.width * frame.height * 0.0005)),
+    minWidth: 2,
+    minHeight: 2
+  });
+  if (components.length <= 1) return frame;
+  const centerX = frame.width / 2;
+  const centerY = frame.height / 2;
+  const best = components
+    .slice()
+    .sort((a, b) => {
+      const acx = (a.x0 + a.x1) / 2;
+      const acy = (a.y0 + a.y1) / 2;
+      const bcx = (b.x0 + b.x1) / 2;
+      const bcy = (b.y0 + b.y1) / 2;
+      const ad = Math.hypot(acx - centerX, acy - centerY);
+      const bd = Math.hypot(bcx - centerX, bcy - centerY);
+      return b.opaquePixels - bd * 8 - (a.opaquePixels - ad * 8);
+    })[0];
+  if (!best) return frame;
+  return extract(
+    frame,
+    best.x0,
+    best.y0,
+    best.x1 - best.x0 + 1,
+    best.y1 - best.y0 + 1
+  );
+}
+
+function cropOpaqueBounds(frame: RawImage, padding: number): RawImage {
+  let minX = frame.width;
+  let minY = frame.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < frame.height; y += 1) {
+    for (let x = 0; x < frame.width; x += 1) {
+      const a = frame.data[(y * frame.width + x) * 4 + 3] ?? 0;
+      if (a === 0) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < minX || maxY < minY) {
+    return frame;
+  }
+  minX = Math.max(0, minX - padding);
+  minY = Math.max(0, minY - padding);
+  maxX = Math.min(frame.width - 1, maxX + padding);
+  maxY = Math.min(frame.height - 1, maxY + padding);
+  return extract(frame, minX, minY, maxX - minX + 1, maxY - minY + 1);
 }
 
 export interface AtlasComposeInput {

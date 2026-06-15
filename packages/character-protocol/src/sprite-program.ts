@@ -1,15 +1,13 @@
 import { z } from "zod";
 import { SCHEMA_VERSION } from "./character-card.js";
-import { LayeredPetDSLSchema } from "./layered-pet.js";
 import { AtlasPetSchema } from "./atlas-pet.js";
 
 /**
  * SpriteProgram 描述一只桌宠"长什么样 / 怎么动"。
  *
- * 支持四种 mode：
+ * 支持三种 mode：
  *   - dsl          手写 / 程序化像素 DSL，starter-library 默认走这条
  *   - js-sandbox   受限 JS 渲染（默认禁用，未来开关）
- *   - layered-css  v0.1 引入的参考图分层 + CSS 骨骼
  *   - atlas        hatch-pet 兼容的精灵图集（1536×1872 / 8×9 / 192×208）
  *
  * 详细规范见 docs/product/CHARACTER-PROTOCOL.md §3。
@@ -101,7 +99,7 @@ export const SpriteJSSchema = z.object({
 export const SpriteProgramSchema = z
   .object({
     schemaVersion: z.literal(SCHEMA_VERSION),
-    mode: z.enum(["dsl", "js-sandbox", "layered-css", "atlas"]),
+    mode: z.enum(["dsl", "js-sandbox", "atlas"]),
     size: z.object({
       width: z.number().int().positive().max(2048),
       height: z.number().int().positive().max(2048)
@@ -110,7 +108,6 @@ export const SpriteProgramSchema = z
     palette: z.array(PaletteEntrySchema).min(2).max(16),
     dsl: SpriteDSLSchema.optional(),
     js: SpriteJSSchema.optional(),
-    layered: LayeredPetDSLSchema.optional(),
     atlas: AtlasPetSchema.optional()
   })
   .superRefine((value, ctx) => {
@@ -128,13 +125,6 @@ export const SpriteProgramSchema = z
         path: ["js"]
       });
     }
-    if (value.mode === "layered-css" && !value.layered) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "mode=layered-css requires field 'layered'",
-        path: ["layered"]
-      });
-    }
     if (value.mode === "atlas" && !value.atlas) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -148,7 +138,6 @@ export type SpriteProgram = z.infer<typeof SpriteProgramSchema>;
 export type SpriteDSL = z.infer<typeof SpriteDSLSchema>;
 export type SpritePart = z.infer<typeof PartSchema>;
 export type PaletteEntry = z.infer<typeof PaletteEntrySchema>;
-export type { LayeredPetDSL, LayeredPetLayer, LayeredPetRig, LayeredRigHints } from "./layered-pet.js";
 export type {
   AtlasPet,
   AtlasStateBinding,

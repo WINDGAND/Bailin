@@ -27,7 +27,7 @@ import { ImageGenerationAdapter } from "./adapters/image-generation-adapter.js";
 import { SafetyPolicy } from "./safety/safety-policy.js";
 import { MemoryStore } from "./runtime/memory-store.js";
 import { CharacterRuntime } from "./runtime/character-runtime.js";
-import { NuwaOrchestrator } from "./runtime/nuwa-orchestrator.js";
+import { NuwaOrchestrator } from "./orchestration/nuwa-orchestrator.js";
 import {
   broadcastToAllWindows,
   readImageConfigForMain,

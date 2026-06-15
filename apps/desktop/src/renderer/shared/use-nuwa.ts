@@ -6,7 +6,9 @@ import type {
   ResearchDoc
 } from "@nuwa-pet/character-protocol";
 import type {
-  DistillationProgressEvent
+  DistillationProgressEvent,
+  ImageGenerationConfigDTO,
+  ImageTierName
 } from "../../shared/ipc-contract.js";
 
 interface NuwaWindow {
@@ -16,6 +18,20 @@ interface NuwaWindow {
       setProvider(input: unknown): Promise<{ ok: boolean; error?: string }>;
       getProvider(): Promise<unknown>;
       testConnection(): Promise<{ ok: boolean; latencyMs?: number; error?: string }>;
+      clearKey(): Promise<void>;
+    };
+    imageGen: {
+      getConfig(): Promise<ImageGenerationConfigDTO | null>;
+      setConfig(input: ImageGenerationConfigDTO): Promise<{ ok: boolean; error?: string }>;
+      detectCapability(): Promise<{ ok: boolean; reason: string }>;
+      test(tier?: ImageTierName): Promise<{
+        ok: boolean;
+        latencyMs?: number;
+        tier?: ImageTierName;
+        model?: string;
+        estimatedCostUsd?: number;
+        error?: string;
+      }>;
       clearKey(): Promise<void>;
     };
     characters: {
@@ -116,6 +132,13 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       setProvider: async () => ({ ok: false, error: "stub" }),
       getProvider: async () => null,
       testConnection: async () => ({ ok: false, error: "stub" }),
+      clearKey: async () => undefined
+    },
+    imageGen: {
+      getConfig: async () => null,
+      setConfig: async () => ({ ok: false, error: "stub" }),
+      detectCapability: async () => ({ ok: false, reason: "stub 环境" }),
+      test: async () => ({ ok: false, error: "stub 环境" }),
       clearKey: async () => undefined
     },
     characters: {

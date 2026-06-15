@@ -1,7 +1,7 @@
 /**
  * 状态枚举常量：抽到独立模块，避免 sprite-program.ts ↔ atlas-pet.ts 的循环依赖。
  *
- * 任何子协议（DSL / layered-css / atlas）都应从这里导入 SPRITE_STATES / SPRITE_EVENTS /
+ * 任何子协议（DSL / atlas）都应从这里导入 SPRITE_STATES / SPRITE_EVENTS /
  * ANIMATION_NAMES，而不是从 sprite-program 反向导入。
  */
 

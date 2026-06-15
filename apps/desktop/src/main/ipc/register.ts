@@ -10,7 +10,7 @@ import {
 import type { LocalVault } from "../store/local-vault.js";
 import type { MemoryStore } from "../runtime/memory-store.js";
 import type { CharacterRuntime } from "../runtime/character-runtime.js";
-import type { NuwaOrchestrator } from "../runtime/nuwa-orchestrator.js";
+import type { NuwaOrchestrator } from "../orchestration/nuwa-orchestrator.js";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 import {
   DEFAULT_IMAGE_GENERATION_CONFIG,

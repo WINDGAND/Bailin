@@ -1,7 +1,6 @@
 export * from "./sprite-states.js";
 export * from "./appearance.js";
 export * from "./character-card.js";
-export * from "./layered-pet.js";
 export * from "./atlas-pet.js";
 export * from "./sprite-program.js";
 export * from "./runtime-config.js";

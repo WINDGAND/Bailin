@@ -153,7 +153,18 @@ export function removeChromaBackground(
     const dr = r - chromaKey.r;
     const dg = g - chromaKey.g;
     const db = b - chromaKey.b;
-    if (dr * dr + dg * dg + db * db <= sq) {
+    const nearKey = dr * dr + dg * dg + db * db <= sq;
+    // gpt-image 经常会把纯绿幕画成带噪点/渐变的绿色光晕。
+    // 对绿色 chroma key 额外使用“绿色占优”判定，避免残留大块绿背景
+    // 被后续连通域当作角色组件。
+    const greenDominant =
+      chromaKey.g > 200 &&
+      chromaKey.r < 40 &&
+      chromaKey.b < 40 &&
+      g > 110 &&
+      g - r > 45 &&
+      g - b > 45;
+    if (nearKey || greenDominant) {
       out.data[i] = 0;
       out.data[i + 1] = 0;
       out.data[i + 2] = 0;

@@ -13,7 +13,7 @@ export interface StateMachineRuntime {
 
 /**
  * createStateMachine 的最小输入契约：只需要状态机本体。
- * DSL / layered-css / atlas 三种 SpriteProgram 都满足，因此各自渲染层
+ * DSL / atlas 两种 SpriteProgram 都满足，因此各自渲染层
  * 可以传同一个状态机给这个 runtime，而不用拼出完整的 SpriteDSL。
  */
 export interface StateMachineHost {
