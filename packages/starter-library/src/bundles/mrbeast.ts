@@ -62,12 +62,14 @@ export const mrBeastBundle: CharacterBundle = {
     createdAt: NOW,
     updatedAt: NOW,
     meta: {
-      name: "MrBeast · 视角助手",
-      sourceName: "Jimmy Donaldson / MrBeast",
+      name: "吉米·唐纳森",
+      chineseName: "吉米·唐纳森",
+      englishName: "MrBeast",
+      sourceName: "MrBeast",
       sourceType: "public-figure",
       track: "utility",
       quoteOneLiner:
-        "I don't think of myself as a YouTuber. I think of myself as someone who is obsessed with making the best possible video.",
+        "I don't think of myself as a YouTuber. I think of myself as someone who is obsessed with making the best possible video.（我不觉得自己是 YouTuber，我只是一个痴迷于做出最好视频的人。）",
       avatarHint: summarizeAppearance(appearance),
       appearance,
       disclaimer:

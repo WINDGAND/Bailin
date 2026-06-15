@@ -75,6 +75,10 @@ export const HonestyBoundarySchema = z.object({
 
 export const CharacterMetaSchema = z.object({
   name: z.string().min(1).max(80),
+  /** 中文显示名；与 name 同步，生成流程保证始终有值。 */
+  chineseName: z.string().min(1).max(80).optional(),
+  /** 英文显示名；与 sourceName 同步，生成流程保证始终有值。 */
+  englishName: z.string().min(1).max(120).optional(),
   sourceName: z.string().max(120).optional(),
   sourceType: z.enum(["public-figure", "fictional", "original"]),
   track: z.enum(["utility", "companion"]),

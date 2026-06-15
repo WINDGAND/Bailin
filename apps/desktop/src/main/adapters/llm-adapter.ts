@@ -27,7 +27,7 @@ export interface ChatRequest {
   /**
    * 用这个临时覆盖 provider.model（不改全局配置）。
    * 用法：深度蒸馏调研阶段切到 gpt-4o-mini-search-preview，
-   * 其他阶段沿用 provider 默认 gpt-4o-mini。
+   * 其他阶段沿用 provider 默认 model（推荐 deepseek-v4-flash）。
    */
   modelOverride?: string;
 }
@@ -107,8 +107,26 @@ const VISION_MODEL_KEYWORDS = [
   "claude-haiku-4",
   "claude-sonnet-4",
   "claude-opus-4",
-  "claude-4"
+  "claude-4",
+  // ByteDance Doubao（OhMyGPT 等多模态读图）
+  "doubao",
+  "seed-2",
+  "bytedance"
 ];
+
+/** 参考图 vision 读图 / 自检专用模型（与主模型分离，主模型可为 DeepSeek 等纯文本模型）。 */
+export const DEFAULT_VISION_MODEL = "bytedance/doubao-seed-2.0-lite-260428";
+
+export function resolveVisionModel(
+  provider: LLMProviderConfig | null | undefined,
+  modelOverride?: string
+): string {
+  const trimmed = modelOverride?.trim();
+  if (trimmed) return trimmed;
+  const fromProvider = provider?.visionModel?.trim();
+  if (fromProvider) return fromProvider;
+  return DEFAULT_VISION_MODEL;
+}
 
 /** 1×1 透明 PNG 的 data URI；用于 vision probe。 */
 const TINY_PROBE_PNG_DATA_URI =
@@ -135,6 +153,11 @@ function matchesVisionModel(model: string): boolean {
 export class LLMAdapter {
   constructor(private provider: () => LLMProviderConfig | null) {}
 
+  /** 参考图读图 / 视觉自检使用的模型（独立于 provider.model）。 */
+  getVisionModel(modelOverride?: string): string {
+    return resolveVisionModel(this.provider(), modelOverride);
+  }
+
   /**
    * 检测当前 provider + (可选) 指定 model 是否声明支持 web_search。
    * UI 用它决定是否显示「深度版」按钮。
@@ -143,6 +166,13 @@ export class LLMAdapter {
     const p = this.provider();
     if (!p) return { webSearch: false, reason: "未配置 LLM 提供商" };
     const model = (modelOverride ?? p.model ?? "").toLowerCase();
+    if (model.includes("deepseek")) {
+      return {
+        webSearch: false,
+        reason:
+          "DeepSeek 系列（含 V4 Flash）不支持 OpenAI search-preview 式内置联网；深度蒸馏将使用模型训练知识。需要联网请换 gpt-*-search-preview 或 Claude web_search 模型。"
+      };
+    }
     if (p.kind === "openai-compatible") {
       // 当 model 已明确是 search 系列：直接 OK
       if (matchesSearchModel(model)) {
@@ -182,14 +212,17 @@ export class LLMAdapter {
   detectVisionCapability(modelOverride?: string): { vision: boolean; reason: string } {
     const p = this.provider();
     if (!p) return { vision: false, reason: "未配置 LLM 提供商" };
-    const model = (modelOverride ?? p.model ?? "").toLowerCase();
-    if (!model) return { vision: false, reason: "未配置模型" };
+    const model = this.getVisionModel(modelOverride).toLowerCase();
+    if (!model) return { vision: false, reason: "未配置视觉模型" };
     if (matchesVisionModel(model)) {
-      return { vision: true, reason: `${model} 已知支持视觉输入` };
+      return {
+        vision: true,
+        reason: `${model} 为参考图读图专用模型（主模型 ${p.model} 可仍为纯文本）`
+      };
     }
     return {
       vision: false,
-      reason: `${model} 不在已知 vision 白名单（gpt-4o/gpt-4.1/claude-3+/claude-4 系列等）`
+      reason: `${model} 不在已知 vision 白名单（doubao-seed / gpt-4o / claude-3+ 等）`
     };
   }
 
@@ -223,7 +256,7 @@ export class LLMAdapter {
         ],
         maxTokens: 16,
         stream: false,
-        modelOverride
+        modelOverride: modelOverride ?? this.getVisionModel()
       });
       const latencyMs = Date.now() - startedAt;
       if (r.kind === "error") {

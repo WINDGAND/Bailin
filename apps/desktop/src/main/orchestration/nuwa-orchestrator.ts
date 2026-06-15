@@ -3,6 +3,12 @@ import {
   AppearanceSpecSchema,
   parseCard,
   parseSprite,
+  applyCharacterNamesToMeta,
+  normalizeCharacterNames,
+  needsCharacterNameLookup,
+  needsQuoteLookup,
+  normalizeQuoteOneLiner,
+  type CharacterNamePair,
   SCHEMA_VERSION,
   defaultRuntimeConfig,
   makeSkeletonBundle,
@@ -26,6 +32,8 @@ import {
   buildAppearanceVisionExtractionPrompt,
   buildAppearanceVisionVerificationPrompt,
   buildCharacterCardPrompt,
+  buildCharacterNameResolutionPrompt,
+  buildCharacterQuoteResolutionPrompt,
   buildFrameworkSynthesisPrompt
 } from "@nuwa-pet/nuwa-prompts";
 import type { LLMAdapter, ChatContentPart } from "../adapters/llm-adapter.js";
@@ -205,6 +213,24 @@ export class NuwaOrchestrator {
     if (input.sourceType !== "original" && !card.meta.sourceName) {
       card.meta.sourceName = input.characterName;
     }
+
+    await this.finalizeCharacterNames(
+      card,
+      input.characterName,
+      input.sourceType,
+      false,
+      warnings
+    );
+
+    const quoteWebSearch = this.llm.detectCapabilities().webSearch;
+    await this.finalizeCharacterQuote(
+      card,
+      input.sourceType,
+      quoteWebSearch,
+      warnings,
+      undefined,
+      input.userMaterial
+    );
 
     // 外貌信息回写
     if (appearanceResult) {
@@ -447,6 +473,24 @@ export class NuwaOrchestrator {
       card.meta.sourceName = config.characterName;
     }
 
+    await this.finalizeCharacterNames(
+      card,
+      config.characterName,
+      config.sourceType,
+      config.enableWebSearch,
+      warnings,
+      config.researchModel
+    );
+
+    await this.finalizeCharacterQuote(
+      card,
+      config.sourceType,
+      config.enableWebSearch,
+      warnings,
+      config.researchModel,
+      config.userMaterial
+    );
+
     // ===== Phase 3b: 深度外貌（vision-first 流程） =====
     yield phaseEvent(
       jobId,
@@ -618,7 +662,7 @@ export class NuwaOrchestrator {
     }
     if (refs.length > 0 && !vis.vision) {
       warnings.push(
-        `[step2·appearance] 当前 LLM 不支持视觉输入（${vis.reason}），上传的参考图被忽略，回退到纯文本路径，结果可能偏离原作。`
+        `[step2·appearance] 视觉模型不可用（${vis.reason}），上传的参考图被忽略，回退到纯文本路径，结果可能偏离原作。`
       );
     }
     return this.runAppearanceTextOnly(input, warnings);
@@ -664,6 +708,188 @@ export class NuwaOrchestrator {
       `[step2·appearance] 校验失败：${parsed.error.errors.slice(0, 6).map((e) => e.path.join(".")).join(", ")}`
     );
     return null;
+  }
+
+  /** 解析并写回 meta.chineseName / meta.englishName，同时同步 name / sourceName。 */
+  private async finalizeCharacterNames(
+    card: CharacterCard,
+    inputCharacterName: string,
+    sourceType: CharacterCard["meta"]["sourceType"],
+    webSearchEnabled: boolean,
+    warnings: string[],
+    researchModel?: string
+  ): Promise<void> {
+    let names = normalizeCharacterNames({
+      inputName: inputCharacterName,
+      name: card.meta.name,
+      sourceName: card.meta.sourceName,
+      chineseName: card.meta.chineseName,
+      englishName: card.meta.englishName
+    });
+
+    if (needsCharacterNameLookup(names, sourceType)) {
+      const resolved = await this.runNameResolutionStep(
+        inputCharacterName,
+        sourceType,
+        {
+          name: card.meta.name,
+          sourceName: card.meta.sourceName,
+          chineseName: card.meta.chineseName,
+          englishName: card.meta.englishName
+        },
+        webSearchEnabled,
+        warnings,
+        researchModel
+      );
+      if (resolved) {
+        names = normalizeCharacterNames({
+          inputName: inputCharacterName,
+          chineseName: resolved.chineseName,
+          englishName: resolved.englishName,
+          name: resolved.chineseName,
+          sourceName: resolved.englishName
+        });
+      }
+    }
+
+    applyCharacterNamesToMeta(card.meta, names);
+  }
+
+  private async runNameResolutionStep(
+    characterName: string,
+    sourceType: CharacterCard["meta"]["sourceType"],
+    hints: {
+      name?: string;
+      sourceName?: string;
+      chineseName?: string;
+      englishName?: string;
+    },
+    webSearchEnabled: boolean,
+    warnings: string[],
+    researchModel?: string
+  ): Promise<CharacterNamePair | null> {
+    const { system, user } = buildCharacterNameResolutionPrompt({
+      characterName,
+      sourceType,
+      hints
+    });
+    const r = await this.llm.chatWithTools({
+      systemPrompt: system,
+      messages: [{ role: "user", content: user }],
+      temperature: 0.1,
+      maxTokens: 300,
+      stream: false,
+      enableWebSearch: webSearchEnabled,
+      maxToolCalls: 3,
+      searchContextSize: "low",
+      modelOverride: webSearchEnabled ? researchModel : undefined
+    });
+    if (r.kind === "error") {
+      warnings.push(`[name·lookup] LLM 调用失败：${r.message}`);
+      return null;
+    }
+    const json = extractJSON(r.text) as Record<string, unknown> | null;
+    if (!json) {
+      warnings.push("[name·lookup] LLM 未返回合法 JSON");
+      return null;
+    }
+    const chineseName =
+      typeof json.chineseName === "string" ? json.chineseName.trim() : "";
+    const englishName =
+      typeof json.englishName === "string" ? json.englishName.trim() : "";
+    if (!chineseName || !englishName) {
+      warnings.push("[name·lookup] JSON 缺少 chineseName 或 englishName");
+      return null;
+    }
+    return { chineseName, englishName };
+  }
+
+  /** 联网检索角色原话，写回 meta.quoteOneLiner。 */
+  private async finalizeCharacterQuote(
+    card: CharacterCard,
+    sourceType: CharacterCard["meta"]["sourceType"],
+    webSearchEnabled: boolean,
+    warnings: string[],
+    researchModel?: string,
+    userMaterial?: string
+  ): Promise<void> {
+    const chineseName = card.meta.chineseName ?? card.meta.name;
+    const englishName = card.meta.englishName ?? card.meta.sourceName ?? "";
+
+    if (!needsQuoteLookup(card.meta.quoteOneLiner, sourceType)) {
+      return;
+    }
+
+    const resolved = await this.runQuoteResolutionStep(
+      {
+        chineseName,
+        englishName,
+        sourceType,
+        hintQuote: card.meta.quoteOneLiner,
+        userMaterial
+      },
+      webSearchEnabled,
+      warnings,
+      researchModel
+    );
+    if (resolved) {
+      card.meta.quoteOneLiner = resolved;
+    }
+  }
+
+  private async runQuoteResolutionStep(
+    input: {
+      chineseName: string;
+      englishName: string;
+      sourceType: CharacterCard["meta"]["sourceType"];
+      hintQuote?: string;
+      userMaterial?: string;
+    },
+    webSearchEnabled: boolean,
+    warnings: string[],
+    researchModel?: string
+  ): Promise<string | null> {
+    const { system, user } = buildCharacterQuoteResolutionPrompt(input);
+    let r = await this.llm.chatWithTools({
+      systemPrompt: system,
+      messages: [{ role: "user", content: user }],
+      temperature: 0.2,
+      maxTokens: 400,
+      stream: false,
+      enableWebSearch: webSearchEnabled,
+      maxToolCalls: 4,
+      searchContextSize: "medium",
+      modelOverride: webSearchEnabled ? researchModel : undefined
+    });
+    if (r.kind === "error" && webSearchEnabled) {
+      warnings.push(
+        `[quote·lookup] 联网检索失败（${r.message}），回退到模型内置知识。`
+      );
+      r = await this.llm.chatWithTools({
+        systemPrompt: system,
+        messages: [{ role: "user", content: user }],
+        temperature: 0.2,
+        maxTokens: 400,
+        stream: false,
+        enableWebSearch: false
+      });
+    }
+    if (r.kind === "error") {
+      warnings.push(`[quote·lookup] LLM 调用失败：${r.message}`);
+      return null;
+    }
+    const json = extractJSON(r.text) as Record<string, unknown> | null;
+    if (!json) {
+      warnings.push("[quote·lookup] LLM 未返回合法 JSON");
+      return null;
+    }
+    const quoteOneLiner =
+      typeof json.quoteOneLiner === "string" ? json.quoteOneLiner.trim() : "";
+    if (!quoteOneLiner) {
+      warnings.push("[quote·lookup] JSON 缺少 quoteOneLiner");
+      return null;
+    }
+    return normalizeQuoteOneLiner(quoteOneLiner);
   }
 
   /**
@@ -767,7 +993,7 @@ export class NuwaOrchestrator {
       );
     } else if (!vis.vision) {
       warnings.push(
-        `[phase3b·vision] 当前 LLM 不支持视觉输入（${vis.reason}），降级到纯文本三步法；结果可能偏离原作。`
+        `[phase3b·vision] 视觉模型不可用（${vis.reason}），降级到纯文本三步法；结果可能偏离原作。`
       );
     } else {
       warnings.push(
@@ -896,7 +1122,8 @@ export class NuwaOrchestrator {
       messages: [{ role: "user", content: aContent }],
       temperature: 0.2,
       maxTokens: 1800,
-      stream: false
+      stream: false,
+      modelOverride: this.llm.getVisionModel()
     });
     if (aR.kind === "error") {
       warnings.push(`[phase3b·vision·A] 读图失败：${aR.message}`);
@@ -950,7 +1177,8 @@ export class NuwaOrchestrator {
         messages: [{ role: "user", content: cContent }],
         temperature: 0.1,
         maxTokens: 1200,
-        stream: false
+        stream: false,
+        modelOverride: this.llm.getVisionModel()
       });
       if (cR.kind === "done") {
         const critique = extractJSON(cR.text) as

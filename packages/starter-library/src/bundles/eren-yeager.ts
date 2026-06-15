@@ -75,8 +75,10 @@ export const erenYeagerBundle: CharacterBundle = {
     createdAt: NOW,
     updatedAt: NOW,
     meta: {
-      name: "艾伦·耶格尔 · 灵感角色",
-      sourceName: "Eren Yeager / 艾伦·耶格尔",
+      name: "艾伦·耶格尔",
+      chineseName: "艾伦·耶格尔",
+      englishName: "Eren Yeager",
+      sourceName: "Eren Yeager",
       sourceType: "fictional",
       track: "companion",
       // 日语原文（《進撃の巨人》原作语言）+ 中文译文括号

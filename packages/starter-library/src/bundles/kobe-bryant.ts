@@ -75,11 +75,14 @@ export const kobeBryantBundle: CharacterBundle = {
     createdAt: NOW,
     updatedAt: NOW,
     meta: {
-      name: "Kobe Bryant · 灵感视角",
+      name: "科比·布莱恩特",
+      chineseName: "科比·布莱恩特",
+      englishName: "Kobe Bryant",
       sourceName: "Kobe Bryant",
       sourceType: "public-figure",
       track: "companion",
-      quoteOneLiner: "The world becomes your library to help you become better at your craft.",
+      quoteOneLiner:
+        "The world becomes your library to help you become better at your craft.（世界会成为你的图书馆，帮助你精进技艺。）",
       avatarHint: summarizeAppearance(appearance),
       appearance,
       disclaimer:

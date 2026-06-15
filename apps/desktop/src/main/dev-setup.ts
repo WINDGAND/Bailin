@@ -37,14 +37,20 @@ export function applyDevSetup(vault: LocalVault): void {
     | "openai-compatible"
     | "anthropic-compatible";
   const baseUrl = (process.env.NUWA_PET_LLM_BASE_URL ?? "https://api.deepseek.com").trim();
-  const model = (process.env.NUWA_PET_LLM_MODEL ?? "deepseek-chat").trim();
+  const model = (process.env.NUWA_PET_LLM_MODEL ?? "deepseek-v4-flash").trim();
+  const visionModel = (
+    process.env.NUWA_PET_VISION_MODEL ?? "bytedance/doubao-seed-2.0-lite-260428"
+  ).trim();
 
-  vault.setSetting("llm_provider_json", JSON.stringify({ kind, baseUrl, model }));
+  vault.setSetting(
+    "llm_provider_json",
+    JSON.stringify({ kind, baseUrl, model, visionModel })
+  );
   vault.setEncryptedString("llm_api_key_enc", apiKey);
   vault.setSetting("first_run_done", "1");
 
   log.info(
-    `[dev-setup] 已注入开发期凭据：kind=${kind}, baseUrl=${baseUrl}, model=${model}, key=*****${apiKey.slice(-4)}`
+    `[dev-setup] 已注入开发期凭据：kind=${kind}, baseUrl=${baseUrl}, model=${model}, visionModel=${visionModel}, key=*****${apiKey.slice(-4)}`
   );
 
   seedStarterLibraryIfEmpty(vault);
@@ -67,7 +73,7 @@ export function applyDevSetup(vault: LocalVault): void {
 }
 
 /** 提升此值 → 下次启动 dev 会强制刷新所有 starter（保留用户自造的角色）。 */
-const STARTER_SEED_VERSION = "v3-96px-multilang-quote";
+const STARTER_SEED_VERSION = "v5-bilingual-quotes";
 
 /**
  * 开发期 starter 种子：

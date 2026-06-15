@@ -63,12 +63,14 @@ export const trumpBundle: CharacterBundle = {
     createdAt: NOW,
     updatedAt: NOW,
     meta: {
-      name: "Donald Trump · 视角助手",
-      sourceName: "Donald J. Trump",
+      name: "唐纳德·特朗普",
+      chineseName: "唐纳德·特朗普",
+      englishName: "Donald Trump",
+      sourceName: "Donald Trump",
       sourceType: "public-figure",
       track: "utility",
       quoteOneLiner:
-        "I aim very high, and then I just keep pushing and pushing and pushing to get what I'm after.",
+        "I aim very high, and then I just keep pushing and pushing and pushing to get what I'm after.（我目标定得很高，然后不断推、不断推、不断推，直到拿到我想要的。）",
       avatarHint: summarizeAppearance(appearance),
       appearance,
       disclaimer:

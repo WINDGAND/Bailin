@@ -534,7 +534,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             没上传时，若启用联网，会自动搜官方人设图。
             {vision && !vision.vision ? (
               <span style={{ color: "var(--magenta)" }}>
-                {" "}当前模型不支持视觉，上传的图会被忽略。
+                {" "}视觉读图模型不可用，上传的图会被忽略（可在设置 → Provider 配置参考图读图模型）。
               </span>
             ) : null}
           </p>

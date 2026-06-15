@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNuwa } from "../../shared/use-nuwa.js";
+import { getCharacterDisplayNames } from "../../shared/character-display-name.js";
 import { PetPreview } from "../../shared/pet-preview.js";
 import {
   CopyButton,
@@ -224,6 +225,14 @@ export function CharacterLibrary({
     [qualityReport, selected]
   );
 
+  const selectedDisplayName = useMemo(
+    () =>
+      selected
+        ? getCharacterDisplayNames(selected.card.meta)
+        : null,
+    [selected]
+  );
+
   return (
     <div>
       <div className="row row--between" style={{ marginBottom: 18 }}>
@@ -252,7 +261,12 @@ export function CharacterLibrary({
           ) : items.length === 0 ? (
             <EmptyLibrary onNew={onNewClick} />
           ) : (
-            items.map((c, i) => (
+            items.map((c, i) => {
+              const displayName = getCharacterDisplayNames({
+                name: c.name,
+                sourceName: c.sourceName
+              });
+              return (
               <button
                 key={c.id}
                 className={
@@ -302,7 +316,7 @@ export function CharacterLibrary({
                         minWidth: 0
                       }}
                     >
-                      {c.name}
+                      {displayName.chineseName}
                     </span>
                   </div>
                   <div className="row row--between gap-2" style={{ marginTop: 4 }}>
@@ -316,7 +330,7 @@ export function CharacterLibrary({
                         minWidth: 0
                       }}
                     >
-                      {c.sourceName ?? "—"}
+                      {displayName.englishName}
                     </span>
                     {c.isActive ? (
                       <span className="body-sm" style={{ color: "var(--magenta)", flexShrink: 0 }}>
@@ -326,7 +340,8 @@ export function CharacterLibrary({
                   </div>
                 </div>
               </button>
-            ))
+            );
+            })
           )}
         </div>
         {/* 详情 */}
@@ -335,15 +350,21 @@ export function CharacterLibrary({
             <EmptyDetail />
           ) : (
             <div className="stack stack--lg fade-in">
-          <div className="row gap-3 row--start-top">
+              <div className="row gap-3 row--start-top">
                 <PetPreview program={selected.sprite} width={88} height={108} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     className="display display--page"
                     style={{ fontSize: 26, lineHeight: 1.1 }}
                   >
-                    {selected.card.meta.name}
+                    {selectedDisplayName?.chineseName}
                   </div>
+                  <p
+                    className="body-sm"
+                    style={{ marginTop: 4, color: "var(--ink-soft)" }}
+                  >
+                    {selectedDisplayName?.englishName}
+                  </p>
                   <p
                     className="body-sm"
                     style={{ marginTop: 6, color: "var(--ink-faint)" }}
@@ -351,11 +372,6 @@ export function CharacterLibrary({
                     {selected.card.meta.disclaimer}
                   </p>
                 </div>
-                <CopyButton
-                  small
-                  text={selected.card.meta.disclaimer}
-                  label="复制免责"
-                />
               </div>
 
               {qualityWarning ? (

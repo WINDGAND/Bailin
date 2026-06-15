@@ -62,12 +62,14 @@ export const elonMuskBundle: CharacterBundle = {
     createdAt: NOW,
     updatedAt: NOW,
     meta: {
-      name: "Elon Musk · 视角助手",
+      name: "埃隆·马斯克",
+      chineseName: "埃隆·马斯克",
+      englishName: "Elon Musk",
       sourceName: "Elon Musk",
       sourceType: "public-figure",
       track: "utility",
       quoteOneLiner:
-        "The only rules you have to follow are the laws of physics — everything else is a recommendation.",
+        "The only rules you have to follow are the laws of physics — everything else is a recommendation.（只需遵守物理定律——其余都是建议。）",
       avatarHint: summarizeAppearance(appearance),
       appearance,
       disclaimer:

@@ -59,16 +59,16 @@ export const DEFAULT_IMAGE_TIERS: Record<ImageTierName, ImageTierConfig> = {
     estimatedCostUsd: 0.005
   },
   standard: {
-    model: "gpt-image-1",
+    model: "gpt-image-2",
     size: "1024x1024",
     quality: "medium",
-    estimatedCostUsd: 0.042
+    estimatedCostUsd: 0.032
   },
   premium: {
-    model: "gpt-image-1",
+    model: "gpt-image-2",
     size: "1024x1536",
     quality: "high",
-    estimatedCostUsd: 0.25
+    estimatedCostUsd: 0.18
   }
 };
 

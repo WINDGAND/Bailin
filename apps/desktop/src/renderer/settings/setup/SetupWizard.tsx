@@ -180,8 +180,8 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "DeepSeek",
     kind: "openai-compatible",
     baseUrl: "https://api.deepseek.com",
-    model: "deepseek-chat",
-    note: "性价比高"
+    model: "deepseek-v4-flash",
+    note: "主模型推荐；不支持内置联网"
   },
   {
     id: "moonshot",
@@ -195,8 +195,8 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "OhMyGPT",
     kind: "openai-compatible",
     baseUrl: "https://api.ohmygpt.com",
-    model: "gpt-4o-mini",
-    note: "中转，支持 search-preview"
+    model: "deepseek-v4-flash",
+    note: "中转；主模型 DeepSeek，调研用 search-preview"
   },
   {
     id: "claude",
@@ -219,8 +219,8 @@ function ProviderStep({
   const [kind, setKind] = useState<"openai-compatible" | "anthropic-compatible">(
     "openai-compatible"
   );
-  const [baseUrl, setBaseUrl] = useState("https://api.openai.com");
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
+  const [model, setModel] = useState("deepseek-v4-flash");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);

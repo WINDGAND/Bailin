@@ -23,6 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "pinyin-pro": "^3.26.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

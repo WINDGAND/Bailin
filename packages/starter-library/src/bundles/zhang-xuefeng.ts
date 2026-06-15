@@ -68,8 +68,10 @@ export const zhangXuefengBundle: CharacterBundle = {
     createdAt: NOW,
     updatedAt: NOW,
     meta: {
-      name: "张雪峰 · 视角助手",
-      sourceName: "张雪峰",
+      name: "张雪峰",
+      chineseName: "张雪峰",
+      englishName: "Xuefeng Zhang",
+      sourceName: "Xuefeng Zhang",
       sourceType: "public-figure",
       track: "utility",
       quoteOneLiner: "选择比努力更重要，但'有得选'的前提是你足够努力。",

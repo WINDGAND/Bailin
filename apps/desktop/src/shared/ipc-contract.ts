@@ -228,7 +228,13 @@ export interface LLMProviderConfig {
   kind: "openai-compatible" | "anthropic-compatible";
   baseUrl: string;
   apiKey: string;
+  /** 主模型：对话、人格卡、框架提炼等（推荐 deepseek-v4-flash 等纯文本模型）。 */
   model: string;
+  /**
+   * 参考图读图 / 外貌 vision 专用模型（与 model 分离）。
+   * 默认 bytedance/doubao-seed-2.0-lite-260428。
+   */
+  visionModel?: string;
   defaultTemperature?: number;
   defaultMaxTokens?: number;
 }
@@ -272,7 +278,7 @@ export interface CreateCharacterInput {
   userHint?: string;
   userMaterial?: string;
   /**
-   * v0.2：快速模式也支持参考图。如果当前 provider 支持 vision 且用户上传了图，
+   * v0.2：快速模式也支持参考图。若视觉模型（默认豆包 Seed 2.0 Lite）可用且用户上传了图，
    * 就走 vision 路径；否则降级到纯文本。
    */
   referenceImages?: ReferenceImageInput[];

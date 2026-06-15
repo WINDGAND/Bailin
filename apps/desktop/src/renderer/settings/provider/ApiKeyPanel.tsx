@@ -12,6 +12,8 @@ import type {
   ImageTierName
 } from "../../../shared/ipc-contract.js";
 
+const DEFAULT_VISION_MODEL = "bytedance/doubao-seed-2.0-lite-260428";
+
 type Kind = "openai-compatible" | "anthropic-compatible";
 const IMAGE_TIERS: ImageTierName[] = ["economy", "standard", "premium"];
 const TIER_LABEL: Record<ImageTierName, string> = {
@@ -31,16 +33,16 @@ const DEFAULT_IMAGE_CONFIG: ImageGenerationConfigDTO = {
       estimatedCostUsd: 0.005
     },
     standard: {
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       size: "1024x1024",
       quality: "medium",
-      estimatedCostUsd: 0.042
+      estimatedCostUsd: 0.032
     },
     premium: {
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       size: "1024x1536",
       quality: "high",
-      estimatedCostUsd: 0.25
+      estimatedCostUsd: 0.18
     }
   }
 };
@@ -53,6 +55,7 @@ export function ApiKeyPanel(): JSX.Element {
   const [kind, setKind] = useState<Kind>("openai-compatible");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
+  const [visionModel, setVisionModel] = useState(DEFAULT_VISION_MODEL);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -89,12 +92,19 @@ export function ApiKeyPanel(): JSX.Element {
   useEffect(() => {
     void (async () => {
       const p = (await nuwa.llm.getProvider()) as
-        | { kind: string; baseUrl: string; model: string; apiKey: string }
+        | {
+            kind: string;
+            baseUrl: string;
+            model: string;
+            visionModel?: string;
+            apiKey: string;
+          }
         | null;
       if (p) {
         setKind(p.kind as Kind);
         setBaseUrl(p.baseUrl);
         setModel(p.model);
+        setVisionModel(p.visionModel?.trim() || DEFAULT_VISION_MODEL);
         setApiKey(p.apiKey);
       }
       try {
@@ -140,7 +150,13 @@ export function ApiKeyPanel(): JSX.Element {
   async function save(): Promise<void> {
     setBusy(true);
     setStatus({ kind: "running" });
-    const r = await nuwa.llm.setProvider({ kind, baseUrl, model, apiKey });
+    const r = await nuwa.llm.setProvider({
+      kind,
+      baseUrl,
+      model,
+      visionModel: visionModel.trim() || DEFAULT_VISION_MODEL,
+      apiKey
+    });
     if (!r.ok) {
       setBusy(false);
       setStatus({ kind: "error", message: r.error ?? "保存失败" });
@@ -355,8 +371,20 @@ export function ApiKeyPanel(): JSX.Element {
             className="input"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="gpt-4o-mini / deepseek-chat / claude-3-5-sonnet ..."
+            placeholder="deepseek-v4-flash / gpt-4o-mini / claude-3-5-sonnet ..."
           />
+        </div>
+        <div>
+          <label className="eyebrow">参考图读图模型</label>
+          <input
+            className="input"
+            value={visionModel}
+            onChange={(e) => setVisionModel(e.target.value)}
+            placeholder={DEFAULT_VISION_MODEL}
+          />
+          <p className="body-sm" style={{ margin: "4px 0 0" }}>
+            上传参考图时用于 vision 读图 / 外貌自检，与主模型分离。OhMyGPT 推荐豆包 Seed 2.0 Lite。
+          </p>
         </div>
         <div>
           <label className="eyebrow">API Key</label>
@@ -402,7 +430,7 @@ export function ApiKeyPanel(): JSX.Element {
             <div>
               <div className="settings-row__title">Provider</div>
               <div className="settings-row__desc">
-                推荐复用 LLM Provider。`gpt-image-2` 在当前接口下不支持透明背景，默认仍用 gpt-image-1。
+                推荐复用 LLM Provider。标准 / 精品档默认 gpt-image-2（图像 token 更便宜）；经济档仍用 gpt-image-1-mini。若测试报「不支持透明背景」，请改回 gpt-image-1 或联系中转商。
               </div>
             </div>
             <label className="switch-row">
