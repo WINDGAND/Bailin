@@ -6,6 +6,11 @@
     <title>百灵 Bailin · 对话</title>
     <link rel="stylesheet" href="./styles/design-system.css" />
     <style>
+      :root {
+        --chat-radius: 24px;
+        --chat-radius-inner: 16px;
+      }
+
       html,
       body,
       #root {
@@ -16,8 +21,7 @@
         height: 100%;
         overflow: hidden;
       }
-      /* 与气泡 pet-bubble-morph-out 接续：每次 ChatWindow show 时跑一次"小→大"渐入。
-         放在最外层 #root，让用户感觉是气泡膨胀变大成聊天窗。 */
+
       @keyframes chat-window-morph-in {
         0% {
           transform: scale(0.94);
@@ -28,20 +32,292 @@
           opacity: 1;
         }
       }
+
       #root {
         animation: chat-window-morph-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
         transform-origin: center center;
-        border-radius: 16px;
+        border-radius: var(--chat-radius);
         overflow: hidden;
       }
+
       .chat-panel {
         flex: 1;
         display: flex;
         flex-direction: column;
         overflow: hidden;
         background: var(--paper);
-        border: 1px solid rgba(31, 58, 58, 0.08);
-        box-shadow: 0 16px 48px -20px rgba(23, 38, 38, 0.42);
+        border-radius: var(--chat-radius);
+        border: 1px solid rgba(31, 58, 58, 0.07);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.72),
+          0 22px 56px -28px rgba(23, 38, 38, 0.38),
+          0 10px 28px -16px rgba(23, 38, 38, 0.14);
+      }
+
+      .chat-panel__header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px 12px 18px;
+        border-bottom: 1px solid var(--grid);
+        -webkit-app-region: drag;
+        user-select: none;
+        border-top-left-radius: var(--chat-radius);
+        border-top-right-radius: var(--chat-radius);
+      }
+
+      .chat-panel__header .btn--icon {
+        border-radius: 11px;
+      }
+
+      .chat-panel__avatar {
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .chat-panel__body-wrap {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .chat-panel__body {
+        flex: 1;
+        overflow: auto;
+        padding: 14px 16px;
+      }
+
+      .chat-scroll-down {
+        position: absolute;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border-radius: 999px;
+        border: 1px solid var(--grid);
+        background: color-mix(in srgb, var(--paper) 92%, transparent);
+        backdrop-filter: blur(8px);
+        box-shadow:
+          0 6px 18px -8px rgba(23, 38, 38, 0.28),
+          inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        color: var(--ink);
+        cursor: pointer;
+        transition:
+          transform 120ms ease,
+          box-shadow 120ms ease,
+          background 120ms ease;
+      }
+      .chat-scroll-down:hover {
+        background: var(--paper);
+        box-shadow: 0 8px 22px -8px rgba(23, 38, 38, 0.32);
+        transform: translateX(-50%) translateY(-1px);
+      }
+      .chat-scroll-down:active {
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .chat-panel__footer {
+        display: flex;
+        gap: 8px;
+        padding: 12px 14px;
+        border-top: 1px solid var(--grid);
+        background: var(--paper-deep);
+        align-items: flex-end;
+        border-bottom-left-radius: var(--chat-radius);
+        border-bottom-right-radius: var(--chat-radius);
+      }
+
+      .chat-panel__footer .textarea {
+        border-radius: var(--chat-radius-inner);
+        min-height: 38px;
+        max-height: 120px;
+        resize: none;
+        overflow-y: hidden;
+        padding: 9px 12px;
+        font-family: var(--font-body);
+        line-height: 1.45;
+      }
+
+      .chat-panel__footer .btn {
+        border-radius: var(--chat-radius-inner);
+      }
+
+      .chat-panel__footer .btn--send,
+      .chat-panel__footer .btn--cancel {
+        width: 38px;
+        min-width: 38px;
+        height: 38px;
+        padding: 0;
+        flex-shrink: 0;
+      }
+
+      .chat-panel .suggestion {
+        border-radius: var(--chat-radius-inner);
+      }
+
+      /* ===== 消息气泡 + 悬浮操作（预留槽位，hover 仅淡入） ===== */
+      .chat-row {
+        margin: 4px 0 10px;
+      }
+      .chat-row__stack {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        max-width: 86%;
+      }
+      .chat-row--user {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .chat-row--user .chat-row__stack {
+        align-items: flex-end;
+      }
+      .chat-row--assistant {
+        display: flex;
+        justify-content: flex-start;
+      }
+      .chat-row--assistant .chat-row__stack {
+        align-items: flex-start;
+      }
+
+      /* 时间戳 / 操作栏：始终占位，默认透明，hover 时显示 */
+      .chat-row--interactive .chat-row__meta {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 140ms var(--ease-out);
+      }
+      .chat-row--interactive:hover .chat-row__meta,
+      .chat-row--interactive:focus-within .chat-row__meta {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .chat-row__time {
+        flex-shrink: 0;
+        min-height: 14px;
+        font-size: 11px;
+        color: var(--ink-faint);
+        line-height: 14px;
+        margin-bottom: 4px;
+        user-select: none;
+      }
+      .chat-row__time--user {
+        align-self: flex-end;
+      }
+      .chat-row__time--assistant {
+        align-self: flex-start;
+      }
+
+      .chat-bubble {
+        padding: 9px 13px;
+        border-radius: 16px;
+        font-size: 14px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .chat-bubble--compact {
+        padding: 7px 10px;
+        border-radius: 14px;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .chat-bubble--user {
+        background: var(--ink);
+        color: var(--paper);
+      }
+      .chat-bubble--assistant {
+        background: var(--paper-deep);
+        color: var(--ink);
+        border: 1px solid var(--grid);
+        white-space: normal;
+      }
+
+      /* 助手消息 Markdown 排版 */
+      .chat-md__p {
+        margin: 0 0 0.55em;
+      }
+      .chat-md__p:last-child {
+        margin-bottom: 0;
+      }
+      .chat-md__ol,
+      .chat-md__ul {
+        margin: 0.2em 0 0.55em;
+        padding-left: 1.35em;
+      }
+      .chat-md__ol:last-child,
+      .chat-md__ul:last-child {
+        margin-bottom: 0;
+      }
+      .chat-md__ol {
+        list-style-type: decimal;
+      }
+      .chat-md__ul {
+        list-style-type: disc;
+      }
+      .chat-md li {
+        margin: 0.28em 0;
+        padding-left: 0.15em;
+      }
+      .chat-md li::marker {
+        color: var(--ink-faint);
+        font-weight: 600;
+      }
+      .chat-md strong {
+        font-weight: 650;
+        color: var(--ink);
+      }
+      .chat-bubble--user {
+        white-space: pre-wrap;
+      }
+
+      .chat-row__actions {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px 10px;
+        min-height: 22px;
+        margin-top: 6px;
+      }
+      .chat-row__actions--user {
+        justify-content: flex-end;
+      }
+      .chat-row__actions--assistant {
+        justify-content: flex-start;
+      }
+
+      .chat-row__action {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 0;
+        border: none;
+        background: transparent;
+        color: var(--ink-faint);
+        font-family: var(--font-body);
+        font-size: 12px;
+        cursor: pointer;
+        transition: color var(--motion-fast) var(--ease-out);
+      }
+      .chat-row__action:hover {
+        color: var(--ink-soft);
+      }
+      .chat-row__action:focus-visible {
+        color: var(--ink-soft);
+        outline: none;
+      }
+      .chat-row__action-icon {
+        display: inline-flex;
+        opacity: 0.85;
       }
     </style>
   </head>

@@ -39,11 +39,23 @@ export class CharacterRuntime {
     return this.vault.getRecentTurns(characterId, sessionId, limit);
   }
 
+  deleteTurn(turnId: string): boolean {
+    return this.vault.deleteTurn(turnId);
+  }
+
+  deleteTurnsFrom(characterId: string, sessionId: string, turnId: string): boolean {
+    return this.vault.deleteTurnsFrom(characterId, sessionId, turnId);
+  }
+
   async *sendMessage(input: {
     bundle: CharacterBundle;
     sessionId: string;
     userContent: string;
     responseMode?: "bubble" | "full";
+    userTurnId?: string;
+    assistantTurnId?: string;
+    /** 重新生成：不再写入 user turn，直接基于已有 history 请求 assistant。 */
+    skipUserAppend?: boolean;
   }): AsyncGenerator<ChatChunk> {
     const { bundle, sessionId, userContent, responseMode = "full" } = input;
     const verdict = this.safety.check(userContent);
@@ -70,7 +82,15 @@ export class CharacterRuntime {
 【桌宠气泡模式】
 你现在是在桌面宠物旁边的短气泡里说话。最多回复 1-3 句中文短句，优先 12-40 个汉字。
 不要长篇分析，不要列很多点，不要像客服或通用大模型。像一个有性格、在主人桌边轻声回应的伙伴。`
-        : systemPromptBase;
+        : `${systemPromptBase}
+
+【完整聊天窗 · 排版】
+你的回复会渲染为 Markdown，请主动用它提升可读性：
+- 先用 1-2 句给出结论或态度，再展开；避免整段不分段的长墙文字
+- 并列要点、步骤、建议用有序列表（1. 2. 3.）或无序列表（- ）
+- 用 **加粗** 标出关键词、结论、行动项（每段 1-3 处即可，勿整段加粗）
+- 单条列表项尽量控制在 1-2 行；需要强调的子句可单独加粗
+- 不要输出 \`\`\` 代码块围栏，除非用户明确问代码`;
 
     const history = this.vault.getRecentTurns(
       bundle.card.id,
@@ -78,27 +98,31 @@ export class CharacterRuntime {
       bundle.runtime.context.historyTurnsKept
     );
 
-    const userTurnId = ulid();
+    const skipUserAppend = input.skipUserAppend === true;
+    const userTurnId = input.userTurnId ?? ulid();
+    const assistantTurnId = input.assistantTurnId ?? ulid();
     const now = Date.now();
-    this.vault.appendTurn({
-      id: userTurnId,
-      characterId: bundle.card.id,
-      sessionId,
-      role: "user",
-      content: userContent,
-      createdAt: now
-    });
+    if (!skipUserAppend) {
+      this.vault.appendTurn({
+        id: userTurnId,
+        characterId: bundle.card.id,
+        sessionId,
+        role: "user",
+        content: userContent,
+        createdAt: now
+      });
+    }
 
     const ac = new AbortController();
     this.active = ac;
 
-    const messages = [
-      ...history.map((t) => ({
-        role: t.role === "system" ? "user" : (t.role as "user" | "assistant"),
-        content: t.content
-      })),
-      { role: "user" as const, content: userContent }
-    ];
+    const historyMessages = history.map((t) => ({
+      role: t.role === "system" ? "user" : (t.role as "user" | "assistant"),
+      content: t.content
+    }));
+    const messages = skipUserAppend
+      ? historyMessages
+      : [...historyMessages, { role: "user" as const, content: userContent }];
 
     let assistantBuf = "";
     try {
@@ -124,7 +148,7 @@ export class CharacterRuntime {
     } finally {
       if (assistantBuf.length > 0) {
         this.vault.appendTurn({
-          id: ulid(),
+          id: assistantTurnId,
           characterId: bundle.card.id,
           sessionId,
           role: "assistant",

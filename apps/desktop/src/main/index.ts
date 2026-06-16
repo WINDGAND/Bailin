@@ -35,9 +35,17 @@ import {
   registerIpc,
   SETTING_PET_POS
 } from "./ipc/register.js";
+import { registerChatTurnHandlers } from "./ipc/chat-turn-handlers.js";
 import { createPetWindow, PET_WINDOW_SIZE } from "./windows/pet-window.js";
 import { clampPetWindow, clampRectToDisplayBounds } from "./windows/window-bounds.js";
-import { createChatWindow, positionChatNear } from "./windows/chat-window.js";
+import {
+  CHAT_WINDOW_DEFAULT_SIZE,
+  CHAT_WINDOW_MIN_SIZE,
+  createChatWindow,
+  positionChatNear,
+  readChatContentSize,
+  type ChatWindowSize
+} from "./windows/chat-window.js";
 import { createSettingsWindow } from "./windows/settings-window.js";
 import { AmbientMonitor } from "./ambient/ambient-monitor.js";
 import { ProactiveOrchestrator } from "./proactive/proactive-orchestrator.js";
@@ -61,6 +69,11 @@ let ambientMonitor: AmbientMonitor | null = null;
 
 /** 拖动时光标相对窗口原点的偏移量（主进程坐标系，物理/逻辑像素与 screen API 一致）。 */
 let dragCursorOffset: { dx: number; dy: number } | null = null;
+
+/** 聊天窗内容区尺寸：跟随桌宠 reposition 时只写不读 getBounds，避免 DPI 漂移。 */
+let chatWindowSize: ChatWindowSize = { ...CHAT_WINDOW_DEFAULT_SIZE };
+/** 程序化 reposition / resize 期间忽略 resized 事件，防止把漂移值写回 chatWindowSize。 */
+let chatRepositioning = false;
 
 const devUrl = process.env.VITE_DEV_SERVER || undefined;
 
@@ -96,6 +109,11 @@ function ensurePetWindow(): BrowserWindow {
 function ensureChatWindow(): BrowserWindow {
   if (chatWin && !chatWin.isDestroyed()) return chatWin;
   chatWin = createChatWindow(devUrl);
+  chatWindowSize = { ...CHAT_WINDOW_DEFAULT_SIZE };
+  chatWin.on("resized", () => {
+    if (chatRepositioning || !chatWin || chatWin.isDestroyed()) return;
+    chatWindowSize = readChatContentSize(chatWin);
+  });
   // 关闭按钮按 hide 处理（避免重新加载 React 应用），真正销毁交给 quit
   chatWin.on("close", (e) => {
     if (!isQuitting && chatWin && !chatWin.isDestroyed()) {
@@ -127,17 +145,25 @@ function getPetGeometry(pet: BrowserWindow): { x: number; y: number; width: numb
  * 这一版交互设计删除了独立的桌宠气泡窗 —— 所有"想跟桌宠说话"的入口都直接弹这个聊天窗。
  * 入口包括：单击桌宠、Ctrl+Shift+P、托盘"唤起对话"、托盘"展开完整聊天窗"。
  */
+function repositionChatNearPet(chat: BrowserWindow): void {
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return;
+  const geo = getPetGeometry(pet);
+  chatRepositioning = true;
+  positionChatNear(
+    chat,
+    { petX: geo.x, petY: geo.y, petW: geo.width, petH: geo.height },
+    chatWindowSize
+  );
+  chatRepositioning = false;
+}
+
 function showChatNearPet(): void {
   const pet = ensurePetWindow();
   const chat = ensureChatWindow();
-  const geo = getPetGeometry(pet);
-  positionChatNear(chat, {
-    petX: geo.x,
-    petY: geo.y,
-    petW: geo.width,
-    petH: geo.height
-  });
+  repositionChatNearPet(chat);
   chat.show();
+  chat.moveTop();
   chat.focus();
   broadcastToAllWindows("nuwa.event.petSummon", null);
 }
@@ -174,15 +200,27 @@ function isChatVisible(): boolean {
 /** 聊天窗可见时，将其重新定位到桌宠左右侧（随桌宠移动而跟随）。 */
 function syncChatNearPetIfVisible(): void {
   if (!isChatVisible() || !chatWin || chatWin.isDestroyed()) return;
-  const pet = petWin;
-  if (!pet || pet.isDestroyed()) return;
-  const geo = getPetGeometry(pet);
-  positionChatNear(chatWin, {
-    petX: geo.x,
-    petY: geo.y,
-    petW: geo.width,
-    petH: geo.height
-  });
+  repositionChatNearPet(chatWin);
+}
+
+function getChatWindowSize(): ChatWindowSize {
+  return { ...chatWindowSize };
+}
+
+function setChatWindowSize(width: number, height: number): ChatWindowSize {
+  const next = {
+    width: Math.max(CHAT_WINDOW_MIN_SIZE.width, Math.round(width)),
+    height: Math.max(CHAT_WINDOW_MIN_SIZE.height, Math.round(height))
+  };
+  chatWindowSize = next;
+  if (!chatWin || chatWin.isDestroyed()) {
+    return getChatWindowSize();
+  }
+  const content = chatWin.getContentBounds();
+  chatRepositioning = true;
+  chatWin.setContentBounds({ x: content.x, y: content.y, width: next.width, height: next.height });
+  chatRepositioning = false;
+  return getChatWindowSize();
 }
 
 function hidePet(): void {
@@ -365,8 +403,13 @@ void app.whenReady().then(() => {
     ensureSettingsWindow,
     petDragStart,
     petDragMove,
-    petDragEnd
+    petDragEnd,
+    getChatWindowSize,
+    setChatWindowSize
   });
+
+  registerChatTurnHandlers(runtime);
+  log.info("[main] chat turn IPC registered (deleteTurn, deleteTurnsFrom)");
 
   // 首启没完成 → 自动打开 Settings 走 Wizard；否则只确保桌宠在桌面，
   // Settings 由用户从托盘 / 桌宠右键菜单显式打开。

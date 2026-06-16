@@ -54,6 +54,8 @@ export interface IpcDeps {
   petDragMove: () => void;
   /** 拖动结束：清理拖动状态并返回最终位置用于落盘。*/
   petDragEnd: () => { x: number; y: number } | null;
+  getChatWindowSize: () => { width: number; height: number };
+  setChatWindowSize: (width: number, height: number) => { width: number; height: number };
 }
 
 const SETTING_FIRST_RUN_DONE = "first_run_done";
@@ -546,13 +548,18 @@ export function registerIpc(deps: IpcDeps): void {
     vault.setSetting("session." + input.characterId, sessionId);
 
     const requestId = ulid();
+    const userTurnId = input.userTurnId ?? ulid();
+    const assistantTurnId = input.assistantTurnId ?? ulid();
     void (async () => {
       try {
         for await (const chunk of runtime.sendMessage({
           bundle,
           sessionId,
           userContent: input.content,
-          responseMode: input.surface === "bubble" ? "bubble" : "full"
+          responseMode: input.surface === "bubble" ? "bubble" : "full",
+          userTurnId,
+          assistantTurnId,
+          skipUserAppend: input.skipUserAppend
         })) {
           if (chunk.kind === "delta") {
             broadcast(IPC.EventChatStream, {
@@ -566,7 +573,8 @@ export function registerIpc(deps: IpcDeps): void {
               requestId,
               sessionId,
               done: true,
-              finishReason: chunk.finishReason
+              finishReason: chunk.finishReason,
+              assistantTurnId
             });
           } else {
             broadcast(IPC.EventChatStream, {
@@ -588,7 +596,7 @@ export function registerIpc(deps: IpcDeps): void {
         });
       }
     })();
-    return { requestId };
+    return { requestId, userTurnId, assistantTurnId };
   });
 
   ipcMain.handle(IPC.ChatCancel, () => {
@@ -598,6 +606,12 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.ChatHide, () => {
     deps.hideChat();
   });
+
+  ipcMain.handle(IPC.ChatGetSize, () => deps.getChatWindowSize());
+
+  ipcMain.handle(IPC.ChatResize, (_e, input: { width: number; height: number }) =>
+    deps.setChatWindowSize(input.width, input.height)
+  );
 
   // ===== Memory =====
   ipcMain.handle(IPC.MemoryGetProfile, () => memory.getProfile());

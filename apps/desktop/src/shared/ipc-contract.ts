@@ -110,11 +110,15 @@ export interface BailinApi {
 
   // ===== 对话 =====
   chat: {
-    send(input: SendMessageInput): Promise<{ requestId: string }>;
+    send(input: SendMessageInput): Promise<{ requestId: string; userTurnId: string; assistantTurnId: string }>;
     cancel(requestId: string): Promise<void>;
     newSession(characterId: string): Promise<{ sessionId: string }>;
     getRecent(characterId: string): Promise<ChatTurn[]>;
     hide(): Promise<void>;
+    getSize(): Promise<{ width: number; height: number }>;
+    resize(input: { width: number; height: number }): Promise<{ width: number; height: number }>;
+    deleteTurn(input: DeleteChatTurnInput): Promise<{ ok: boolean }>;
+    deleteTurnsFrom(input: DeleteChatTurnInput): Promise<{ ok: boolean }>;
   };
 
   // ===== 记忆 =====
@@ -329,6 +333,16 @@ export interface SendMessageInput {
   content: string;
   /** bubble = 桌宠气泡短回复；chat = 完整聊天窗长回复。 */
   surface?: "bubble" | "chat";
+  userTurnId?: string;
+  assistantTurnId?: string;
+  /** 重新生成 assistant 回复时设为 true，不再重复写入 user turn。 */
+  skipUserAppend?: boolean;
+}
+
+export interface DeleteChatTurnInput {
+  characterId: string;
+  sessionId: string;
+  turnId: string;
 }
 
 export interface ChatStreamChunk {
@@ -338,6 +352,7 @@ export interface ChatStreamChunk {
   delta?: string;
   error?: string;
   finishReason?: "stop" | "length" | "error" | "safety";
+  assistantTurnId?: string;
 }
 
 export interface ChatTurn {
@@ -431,6 +446,10 @@ export const IPC = {
   ChatNewSession: "nuwa.chat.newSession",
   ChatGetRecent: "nuwa.chat.getRecent",
   ChatHide: "nuwa.chat.hide",
+  ChatGetSize: "nuwa.chat.getSize",
+  ChatResize: "nuwa.chat.resize",
+  ChatDeleteTurn: "nuwa.chat.deleteTurn",
+  ChatDeleteTurnsFrom: "nuwa.chat.deleteTurnsFrom",
 
   MemoryGetProfile: "nuwa.memory.getProfile",
   MemoryUpdateProfile: "nuwa.memory.updateProfile",

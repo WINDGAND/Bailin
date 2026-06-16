@@ -1018,6 +1018,28 @@ body {
   transform: translate(-50%, 0);
 }
 
+/* 靠近窗口顶部的按钮：提示向下展开，避免被 overflow:hidden 裁切 */
+[data-hint][data-hint-placement="bottom"]::after {
+  bottom: auto;
+  top: calc(100% + 6px);
+  transform: translate(-50%, -4px);
+}
+[data-hint][data-hint-placement="bottom"]:hover::after,
+[data-hint][data-hint-placement="bottom"]:focus-visible::after {
+  transform: translate(-50%, 0);
+}
+
+/* 靠右按钮：提示右对齐，避免超出窗口右缘 */
+[data-hint][data-hint-placement="bottom"][data-hint-align="end"]::after {
+  left: auto;
+  right: 0;
+  transform: translate(0, -4px);
+}
+[data-hint][data-hint-placement="bottom"][data-hint-align="end"]:hover::after,
+[data-hint][data-hint-placement="bottom"][data-hint-align="end"]:focus-visible::after {
+  transform: translate(0, 0);
+}
+
 /* ---------- Scrollbars (subtle) ---------- */
 
 * {

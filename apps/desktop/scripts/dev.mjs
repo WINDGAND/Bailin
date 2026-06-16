@@ -49,6 +49,10 @@ runChecked(
   repoRoot
 );
 
+console.log("[dev] building main + preload (initial sync)…");
+runChecked("pnpm", ["run", "build:main"], appRoot);
+runChecked("pnpm", ["run", "build:preload"], appRoot);
+
 console.log("[dev] starting vite renderer + tsc main watch + electron…");
 
 const vite = run("vite", ["--config", "vite.config.ts"]);
@@ -62,16 +66,11 @@ const preloadBuild = run("tsc", ["-w", "-p", "tsconfig.preload.json"]);
 // Electron 没有原生 HMR——任何主进程改动都必须 kill + respawn 整个 app。
 // 这意味着重启时桌宠 + 设置 + 聊天窗会一起消失再出现，视觉上是"全局闪屏"。
 //
-// 为了避免这种闪屏成为高频骚扰，本 watcher 默认**关闭**自动重启；
-// 改完主进程代码后，在 dev 终端里输入 r + Enter 即可触发一次重启。
-//
-// 想恢复旧的"主进程一改就自动重启"行为：
-//   NUWA_PET_DEV_AUTO_RESTART=1 pnpm dev
-//
-// 也支持 NUWA_PET_DEV_AUTO_RESTART=0 显式关闭，与默认行为一致。
+// 主进程改动后默认自动重启 Electron（避免 preload 已更新但 main 未重启导致 IPC 缺失）。
+// 若不想闪屏可设 NUWA_PET_DEV_AUTO_RESTART=0，改完主进程后在 dev 终端输入 r + Enter。
 
 const distMainRoot = resolve(appRoot, "dist/main");
-const autoRestart = process.env.NUWA_PET_DEV_AUTO_RESTART === "1";
+const autoRestart = process.env.NUWA_PET_DEV_AUTO_RESTART !== "0";
 let electron = null;
 let restartTimer = null;
 let lastRestartAt = 0;
@@ -168,13 +167,13 @@ setTimeout(() => {
 function setupManualRestart() {
   if (autoRestart) {
     console.log(
-      "[dev] main process auto-restart: ON (NUWA_PET_DEV_AUTO_RESTART=1)。" +
-        " 改主进程代码会自动重启 Electron。"
+      "[dev] main process auto-restart: ON。" +
+        " 改主进程代码会自动重启 Electron（设 NUWA_PET_DEV_AUTO_RESTART=0 可关闭）。"
     );
   } else {
     console.log(
       "[dev] main process auto-restart: OFF。" +
-        " Renderer 走 Vite HMR；主进程改动不会自动重启窗口。" +
+        " Renderer 走 Vite HMR；主进程改动不会自动重启。" +
         " 在本终端输入 r + Enter 可手动重启 Electron。"
     );
   }

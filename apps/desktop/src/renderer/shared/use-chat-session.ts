@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ulid } from "ulid";
 import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import type { ChatTurn } from "../../shared/ipc-contract.js";
 import { useNuwa } from "./use-nuwa.js";
@@ -7,6 +8,7 @@ export interface UiTurn {
   id: string;
   role: "user" | "assistant";
   content: string;
+  createdAt: number;
   error?: { code?: string; message: string };
 }
 
@@ -25,6 +27,9 @@ export interface ChatSessionState {
   startNewSession(): Promise<void>;
   retryLastUser(): void;
   clearError(): void;
+  deleteTurn(turnId: string): Promise<void>;
+  deleteTurnsFrom(turnId: string): Promise<void>;
+  regenerateAssistant(assistantTurnId: string): Promise<void>;
 }
 
 export function useChatSession(
@@ -43,6 +48,7 @@ export function useChatSession(
   const [phase, setPhase] = useState<StreamPhase>("idle");
   const [lastError, setLastError] = useState<{ code?: string; message: string } | null>(null);
   const inFlightRef = useRef<string | null>(null);
+  const pendingAssistantTurnIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!bundle) {
@@ -51,6 +57,7 @@ export function useChatSession(
       setPending("");
       setPhase("idle");
       inFlightRef.current = null;
+      pendingAssistantTurnIdRef.current = null;
       return;
     }
     void (async () => {
@@ -62,6 +69,7 @@ export function useChatSession(
       setLastError(null);
       setPhase("idle");
       inFlightRef.current = null;
+      pendingAssistantTurnIdRef.current = null;
     })();
   }, [bundle?.card.id, nuwa, options.historyLimit]);
 
@@ -79,10 +87,12 @@ export function useChatSession(
             id: chunk.requestId + "-err",
             role: "assistant",
             content: "",
+            createdAt: Date.now(),
             error: errObj
           }
         ]);
         inFlightRef.current = null;
+        pendingAssistantTurnIdRef.current = null;
         return;
       }
       if (chunk.delta) {
@@ -90,44 +100,61 @@ export function useChatSession(
         setPending((cur) => cur + chunk.delta);
       }
       if (chunk.done) {
+        const assistantId =
+          chunk.assistantTurnId ?? pendingAssistantTurnIdRef.current ?? chunk.requestId + "-done";
         setPending((cur) => {
           if (cur.length > 0) {
             setTurns((prev) => [
               ...prev,
-              { id: chunk.requestId + "-done", role: "assistant", content: cur }
+              {
+                id: assistantId,
+                role: "assistant",
+                content: cur,
+                createdAt: Date.now()
+              }
             ]);
           }
           return "";
         });
         setPhase("idle");
         inFlightRef.current = null;
+        pendingAssistantTurnIdRef.current = null;
       }
     });
   }, [nuwa]);
 
-  const submit = useCallback(
-    async (text: string) => {
+  const sendInternal = useCallback(
+    async (text: string, opts?: { skipUserAppend?: boolean }) => {
       if (!bundle || !sessionId) return;
       const trimmed = text.trim();
       if (!trimmed) return;
       setLastError(null);
-      setTurns((prev) => [
-        ...prev,
-        {
-          id: Math.random().toString(36).slice(2),
-          role: "user",
-          content: trimmed
-        }
-      ]);
+
+      const userTurnId = ulid();
+      if (!opts?.skipUserAppend) {
+        setTurns((prev) => [
+          ...prev,
+          {
+            id: userTurnId,
+            role: "user",
+            content: trimmed,
+            createdAt: Date.now()
+          }
+        ]);
+      }
+
       setPhase("thinking");
       try {
         const res = await nuwa.chat.send({
           characterId: bundle.card.id,
           sessionId,
           content: trimmed,
-          surface: options.surface
+          surface: options.surface,
+          userTurnId,
+          skipUserAppend: opts?.skipUserAppend
         });
         inFlightRef.current = res.requestId;
+        pendingAssistantTurnIdRef.current = res.assistantTurnId;
       } catch (e) {
         setPhase("idle");
         const message = e instanceof Error ? e.message : "发送失败";
@@ -137,16 +164,19 @@ export function useChatSession(
     [bundle, sessionId, nuwa, options.surface, options.onError]
   );
 
+  const submit = useCallback(async (text: string) => sendInternal(text), [sendInternal]);
+
   const cancel = useCallback(async () => {
     if (inFlightRef.current == null) return;
     const id = inFlightRef.current;
     inFlightRef.current = null;
+    pendingAssistantTurnIdRef.current = null;
     await nuwa.chat.cancel(id);
     setPending((cur) => {
       if (cur.length > 0) {
         setTurns((prev) => [
           ...prev,
-          { id: id + "-cancel", role: "assistant", content: cur + " ⏹" }
+          { id: id + "-cancel", role: "assistant", content: cur + " ⏹", createdAt: Date.now() }
         ]);
       }
       return "";
@@ -180,23 +210,116 @@ export function useChatSession(
     void submit(lastUser.content);
   }, [turns, submit]);
 
+  const deleteTurn = useCallback(
+    async (turnId: string) => {
+      if (!bundle || !sessionId) return;
+      try {
+        const res = await nuwa.chat.deleteTurn({
+          characterId: bundle.card.id,
+          sessionId,
+          turnId
+        });
+        if (!res.ok) {
+          options.onError?.("删除失败：找不到该消息记录");
+          return;
+        }
+        setTurns((prev) => prev.filter((t) => t.id !== turnId));
+        options.onInfo?.("已删除");
+      } catch (e) {
+        options.onError?.(e instanceof Error ? e.message : "删除失败");
+      }
+    },
+    [bundle, sessionId, nuwa, options.onInfo, options.onError]
+  );
+
+  const deleteTurnsFrom = useCallback(
+    async (turnId: string) => {
+      if (!bundle || !sessionId) return;
+      try {
+        const res = await nuwa.chat.deleteTurnsFrom({
+          characterId: bundle.card.id,
+          sessionId,
+          turnId
+        });
+        if (!res.ok) {
+          options.onError?.("删除失败：找不到该消息记录");
+          return;
+        }
+        setTurns((prev) => {
+          const idx = prev.findIndex((t) => t.id === turnId);
+          if (idx < 0) return prev;
+          return prev.slice(0, idx);
+        });
+        options.onInfo?.("已删除");
+      } catch (e) {
+        options.onError?.(e instanceof Error ? e.message : "删除失败");
+      }
+    },
+    [bundle, sessionId, nuwa, options.onInfo, options.onError]
+  );
+
+  const regenerateAssistant = useCallback(
+    async (assistantTurnId: string) => {
+      if (!bundle || !sessionId) return;
+      if (inFlightRef.current) await cancel();
+
+      const idx = turns.findIndex((t) => t.id === assistantTurnId);
+      if (idx < 0) return;
+      let userContent = "";
+      for (let i = idx - 1; i >= 0; i--) {
+        const prior = turns[i];
+        if (prior?.role === "user") {
+          userContent = prior.content;
+          break;
+        }
+      }
+      if (!userContent) return;
+
+      try {
+        const res = await nuwa.chat.deleteTurn({
+          characterId: bundle.card.id,
+          sessionId,
+          turnId: assistantTurnId
+        });
+        if (!res.ok) {
+          options.onError?.("重新生成失败：找不到该回复记录，请重启应用后再试");
+          return;
+        }
+        setTurns((prev) => prev.filter((t) => t.id !== assistantTurnId));
+        await sendInternal(userContent, { skipUserAppend: true });
+        options.onInfo?.("正在重新生成…");
+      } catch (e) {
+        options.onError?.(e instanceof Error ? e.message : "重新生成失败");
+      }
+    },
+    [bundle, sessionId, turns, nuwa, cancel, sendInternal, options.onInfo, options.onError]
+  );
+
   return {
     sessionId,
     turns,
     pending,
     phase,
     lastError,
-    streaming: inFlightRef.current != null,
+    streaming: phase !== "idle",
     submit,
     cancel,
     startNewSession,
     retryLastUser,
-    clearError: () => setLastError(null)
+    clearError: () => setLastError(null),
+    deleteTurn,
+    deleteTurnsFrom,
+    regenerateAssistant
   };
 }
 
 function toUiTurns(turns: ChatTurn[]): UiTurn[] {
   return turns
     .filter((t) => t.role === "user" || t.role === "assistant")
-    .map((t) => ({ id: t.id, role: t.role as "user" | "assistant", content: t.content }));
+    .map((t) => ({
+      id: t.id,
+      role: t.role as "user" | "assistant",
+      content: t.content,
+      createdAt: t.createdAt
+    }));
 }

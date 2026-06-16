@@ -11,6 +11,8 @@ import { PetRenderer } from "../shared/pet-renderer.js";
 import { useToast } from "../shared/feedback.js";
 import { ChatBubble } from "../shared/chat-bubble.js";
 import { useChatSession } from "../shared/use-chat-session.js";
+import { useChatScroll } from "../shared/use-chat-scroll.js";
+import { ChatResizeHandles } from "./ChatResizeHandles.js";
 
 export function ChatApp(): JSX.Element {
   const nuwa = useNuwa();
@@ -25,11 +27,11 @@ export function ChatApp(): JSX.Element {
     onInfo: (text) => showToast({ kind: "info", text }),
     onError: (text) => showToast({ kind: "error", text })
   });
-
-  // ===== 自动滚到底部 =====
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [chat.turns, chat.pending, chat.phase]);
+  const { showScrollDown, scrollToLatest, forceScrollOnNextUpdate } = useChatScroll(listRef, {
+    turnsLength: chat.turns.length,
+    pending: chat.pending,
+    phase: chat.phase
+  });
 
   // ===== 差异化建议（取自 card） =====
   const suggestions = useMemo<Suggestion[]>(() => {
@@ -64,10 +66,11 @@ export function ChatApp(): JSX.Element {
   // ===== 发送 =====
   const submit = useCallback(
     async (text: string) => {
+      forceScrollOnNextUpdate();
       setInput("");
       await chat.submit(text);
     },
-    [chat]
+    [chat, forceScrollOnNextUpdate]
   );
 
   // ===== 新对话 =====
@@ -117,12 +120,15 @@ export function ChatApp(): JSX.Element {
     }
   }
 
+  const CHAT_INPUT_MAX_HEIGHT = 120;
+
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const next = Math.min(el.scrollHeight, 120);
+    const next = Math.min(el.scrollHeight, CHAT_INPUT_MAX_HEIGHT);
     el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > CHAT_INPUT_MAX_HEIGHT ? "auto" : "hidden";
   }, [input]);
 
   const streaming = chat.streaming;
@@ -136,24 +142,11 @@ export function ChatApp(): JSX.Element {
         flexDirection: "column"
       }}
     >
+      <ChatResizeHandles />
       <div className="chat-panel">
         {/* Header */}
-        <div
-          style={
-            {
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 12px 10px 16px",
-              borderBottom: "1px solid var(--grid)",
-              WebkitAppRegion: "drag",
-              userSelect: "none",
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16
-            } as React.CSSProperties
-          }
-        >
-          <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <div className="chat-panel__header">
+          <div className="chat-panel__avatar" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
             {bundle ? (
               <PetRenderer program={bundle.sprite} width={36} height={36} />
             ) : (
@@ -161,7 +154,6 @@ export function ChatApp(): JSX.Element {
                 style={{
                   width: 36,
                   height: 36,
-                  borderRadius: 10,
                   background: "var(--paper-deep)"
                 }}
               />
@@ -197,6 +189,7 @@ export function ChatApp(): JSX.Element {
             onClick={() => void startNewSession()}
             className="btn btn--icon"
             data-hint="新对话 · Ctrl+L"
+            data-hint-placement="bottom"
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             aria-label="新对话"
           >
@@ -207,6 +200,8 @@ export function ChatApp(): JSX.Element {
             onClick={() => void nuwa.chat.hide()}
             className="btn btn--icon"
             data-hint="关闭 · Esc"
+            data-hint-placement="bottom"
+            data-hint-align="end"
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             aria-label="关闭"
           >
@@ -215,10 +210,8 @@ export function ChatApp(): JSX.Element {
         </div>
 
         {/* Body */}
-        <div
-          ref={listRef}
-          style={{ flex: 1, overflow: "auto", padding: "14px 16px" }}
-        >
+        <div className="chat-panel__body-wrap">
+          <div ref={listRef} className="chat-panel__body">
           {chat.turns.length === 0 && !chat.pending && chat.phase === "idle" ? (
             <div className="stack fade-in-up" style={{ marginTop: 4 }}>
               <div className="eyebrow">不知道说什么？</div>
@@ -241,6 +234,7 @@ export function ChatApp(): JSX.Element {
               key={t.id}
               role={t.role}
               content={t.content}
+              createdAt={t.createdAt}
               error={t.error}
               onRetry={t.error ? retryLastUser : undefined}
               onGoSettings={
@@ -248,30 +242,73 @@ export function ChatApp(): JSX.Element {
                   ? () => void nuwa.pet.openSettings()
                   : undefined
               }
+              onCopy={() => {
+                void navigator.clipboard.writeText(t.content).then(() => {
+                  showToast({ kind: "info", text: "已复制" });
+                });
+              }}
+              onDelete={() => {
+                if (t.role === "user") {
+                  void chat.deleteTurnsFrom(t.id);
+                } else {
+                  void chat.deleteTurn(t.id);
+                }
+              }}
+              onEdit={
+                t.role === "user"
+                  ? () => {
+                      setInput(t.content);
+                      void chat.deleteTurnsFrom(t.id);
+                      textareaRef.current?.focus();
+                    }
+                  : undefined
+              }
+              onQuote={
+                t.role === "assistant"
+                  ? () => {
+                      const quoted = t.content
+                        .split("\n")
+                        .map((line) => `> ${line}`)
+                        .join("\n");
+                      setInput((cur) => (cur.trim() ? `${cur}\n\n${quoted}\n\n` : `${quoted}\n\n`));
+                      textareaRef.current?.focus();
+                    }
+                  : undefined
+              }
+              onRegenerate={
+                t.role === "assistant" ? () => void chat.regenerateAssistant(t.id) : undefined
+              }
             />
           ))}
 
           {chat.phase !== "idle" ? (
-            <ChatBubble role="assistant" content={chat.pending} streamingKind={chat.phase} />
+            <ChatBubble
+              role="assistant"
+              content={chat.pending}
+              streamingKind={chat.phase}
+              interactive={false}
+            />
+          ) : null}
+          </div>
+          {showScrollDown ? (
+            <button
+              type="button"
+              className="chat-scroll-down fade-in"
+              onClick={scrollToLatest}
+              aria-label="回到底部"
+            >
+              <ChevronDownIcon />
+            </button>
           ) : null}
         </div>
 
         {/* Input */}
         <form
+          className="chat-panel__footer"
           onSubmit={(e) => {
             e.preventDefault();
             if (streaming) void chat.cancel();
             else void submit(input);
-          }}
-          style={{
-            display: "flex",
-            gap: 8,
-            padding: "10px 12px",
-            borderTop: "1px solid var(--grid)",
-            background: "var(--paper-deep)",
-            alignItems: "flex-end",
-            borderBottomLeftRadius: 16,
-            borderBottomRightRadius: 16
           }}
         >
           <textarea
@@ -286,36 +323,27 @@ export function ChatApp(): JSX.Element {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onTextareaKeyDown}
             rows={1}
-            style={{
-              minHeight: 38,
-              maxHeight: 120,
-              resize: "none",
-              padding: "9px 12px",
-              fontFamily: "var(--font-body)"
-            }}
             autoFocus
           />
           {streaming ? (
             <button
               type="button"
-              className="btn btn--danger"
+              className="btn btn--danger btn--cancel"
               onClick={() => void chat.cancel()}
               data-hint="中断 · Enter"
               aria-label="中断"
-              style={{ minWidth: 64 }}
             >
-              ◼ 中断
+              <StopIcon />
             </button>
           ) : (
             <button
               type="submit"
-              className="btn btn--magenta"
+              className="btn btn--magenta btn--send"
               disabled={input.trim().length === 0}
               data-hint="发送 · Enter"
               aria-label="发送"
-              style={{ minWidth: 64 }}
             >
-              发送
+              <SendIcon />
             </button>
           )}
         </form>
@@ -346,4 +374,49 @@ interface Suggestion {
   title: string;
   hint: string;
   prompt: string;
+}
+
+function ChevronDownIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function SendIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22 11 13 2 9l20-7Z" />
+    </svg>
+  );
+}
+
+function StopIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </svg>
+  );
 }

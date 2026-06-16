@@ -115,7 +115,7 @@ export function PetApp(): JSX.Element {
       if (!s) return;
       if (!s.dragging) {
         // 超过 4px 才判定为拖动，避免误把点击识别为拖动。
-        if (Math.abs(e.screenX - s.startScreenX) < 4 && Math.abs(e.screenY - s.startScreenY) < 4) return;
+        if (Math.abs(e.screenX - s.startScreenX) < 8 && Math.abs(e.screenY - s.startScreenY) < 8) return;
         s.dragging = true;
         draggingRef.current = true;
         void (async () => {
@@ -144,7 +144,7 @@ export function PetApp(): JSX.Element {
         void nuwa.pet.dragEnd();
         sendSpriteEvent("dragEnd");
       } else {
-        void nuwa.pet.summon();
+        void nuwa.pet.openChat();
       }
     },
     [nuwa, sendSpriteEvent]
@@ -241,6 +241,7 @@ export function PetApp(): JSX.Element {
           userSelect: "none"
         }}
         onPointerDown={onPetPointerDown}
+        onPointerEnter={() => void nuwa.pet.setMouseIgnore(false)}
         onPointerMove={onPetPointerMove}
         onPointerUp={onPetPointerUp}
         onPointerCancel={onPetPointerUp}
@@ -264,7 +265,7 @@ export function PetApp(): JSX.Element {
             starters={starters}
             submenu={submenu}
             onSubmenu={(s) => setSubmenu(s)}
-            onSummon={() => void nuwa.pet.summon()}
+            onSummon={() => void nuwa.pet.openChat()}
             onHush={() => {
               void nuwa.pet.hush(30 * 60 * 1000);
               // hush 后顺手把聊天窗也收起来，让"安静 30 分钟"是真的安静——

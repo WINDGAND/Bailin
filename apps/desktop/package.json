@@ -11,6 +11,7 @@
     "build:preload": "tsc -p tsconfig.preload.json",
     "build:renderer": "vite build",
     "build": "pnpm run build:main && pnpm run build:preload && pnpm run build:renderer",
+    "prestart": "pnpm run build:main && pnpm run build:preload",
     "start": "electron .",
     "typecheck": "pnpm --dir ../.. -r --filter @nuwa-pet/character-protocol --filter @nuwa-pet/nuwa-prompts --filter @nuwa-pet/pet-atlas-tools --filter @nuwa-pet/sprite-runtime --filter @nuwa-pet/starter-library run build && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "package": "electron-builder"

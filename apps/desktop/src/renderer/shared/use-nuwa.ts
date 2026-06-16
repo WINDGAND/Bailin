@@ -80,11 +80,15 @@ interface NuwaWindow {
       }>;
     };
     chat: {
-      send(input: { characterId: string; sessionId: string; content: string; surface?: "bubble" | "chat" }): Promise<{ requestId: string }>;
+      send(input: { characterId: string; sessionId: string; content: string; surface?: "bubble" | "chat"; userTurnId?: string; skipUserAppend?: boolean }): Promise<{ requestId: string; userTurnId: string; assistantTurnId: string }>;
       cancel(requestId: string): Promise<void>;
       newSession(characterId: string): Promise<{ sessionId: string }>;
       getRecent(characterId: string): Promise<Array<{ id: string; role: "user" | "assistant" | "system"; content: string; createdAt: number }>>;
       hide(): Promise<void>;
+      getSize(): Promise<{ width: number; height: number }>;
+      resize(input: { width: number; height: number }): Promise<{ width: number; height: number }>;
+      deleteTurn(input: { characterId: string; sessionId: string; turnId: string }): Promise<{ ok: boolean }>;
+      deleteTurnsFrom(input: { characterId: string; sessionId: string; turnId: string }): Promise<{ ok: boolean }>;
     };
     memory: {
       getProfile(): Promise<{ preferredName?: string; currentGoals: string[]; ongoingConcerns: string[]; tabooTopics: string[] }>;
@@ -102,7 +106,7 @@ interface NuwaWindow {
       triggerNow(reason?: AmbientSignal["kind"]): Promise<{ ok: boolean; reason?: string }>;
     };
     on: {
-      chatStream(h: (chunk: { requestId: string; sessionId: string; done: boolean; delta?: string; error?: string; finishReason?: string }) => void): () => void;
+      chatStream(h: (chunk: { requestId: string; sessionId: string; done: boolean; delta?: string; error?: string; finishReason?: string; assistantTurnId?: string }) => void): () => void;
       activeCharacterChanged(h: (bundle: CharacterBundle | null) => void): () => void;
       petSummon(h: () => void): () => void;
       proactiveWhisper(h: (evt: ProactiveWhisperEvent) => void): () => void;
@@ -210,11 +214,15 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       probeWebSearch: async () => ({ ok: false, realWebSearch: false, citations: 0 })
     },
     chat: {
-      send: async () => ({ requestId: "stub" }),
+      send: async () => ({ requestId: "stub", userTurnId: "stub-u", assistantTurnId: "stub-a" }),
       cancel: async () => undefined,
       newSession: async () => ({ sessionId: "stub" }),
       getRecent: async () => [],
-      hide: async () => undefined
+      hide: async () => undefined,
+      getSize: async () => ({ width: 380, height: 480 }),
+      resize: async (input) => input,
+      deleteTurn: async () => ({ ok: true }),
+      deleteTurnsFrom: async () => ({ ok: true })
     },
     memory: {
       getProfile: async () => ({

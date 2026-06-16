@@ -333,6 +333,31 @@ export class LocalVault {
       .run(turn.id, turn.characterId, turn.sessionId, turn.role, turn.content, turn.createdAt);
   }
 
+  deleteTurn(turnId: string): boolean {
+    const r = this.db.prepare("DELETE FROM chat_turns WHERE id = ?").run(turnId);
+    return r.changes > 0;
+  }
+
+  /** 删除指定 turn 及其之后同一 session 内的所有 turn（按 created_at）。 */
+  deleteTurnsFrom(characterId: string, sessionId: string, turnId: string): boolean {
+    const row = this.db
+      .prepare("SELECT created_at FROM chat_turns WHERE id = ?")
+      .get(turnId) as { created_at: number } | undefined;
+    if (!row) return false;
+    this.db
+      .prepare(
+        `DELETE FROM chat_turns
+         WHERE character_id = ? AND session_id = ? AND created_at >= ?`
+      )
+      .run(characterId, sessionId, row.created_at);
+    return true;
+  }
+
+  updateTurnContent(turnId: string, content: string): boolean {
+    const r = this.db.prepare("UPDATE chat_turns SET content = ? WHERE id = ?").run(content, turnId);
+    return r.changes > 0;
+  }
+
   getRecentTurns(characterId: string, sessionId: string, limit: number): Array<{
     id: string;
     role: "user" | "assistant" | "system";
