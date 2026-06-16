@@ -1,5 +1,6 @@
 export * from "./templates/appearance-research.js";
 export * from "./templates/character-quote-resolution.js";
+export * from "./templates/character-quote-translation.js";
 export * from "./templates/character-name-resolution.js";
 export * from "./templates/character-creation.js";
 export * from "./templates/sprite-from-appearance.js";

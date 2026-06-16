@@ -54,19 +54,52 @@ export function isValidChineseNativeQuote(quote: string): boolean {
   return true;
 }
 
+/** 当前座右铭是否已符合该角色的格式要求。 */
+export function isQuoteAcceptable(
+  quote: string | undefined,
+  options: { chineseNative: boolean }
+): boolean {
+  const trimmed = quote?.trim();
+  if (!trimmed) return false;
+  return options.chineseNative
+    ? isValidChineseNativeQuote(trimmed)
+    : isValidForeignLanguageQuote(trimmed);
+}
+
+/**
+ * 非中文母语角色的座右铭是否缺少中文译文（仅有日文/英文等原文）。
+ */
+export function needsQuoteTranslation(
+  quote: string | undefined,
+  options: { chineseNative: boolean }
+): boolean {
+  if (options.chineseNative) return false;
+  const trimmed = quote?.trim();
+  if (!trimmed) return false;
+  if (isValidForeignLanguageQuote(trimmed)) return false;
+
+  const hasForeignScript =
+    LATIN_RE.test(trimmed) || KANA_RE.test(trimmed) || HANGUL_RE.test(trimmed);
+  if (hasForeignScript) return true;
+
+  // 整段非中文且没有「原文（中文）」格式
+  if (!BILINGUAL_QUOTE_RE.test(trimmed) && cjkRatio(trimmed) < 0.5) return true;
+
+  return false;
+}
+
 /**
  * 判断是否需要专项座右铭检索。
- * 公众人物 / 虚构角色：始终检索；原创角色：仅在缺失或无效时检索。
+ * 已有且格式正确的座右铭会跳过；否则联网检索角色原话。
  */
 export function needsQuoteLookup(
   quote: string | undefined,
   sourceType: "public-figure" | "fictional" | "original",
-  _options?: { chineseNative?: boolean }
+  options?: { chineseNative?: boolean }
 ): boolean {
-  if (sourceType === "public-figure" || sourceType === "fictional") {
-    return true;
-  }
-  return !quote?.trim();
+  const chineseNative = options?.chineseNative ?? false;
+  if (!quote?.trim()) return true;
+  return !isQuoteAcceptable(quote, { chineseNative });
 }
 
 /** 华人角色：英文名是拼音转写而非独立艺名时，座右铭用纯中文。 */

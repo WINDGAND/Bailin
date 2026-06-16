@@ -7,6 +7,10 @@ import {
   normalizeCharacterNames,
   needsCharacterNameLookup,
   needsQuoteLookup,
+  needsQuoteTranslation,
+  isQuoteAcceptable,
+  isChineseNativeForQuote,
+  chineseNameToPinyinEnglish,
   normalizeQuoteOneLiner,
   type CharacterNamePair,
   SCHEMA_VERSION,
@@ -34,6 +38,7 @@ import {
   buildCharacterCardPrompt,
   buildCharacterNameResolutionPrompt,
   buildCharacterQuoteResolutionPrompt,
+  buildCharacterQuoteTranslationPrompt,
   buildFrameworkSynthesisPrompt
 } from "@nuwa-pet/nuwa-prompts";
 import type { LLMAdapter, ChatContentPart } from "../adapters/llm-adapter.js";
@@ -888,7 +893,7 @@ export class NuwaOrchestrator {
     return { chineseName, englishName };
   }
 
-  /** 联网检索角色原话，写回 meta.quoteOneLiner。 */
+  /** 联网检索角色原话，写回 meta.quoteOneLiner；外国角色确保「原文（中文译）」格式。 */
   private async finalizeCharacterQuote(
     card: CharacterCard,
     sourceType: CharacterCard["meta"]["sourceType"],
@@ -899,26 +904,47 @@ export class NuwaOrchestrator {
   ): Promise<void> {
     const chineseName = card.meta.chineseName ?? card.meta.name;
     const englishName = card.meta.englishName ?? card.meta.sourceName ?? "";
+    const pinyinEnglish = chineseNameToPinyinEnglish(chineseName);
+    const chineseNative = isChineseNativeForQuote(chineseName, englishName, pinyinEnglish);
+    const quoteOpts = { chineseNative };
 
-    if (!needsQuoteLookup(card.meta.quoteOneLiner, sourceType)) {
-      return;
+    let quote = card.meta.quoteOneLiner;
+
+    if (needsQuoteLookup(quote, sourceType, quoteOpts)) {
+      const resolved = await this.runQuoteResolutionStep(
+        {
+          chineseName,
+          englishName,
+          sourceType,
+          hintQuote: quote,
+          userMaterial
+        },
+        webSearchEnabled,
+        warnings,
+        researchModel
+      );
+      if (resolved) quote = resolved;
     }
 
-    const resolved = await this.runQuoteResolutionStep(
-      {
-        chineseName,
-        englishName,
-        sourceType,
-        hintQuote: card.meta.quoteOneLiner,
-        userMaterial
-      },
-      webSearchEnabled,
-      warnings,
-      researchModel
-    );
-    if (resolved) {
-      card.meta.quoteOneLiner = resolved;
+    if (needsQuoteTranslation(quote, quoteOpts)) {
+      const translated = await this.runQuoteTranslationStep(
+        { chineseName, englishName, quoteOneLiner: quote! },
+        warnings
+      );
+      if (translated) quote = translated;
     }
+
+    if (!quote?.trim()) return;
+
+    if (!isQuoteAcceptable(quote, quoteOpts)) {
+      if (chineseNative) {
+        warnings.push("[quote·format] 中文母语角色座右铭格式不合规，已保留原文");
+      } else {
+        warnings.push("[quote·format] 外国角色座右铭未能格式化为「原文（中文译）」");
+      }
+    }
+
+    card.meta.quoteOneLiner = normalizeQuoteOneLiner(quote);
   }
 
   private async runQuoteResolutionStep(
@@ -971,6 +997,37 @@ export class NuwaOrchestrator {
       typeof json.quoteOneLiner === "string" ? json.quoteOneLiner.trim() : "";
     if (!quoteOneLiner) {
       warnings.push("[quote·lookup] JSON 缺少 quoteOneLiner");
+      return null;
+    }
+    return normalizeQuoteOneLiner(quoteOneLiner);
+  }
+
+  /** 为缺少中文译文的外文座右铭补译。 */
+  private async runQuoteTranslationStep(
+    input: { chineseName: string; englishName: string; quoteOneLiner: string },
+    warnings: string[]
+  ): Promise<string | null> {
+    const { system, user } = buildCharacterQuoteTranslationPrompt(input);
+    const r = await this.llm.chatOnce({
+      systemPrompt: system,
+      messages: [{ role: "user", content: user }],
+      temperature: 0.2,
+      maxTokens: 300,
+      stream: false
+    });
+    if (r.kind === "error") {
+      warnings.push(`[quote·translate] LLM 调用失败：${r.message}`);
+      return null;
+    }
+    const json = extractJSON(r.text) as Record<string, unknown> | null;
+    if (!json) {
+      warnings.push("[quote·translate] LLM 未返回合法 JSON");
+      return null;
+    }
+    const quoteOneLiner =
+      typeof json.quoteOneLiner === "string" ? json.quoteOneLiner.trim() : "";
+    if (!quoteOneLiner) {
+      warnings.push("[quote·translate] JSON 缺少 quoteOneLiner");
       return null;
     }
     return normalizeQuoteOneLiner(quoteOneLiner);
