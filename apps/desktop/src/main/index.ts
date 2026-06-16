@@ -35,6 +35,7 @@ import {
   SETTING_PET_POS
 } from "./ipc/register.js";
 import { createPetWindow } from "./windows/pet-window.js";
+import { clampPetWindow, clampRectToWorkArea } from "./windows/window-bounds.js";
 import { createChatWindow, positionChatNear } from "./windows/chat-window.js";
 import { createSettingsWindow } from "./windows/settings-window.js";
 import type { LLMProviderConfig } from "../shared/ipc-contract.js";
@@ -116,8 +117,18 @@ function hidePet(): void {
   if (petWin && !petWin.isDestroyed()) petWin.hide();
 }
 
-function movePet(x: number, y: number): void {
-  if (petWin && !petWin.isDestroyed()) petWin.setPosition(x, y);
+function movePet(x: number, y: number): { x: number; y: number } {
+  const pet = ensurePetWindow();
+  const bounds = pet.getBounds();
+  const clamped = clampRectToWorkArea({ x, y, width: bounds.width, height: bounds.height });
+  pet.setPosition(clamped.x, clamped.y);
+  return clamped;
+}
+
+function ensurePetOnScreen(): void {
+  const pet = ensurePetWindow();
+  clampPetWindow(pet);
+  if (!pet.isVisible()) pet.show();
 }
 
 void app.whenReady().then(() => {
@@ -172,6 +183,7 @@ void app.whenReady().then(() => {
     hideChat,
     hidePet,
     movePet,
+    ensurePetOnScreen,
     ensureSettingsWindow
   });
 
@@ -183,13 +195,23 @@ void app.whenReady().then(() => {
   }
   ensurePetWindow();
 
-  // 恢复上次保存的桌宠位置
+  // 恢复上次保存的桌宠位置（越界则拉回可见区域）
   try {
     const posJson = vault.getSetting(SETTING_PET_POS);
     if (posJson && petWin) {
       const pos = JSON.parse(posJson) as { x: number; y: number };
       if (typeof pos.x === "number" && typeof pos.y === "number") {
-        petWin.setPosition(pos.x, pos.y);
+        const bounds = petWin.getBounds();
+        const clamped = clampRectToWorkArea({
+          x: pos.x,
+          y: pos.y,
+          width: bounds.width,
+          height: bounds.height
+        });
+        petWin.setPosition(clamped.x, clamped.y);
+        if (clamped.x !== pos.x || clamped.y !== pos.y) {
+          vault.setSetting(SETTING_PET_POS, JSON.stringify(clamped));
+        }
       }
     }
   } catch {

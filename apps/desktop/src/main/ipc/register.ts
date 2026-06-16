@@ -40,7 +40,8 @@ export interface IpcDeps {
   showChatNearPet: () => void;
   hideChat: () => void;
   hidePet: () => void;
-  movePet: (x: number, y: number) => void;
+  movePet: (x: number, y: number) => { x: number; y: number };
+  ensurePetOnScreen: () => void;
   ensureSettingsWindow: () => void;
 }
 
@@ -498,6 +499,11 @@ export function registerIpc(deps: IpcDeps): void {
     if (!bundle) return { ok: false };
     deps.setActiveCharacterId(characterId);
     vault.setSetting(SETTING_ACTIVE_CHARACTER, characterId);
+    deps.ensurePetOnScreen();
+    const bounds = deps.getPetBounds();
+    if (bounds) {
+      vault.setSetting(SETTING_PET_POS, JSON.stringify({ x: bounds.x, y: bounds.y }));
+    }
     broadcast(IPC.EventActiveCharacterChanged, bundle);
     return { ok: true };
   });
@@ -599,8 +605,8 @@ export function registerIpc(deps: IpcDeps): void {
     /* MVP: 暂时无主动行为，无需 hush。 */
   });
   ipcMain.handle(IPC.PetSetPosition, (_e, x: number, y: number) => {
-    deps.movePet(Math.round(x), Math.round(y));
-    vault.setSetting(SETTING_PET_POS, JSON.stringify({ x: Math.round(x), y: Math.round(y) }));
+    const pos = deps.movePet(Math.round(x), Math.round(y));
+    vault.setSetting(SETTING_PET_POS, JSON.stringify(pos));
   });
   ipcMain.handle(IPC.PetSetMouseIgnore, (e, ignore: boolean) => {
     const win = BrowserWindow.fromWebContents(e.sender);
