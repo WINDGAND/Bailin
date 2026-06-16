@@ -132,22 +132,11 @@ export function ChatApp(): JSX.Element {
       style={{
         position: "fixed",
         inset: 0,
-        padding: 12,
         display: "flex",
         flexDirection: "column"
       }}
     >
-      <div
-        className="card"
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          padding: 0,
-          background: "var(--paper)"
-        }}
-      >
+      <div className="chat-panel">
         {/* Header */}
         <div
           style={
@@ -158,7 +147,9 @@ export function ChatApp(): JSX.Element {
               padding: "10px 12px 10px 16px",
               borderBottom: "1px solid var(--grid)",
               WebkitAppRegion: "drag",
-              userSelect: "none"
+              userSelect: "none",
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16
             } as React.CSSProperties
           }
         >
@@ -278,7 +269,9 @@ export function ChatApp(): JSX.Element {
             padding: "10px 12px",
             borderTop: "1px solid var(--grid)",
             background: "var(--paper-deep)",
-            alignItems: "flex-end"
+            alignItems: "flex-end",
+            borderBottomLeftRadius: 16,
+            borderBottomRightRadius: 16
           }}
         >
           <textarea
@@ -287,7 +280,7 @@ export function ChatApp(): JSX.Element {
             placeholder={
               streaming
                 ? "正在回答…（按 Enter 中断）"
-                : "Enter 发送 · Shift+Enter 换行 · ↑ 找回上一条"
+                : `想跟${bundle?.card.meta.name ?? "TA"}说点什么？`
             }
             value={input}
             onChange={(e) => setInput(e.target.value)}

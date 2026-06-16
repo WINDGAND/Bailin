@@ -171,6 +171,20 @@ function isChatVisible(): boolean {
   return Boolean(chatWin && !chatWin.isDestroyed() && chatWin.isVisible());
 }
 
+/** 聊天窗可见时，将其重新定位到桌宠左右侧（随桌宠移动而跟随）。 */
+function syncChatNearPetIfVisible(): void {
+  if (!isChatVisible() || !chatWin || chatWin.isDestroyed()) return;
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return;
+  const geo = getPetGeometry(pet);
+  positionChatNear(chatWin, {
+    petX: geo.x,
+    petY: geo.y,
+    petW: geo.width,
+    petH: geo.height
+  });
+}
+
 function hidePet(): void {
   if (petWin && !petWin.isDestroyed()) petWin.hide();
 }
@@ -192,7 +206,9 @@ function setPetContentOrigin(pet: BrowserWindow, x: number, y: number): { x: num
 
 function movePet(x: number, y: number): { x: number; y: number } {
   const pet = ensurePetWindow();
-  return setPetContentOrigin(pet, x, y);
+  const pos = setPetContentOrigin(pet, x, y);
+  syncChatNearPetIfVisible();
+  return pos;
 }
 
 function positionPetAtPrimaryBottomRight(margin = 24): void {
@@ -209,6 +225,7 @@ function positionPetAtPrimaryBottomRight(margin = 24): void {
 function ensurePetOnScreen(): void {
   const pet = ensurePetWindow();
   clampPetWindow(pet, PET_WINDOW_SIZE);
+  syncChatNearPetIfVisible();
   if (!pet.isVisible()) pet.show();
 }
 
@@ -256,6 +273,7 @@ function petDragMove(): void {
     dragCursorOffset.dy = cursor.y - clamped.y;
   }
 
+  syncChatNearPetIfVisible();
 }
 
 function petDragEnd(): { x: number; y: number } | null {
