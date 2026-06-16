@@ -11,7 +11,6 @@
 .atlas-pet__frame {
   position: relative;
   pointer-events: none;
-  filter: drop-shadow(0 8px 18px rgba(20, 24, 40, 0.28));
 }
 
 /* hatch 入场动画：从下方淡入 + 轻微弹跳 */

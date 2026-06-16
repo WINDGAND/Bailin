@@ -80,7 +80,7 @@ export function positionChatNear(win: BW, anchor: ChatWindowAnchor, size: ChatWi
     width: anchor.petW,
     height: anchor.petH
   });
-  const margin = 12;
+  const margin = 4;
   const work = display.workArea;
   const petCenterX = anchor.petX + anchor.petW / 2;
   const distToLeft = petCenterX - work.x;

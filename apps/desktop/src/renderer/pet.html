@@ -32,6 +32,9 @@
         align-items: flex-end;
         pointer-events: none;
       }
+      .pet-root--menu-left {
+        flex-direction: row-reverse;
+      }
       .pet-slot {
         flex-shrink: 0;
         display: flex;
@@ -54,19 +57,24 @@
         display: flex;
         align-items: flex-start;
         justify-content: flex-start;
-        padding: 8px 6px 10px 0;
+        padding: 2px 0 4px 0;
+        margin-left: -56px;
         pointer-events: auto;
+      }
+      .pet-root--menu-left .pet-menu-column {
+        margin-left: 0;
+        margin-right: -56px;
+        justify-content: flex-end;
       }
       .pet-menu-panel {
         width: 100%;
-        max-width: 220px;
+        max-width: 196px;
         max-height: calc(100vh - 20px);
         overflow-y: auto;
         pointer-events: auto;
         background: var(--paper);
         border: 1px solid var(--grid-strong);
         border-radius: 12px;
-        box-shadow: 0 22px 50px rgba(0, 0, 0, 0.28);
         font-family: var(--font-body);
         font-size: 13px;
         color: var(--ink);

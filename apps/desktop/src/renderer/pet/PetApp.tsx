@@ -171,7 +171,7 @@ export function PetApp(): JSX.Element {
   }, [nuwa, bundle?.card.id, sendSpriteEvent]);
 
   // ===== 右键菜单 =====
-  const [menu, setMenu] = useState<{ chatOpen: boolean } | null>(null);
+  const [menu, setMenu] = useState<{ chatOpen: boolean; side: "left" | "right" } | null>(null);
   const [characters, setCharacters] = useState<MyCharacter[]>([]);
   const [starters, setStarters] = useState<Starter[]>([]);
   const [submenu, setSubmenu] = useState<null | "switch">(null);
@@ -184,8 +184,8 @@ export function PetApp(): JSX.Element {
         nuwa.characters.listStarters(),
         nuwa.chat.isVisible()
       ]);
-      await nuwa.pet.setContextMenuOpen(true);
-      setMenu({ chatOpen });
+      const side = await nuwa.pet.setContextMenuOpen(true);
+      setMenu({ chatOpen, side: side ?? "right" });
       setSubmenu(null);
       setCharacters(list);
       setStarters(st);
@@ -213,7 +213,7 @@ export function PetApp(): JSX.Element {
   }
 
   return (
-    <div className="pet-root">
+    <div className={`pet-root${menu?.side === "left" ? " pet-root--menu-left" : ""}`}>
       <div
         className="pet-slot"
         style={{ width: menu ? PET_SLOT_WIDTH : "100%" }}
@@ -226,7 +226,6 @@ export function PetApp(): JSX.Element {
             pointerEvents: "auto",
             padding: 4,
             borderRadius: 18,
-            filter: "drop-shadow(0 12px 24px rgba(31,58,58,0.4))",
             cursor: "grab",
             userSelect: "none"
           }}

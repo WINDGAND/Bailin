@@ -46,7 +46,7 @@ export interface IpcDeps {
   hideChat: () => void;
   isChatVisible: () => boolean;
   hidePet: () => void;
-  setPetContextMenuOpen: (open: boolean) => void;
+  setPetContextMenuOpen: (open: boolean) => "left" | "right" | null;
   movePet: (x: number, y: number) => { x: number; y: number };
   ensurePetOnScreen: () => void;
   ensureSettingsWindow: () => void;
@@ -653,7 +653,7 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.PetOpenSettings, () => deps.ensureSettingsWindow());
   ipcMain.handle(IPC.PetHide, () => deps.hidePet());
   ipcMain.handle(IPC.PetSetContextMenuOpen, (_e, open: boolean) => {
-    deps.setPetContextMenuOpen(open);
+    return deps.setPetContextMenuOpen(open);
   });
 
   // ===== 拖动（主进程全程用 screen 坐标，规避渲染进程 CSS 像素 / DPI 差异） =====

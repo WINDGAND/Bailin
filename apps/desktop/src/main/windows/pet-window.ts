@@ -14,8 +14,99 @@ import { join } from "node:path";
  * 同时所有调用都改用 setContentBounds（不受同 bug 影响），双重保险。
  */
 export const PET_WINDOW_SIZE = { width: 240, height: 260 } as const;
-/** 右键菜单展开时临时加宽，给菜单留出桌宠右侧空间。 */
-export const PET_MENU_EXTRA_WIDTH = 224;
+/** 右键菜单展开时临时加宽，给菜单留出桌宠旁侧空间。 */
+export const PET_MENU_EXTRA_WIDTH = 196;
+/** 菜单与聊天窗之间的最小间距（屏幕坐标）。 */
+export const PET_MENU_GAP = 4;
+
+export type PetMenuSide = "left" | "right";
+
+interface ScreenRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function rectsOverlap(a: ScreenRect, b: ScreenRect, gap: number): boolean {
+  return !(
+    a.x + a.width + gap <= b.x ||
+    b.x + b.width + gap <= a.x ||
+    a.y + a.height + gap <= b.y ||
+    b.y + b.height + gap <= a.y
+  );
+}
+
+export interface PetMenuPlacementInput {
+  petX: number;
+  petY: number;
+  petW: number;
+  petH: number;
+  chat: ScreenRect | null;
+  workArea: { x: number; y: number; width: number; height: number };
+}
+
+/** 根据聊天窗位置与屏幕可用空间，决定菜单出现在桌宠左侧还是右侧。 */
+export function resolvePetMenuSide(input: PetMenuPlacementInput): PetMenuSide {
+  const { petX, petY, petW, petH, chat, workArea } = input;
+  const menuW = PET_MENU_EXTRA_WIDTH;
+  const workRight = workArea.x + workArea.width;
+
+  const rightMenu: ScreenRect = { x: petX + petW, y: petY, width: menuW, height: petH };
+  const leftMenu: ScreenRect = { x: petX - menuW, y: petY, width: menuW, height: petH };
+
+  const canExpandRight = petX + petW + menuW <= workRight;
+  const canExpandLeft = petX - menuW >= workArea.x;
+
+  const rightOverlapsChat = chat ? rectsOverlap(rightMenu, chat, PET_MENU_GAP) : false;
+  const leftOverlapsChat = chat ? rectsOverlap(leftMenu, chat, PET_MENU_GAP) : false;
+
+  if (chat) {
+    const chatCenter = chat.x + chat.width / 2;
+    const petCenter = petX + petW / 2;
+    const chatOnRight = chatCenter >= petCenter;
+
+    if (chatOnRight) {
+      if (canExpandLeft && !leftOverlapsChat) return "left";
+      if (canExpandRight && !rightOverlapsChat) return "right";
+      return "left";
+    }
+    if (canExpandRight && !rightOverlapsChat) return "right";
+    if (canExpandLeft && !leftOverlapsChat) return "left";
+    return "right";
+  }
+
+  if (canExpandRight) return "right";
+  if (canExpandLeft) return "left";
+  return "right";
+}
+
+export function computePetMenuWindowBounds(
+  petX: number,
+  petY: number,
+  side: PetMenuSide,
+  workArea: { x: number; y: number; width: number; height: number }
+): { x: number; y: number; width: number; height: number } {
+  const baseW = PET_WINDOW_SIZE.width;
+  const baseH = PET_WINDOW_SIZE.height;
+  const menuW = PET_MENU_EXTRA_WIDTH;
+  const expandedW = baseW + menuW;
+  const workRight = workArea.x + workArea.width;
+
+  if (side === "right") {
+    let nextX = petX;
+    if (nextX + expandedW > workRight) {
+      nextX = workRight - expandedW;
+    }
+    return { x: nextX, y: petY, width: expandedW, height: baseH };
+  }
+
+  let nextX = petX - menuW;
+  if (nextX < workArea.x) {
+    nextX = workArea.x;
+  }
+  return { x: nextX, y: petY, width: expandedW, height: baseH };
+}
 
 export function createPetWindow(devUrl: string | undefined): BrowserWindow {
   const display = screen.getPrimaryDisplay();

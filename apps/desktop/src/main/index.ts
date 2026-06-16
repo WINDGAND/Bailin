@@ -37,7 +37,13 @@ import {
 } from "./ipc/register.js";
 import { registerChatTurnHandlers } from "./ipc/chat-turn-handlers.js";
 import { registerChatSessionHandlers } from "./ipc/chat-session-handlers.js";
-import { createPetWindow, PET_MENU_EXTRA_WIDTH, PET_WINDOW_SIZE } from "./windows/pet-window.js";
+import {
+  computePetMenuWindowBounds,
+  createPetWindow,
+  PET_WINDOW_SIZE,
+  resolvePetMenuSide,
+  type PetMenuSide
+} from "./windows/pet-window.js";
 import { clampPetWindow, clampRectToDisplayBounds } from "./windows/window-bounds.js";
 import {
   CHAT_WINDOW_DEFAULT_SIZE,
@@ -140,8 +146,11 @@ function ensureChatWindow(): BrowserWindow {
  * 调用次数累积漂移的 bug。
  */
 function getPetGeometry(pet: BrowserWindow): { x: number; y: number; width: number; height: number } {
-  const content = pet.getContentBounds();
   const { width, height } = PET_WINDOW_SIZE;
+  if (petContextMenuOpen && petBoundsBeforeMenu) {
+    return { x: petBoundsBeforeMenu.x, y: petBoundsBeforeMenu.y, width, height };
+  }
+  const content = pet.getContentBounds();
   return { x: content.x, y: content.y, width, height };
 }
 
@@ -241,14 +250,14 @@ function syncChatNearPetIfVisible(): void {
   repositionChatNearPet(chatWin);
 }
 
-function setPetContextMenuOpen(open: boolean): void {
+function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
   const pet = petWin;
-  if (!pet || pet.isDestroyed()) return;
-  petContextMenuOpen = open;
+  if (!pet || pet.isDestroyed()) return null;
   const baseW = PET_WINDOW_SIZE.width;
   const baseH = PET_WINDOW_SIZE.height;
 
   if (!open) {
+    petContextMenuOpen = false;
     if (petBoundsBeforeMenu) {
       pet.setContentBounds({ ...petBoundsBeforeMenu });
       petBoundsBeforeMenu = null;
@@ -257,30 +266,39 @@ function setPetContextMenuOpen(open: boolean): void {
       pet.setContentBounds({ x: geo.x, y: geo.y, width: baseW, height: baseH });
     }
     clampPetWindow(pet, { width: baseW, height: baseH });
-    return;
+    return null;
   }
 
   const geo = getPetGeometry(pet);
   petBoundsBeforeMenu = { x: geo.x, y: geo.y, width: geo.width, height: geo.height };
+  petContextMenuOpen = true;
 
-  const expandedW = baseW + PET_MENU_EXTRA_WIDTH;
   const display = screen.getDisplayMatching({
     x: geo.x,
     y: geo.y,
     width: geo.width,
     height: geo.height
   });
-  const screenRight = display.bounds.x + display.bounds.width;
 
-  // 默认：保持窗口左缘不动，向右加宽，桌宠仍在左侧 240px 内不位移
-  let nextX = geo.x;
-  if (nextX + expandedW > screenRight) {
-    // 贴屏幕右缘：整体左移，给菜单腾出空间
-    nextX = screenRight - expandedW;
+  let chatRect: { x: number; y: number; width: number; height: number } | null = null;
+  if (chatWin && !chatWin.isDestroyed() && chatWin.isVisible()) {
+    const c = chatWin.getContentBounds();
+    chatRect = { x: c.x, y: c.y, width: c.width, height: c.height };
   }
 
-  pet.setContentBounds({ x: nextX, y: geo.y, width: expandedW, height: baseH });
+  const side = resolvePetMenuSide({
+    petX: geo.x,
+    petY: geo.y,
+    petW: geo.width,
+    petH: geo.height,
+    chat: chatRect,
+    workArea: display.workArea
+  });
+
+  const bounds = computePetMenuWindowBounds(geo.x, geo.y, side, display.workArea);
+  pet.setContentBounds(bounds);
   pet.setIgnoreMouseEvents(false);
+  return side;
 }
 
 function getChatWindowSize(): ChatWindowSize {
