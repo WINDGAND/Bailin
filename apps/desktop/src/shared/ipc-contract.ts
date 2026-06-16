@@ -120,6 +120,7 @@ export interface BailinApi {
     renameSession(input: RenameChatSessionInput): Promise<{ ok: boolean }>;
     deleteSession(input: DeleteChatSessionInput): Promise<{ ok: boolean }>;
     hide(): Promise<void>;
+    isVisible(): Promise<boolean>;
     getSize(): Promise<{ width: number; height: number }>;
     resize(input: { width: number; height: number }): Promise<{ width: number; height: number }>;
     deleteTurn(input: DeleteChatTurnInput): Promise<{ ok: boolean }>;
@@ -480,6 +481,7 @@ export const IPC = {
   ChatRenameSession: "nuwa.chat.renameSession",
   ChatDeleteSession: "nuwa.chat.deleteSession",
   ChatHide: "nuwa.chat.hide",
+  ChatIsVisible: "nuwa.chat.isVisible",
   ChatGetSize: "nuwa.chat.getSize",
   ChatResize: "nuwa.chat.resize",
   ChatDeleteTurn: "nuwa.chat.deleteTurn",

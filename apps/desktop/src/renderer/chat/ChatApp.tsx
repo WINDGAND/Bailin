@@ -223,7 +223,7 @@ export function ChatApp(): JSX.Element {
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             aria-label="关闭"
           >
-            ×
+            <CloseIcon />
           </button>
         </div>
 
@@ -408,6 +408,23 @@ interface Suggestion {
   title: string;
   hint: string;
   prompt: string;
+}
+
+function CloseIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
 }
 
 function PlusIcon(): JSX.Element {

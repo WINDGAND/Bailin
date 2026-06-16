@@ -70,6 +70,9 @@
       .chat-panel__header .btn--icon {
         border-radius: 11px;
       }
+      .chat-panel__header .btn--icon svg {
+        display: block;
+      }
 
       .chat-panel__avatar {
         border-radius: 12px;
@@ -359,9 +362,9 @@
         gap: 8px;
         margin: 14px 14px 10px;
         padding: 10px 14px;
-        border: 1px solid var(--ink);
+        border: 1px solid var(--magenta);
         border-radius: 14px;
-        background: var(--ink);
+        background: var(--magenta);
         color: var(--paper);
         font-family: var(--font-body);
         font-size: 14px;
@@ -370,11 +373,13 @@
         transition:
           transform 120ms ease,
           background 120ms ease,
-          border-color 120ms ease;
+          border-color 120ms ease,
+          color 120ms ease;
       }
       .chat-history__new:hover {
-        background: var(--magenta);
-        border-color: var(--magenta);
+        background: var(--paper-warm);
+        border-color: var(--magenta-soft);
+        color: var(--magenta-deep);
         transform: translateY(-1px);
       }
       .chat-history__list {

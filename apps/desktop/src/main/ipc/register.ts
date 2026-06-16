@@ -44,6 +44,7 @@ export interface IpcDeps {
   summonPetBubble: () => void;
   showChatNearPet: () => void;
   hideChat: () => void;
+  isChatVisible: () => boolean;
   hidePet: () => void;
   movePet: (x: number, y: number) => { x: number; y: number };
   ensurePetOnScreen: () => void;
@@ -608,6 +609,8 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.ChatHide, () => {
     deps.hideChat();
   });
+
+  ipcMain.handle(IPC.ChatIsVisible, () => deps.isChatVisible());
 
   ipcMain.handle(IPC.ChatGetSize, () => deps.getChatWindowSize());
 

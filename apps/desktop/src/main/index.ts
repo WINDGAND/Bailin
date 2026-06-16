@@ -125,6 +125,8 @@ function ensureChatWindow(): BrowserWindow {
   chatWin.on("closed", () => {
     chatWin = null;
   });
+  chatWin.on("show", () => rebuildTrayMenu());
+  chatWin.on("hide", () => rebuildTrayMenu());
   return chatWin;
 }
 
@@ -144,7 +146,7 @@ function getPetGeometry(pet: BrowserWindow): { x: number; y: number; width: numb
  * 打开（或保持显示）完整聊天窗。
  *
  * 这一版交互设计删除了独立的桌宠气泡窗 —— 所有"想跟桌宠说话"的入口都直接弹这个聊天窗。
- * 入口包括：单击桌宠、Ctrl+Shift+P、托盘"唤起对话"、托盘"展开完整聊天窗"。
+ * 入口包括：单击桌宠、Ctrl+Shift+P、托盘「唤起对话 / 关闭对话」。
  */
 function repositionChatNearPet(chat: BrowserWindow): void {
   const pet = petWin;
@@ -196,6 +198,38 @@ function hideChat(): void {
 
 function isChatVisible(): boolean {
   return Boolean(chatWin && !chatWin.isDestroyed() && chatWin.isVisible());
+}
+
+function rebuildTrayMenu(): void {
+  if (!tray) return;
+  const chatOpen = isChatVisible();
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: chatOpen ? "关闭对话" : "唤起对话",
+        click: () => summonPetBubble()
+      },
+      {
+        label: "显示桌宠",
+        click: () => {
+          const pet = ensurePetWindow();
+          pet.show();
+        }
+      },
+      {
+        label: "打开设置 / 角色仓库",
+        click: () => ensureSettingsWindow()
+      },
+      { type: "separator" },
+      {
+        label: "退出",
+        click: () => {
+          isQuitting = true;
+          app.exit(0);
+        }
+      }
+    ])
+  );
 }
 
 /** 聊天窗可见时，将其重新定位到桌宠左右侧（随桌宠移动而跟随）。 */
@@ -398,6 +432,7 @@ void app.whenReady().then(() => {
     summonPetBubble,
     showChatNearPet,
     hideChat,
+    isChatVisible,
     hidePet,
     movePet,
     ensurePetOnScreen,
@@ -456,37 +491,7 @@ void app.whenReady().then(() => {
   tray = new Tray(trayIcon);
   tray.setToolTip("百灵 Bailin");
   tray.on("click", () => summonPetBubble());
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      {
-        label: "唤起对话",
-        click: () => summonPetBubble()
-      },
-      {
-        label: "展开完整聊天窗",
-        click: () => showChatNearPet()
-      },
-      {
-        label: "显示桌宠",
-        click: () => {
-          const pet = ensurePetWindow();
-          pet.show();
-        }
-      },
-      {
-        label: "打开设置 / 角色仓库",
-        click: () => ensureSettingsWindow()
-      },
-      { type: "separator" },
-      {
-        label: "退出",
-        click: () => {
-          isQuitting = true;
-          app.exit(0);
-        }
-      }
-    ])
-  );
+  rebuildTrayMenu();
 
   app.on("window-all-closed", () => {
     // 不退出：保留托盘，由用户从托盘菜单显式退出。

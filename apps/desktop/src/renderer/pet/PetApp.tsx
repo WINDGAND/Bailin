@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SpriteEvent } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
@@ -169,7 +169,7 @@ export function PetApp(): JSX.Element {
   }, [nuwa, bundle?.card.id, sendSpriteEvent]);
 
   // ===== 右键菜单 =====
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; chatOpen: boolean } | null>(null);
   const [characters, setCharacters] = useState<MyCharacter[]>([]);
   const [starters, setStarters] = useState<Starter[]>([]);
   const [submenu, setSubmenu] = useState<null | "switch">(null);
@@ -177,12 +177,13 @@ export function PetApp(): JSX.Element {
   const onPetContextMenu = useCallback(
     async (e: React.MouseEvent) => {
       e.preventDefault();
-      setMenu({ x: e.clientX, y: e.clientY });
-      setSubmenu(null);
-      const [list, st] = await Promise.all([
+      const [list, st, chatOpen] = await Promise.all([
         nuwa.characters.list(),
-        nuwa.characters.listStarters()
+        nuwa.characters.listStarters(),
+        nuwa.chat.isVisible()
       ]);
+      setMenu({ x: e.clientX, y: e.clientY, chatOpen });
+      setSubmenu(null);
       setCharacters(list);
       setStarters(st);
     },
@@ -196,18 +197,21 @@ export function PetApp(): JSX.Element {
       setMenu(null);
       setSubmenu(null);
     };
+    const onPointerDownOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (menuLayerRef.current?.contains(target)) return;
+      close();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
         close();
       }
     };
-    window.addEventListener("mousedown", close);
-    window.addEventListener("blur", close);
+    window.addEventListener("mousedown", onPointerDownOutside);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("mousedown", close);
-      window.removeEventListener("blur", close);
+      window.removeEventListener("mousedown", onPointerDownOutside);
       window.removeEventListener("keydown", onKey);
     };
   }, [menu]);
@@ -261,11 +265,15 @@ export function PetApp(): JSX.Element {
           <PetContextMenu
             x={menu.x}
             y={menu.y}
+            chatOpen={menu.chatOpen}
             characters={characters}
             starters={starters}
             submenu={submenu}
             onSubmenu={(s) => setSubmenu(s)}
-            onSummon={() => void nuwa.pet.openChat()}
+            onSummon={() => {
+              void nuwa.pet.summon();
+              setMenu(null);
+            }}
             onHush={() => {
               void nuwa.pet.hush(30 * 60 * 1000);
               // hush 后顺手把聊天窗也收起来，让"安静 30 分钟"是真的安静——
@@ -350,6 +358,7 @@ function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element
 interface MenuProps {
   x: number;
   y: number;
+  chatOpen: boolean;
   characters: MyCharacter[];
   starters: Starter[];
   submenu: null | "switch";
@@ -363,10 +372,39 @@ interface MenuProps {
   onClose: () => void;
 }
 
+const MENU_VIEWPORT_PAD = 8;
+
+function clampMenuPosition(
+  anchorX: number,
+  anchorY: number,
+  menuW: number,
+  menuH: number
+): { left: number; top: number } {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  let left = anchorX;
+  let top = anchorY;
+
+  if (left + menuW + MENU_VIEWPORT_PAD > vw) {
+    left = vw - menuW - MENU_VIEWPORT_PAD;
+  }
+  if (top + menuH + MENU_VIEWPORT_PAD > vh) {
+    top = anchorY - menuH;
+  }
+  if (top + menuH + MENU_VIEWPORT_PAD > vh) {
+    top = vh - menuH - MENU_VIEWPORT_PAD;
+  }
+
+  left = Math.max(MENU_VIEWPORT_PAD, left);
+  top = Math.max(MENU_VIEWPORT_PAD, top);
+  return { left, top };
+}
+
 function PetContextMenu(props: MenuProps): JSX.Element {
   const {
     x,
     y,
+    chatOpen,
     characters,
     starters,
     submenu,
@@ -380,11 +418,14 @@ function PetContextMenu(props: MenuProps): JSX.Element {
   } = props;
 
   const menuRef = useRef<HTMLDivElement | null>(null);
-  // 菜单出现时把焦点交给第一个按钮，方便键盘操作
-  useEffect(() => {
-    const firstBtn = menuRef.current?.querySelector("button");
-    (firstBtn as HTMLButtonElement | null)?.focus?.();
-  }, []);
+  const [position, setPosition] = useState({ left: x, top: y });
+
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setPosition(clampMenuPosition(x, y, rect.width, rect.height));
+  }, [x, y, submenu, characters.length, starters.length, chatOpen]);
 
   return (
     <div
@@ -394,8 +435,8 @@ function PetContextMenu(props: MenuProps): JSX.Element {
       className="fade-in-up"
       style={{
         position: "fixed",
-        left: Math.min(x, window.innerWidth - 240),
-        top: Math.min(y, window.innerHeight - 280),
+        left: position.left,
+        top: position.top,
         pointerEvents: "auto",
         background: "var(--paper)",
         border: "1px solid var(--grid-strong)",
@@ -405,11 +446,18 @@ function PetContextMenu(props: MenuProps): JSX.Element {
         fontSize: 13,
         color: "var(--ink)",
         minWidth: 220,
-        zIndex: 9999,
-        overflow: "hidden"
+        maxWidth: Math.max(180, window.innerWidth - MENU_VIEWPORT_PAD * 2),
+        maxHeight: window.innerHeight - MENU_VIEWPORT_PAD * 2,
+        overflowY: "auto",
+        zIndex: 9999
       }}
     >
-      <MenuItem label="唤起对话" hint="Ctrl+Shift+P" onClick={onSummon} delay={0} />
+      <MenuItem
+        label={chatOpen ? "关闭对话" : "唤起对话"}
+        hint="Ctrl+Shift+P"
+        onClick={onSummon}
+        delay={0}
+      />
       <MenuItem label="安静 30 分钟" onClick={onHush} delay={20} />
       <MenuItem
         label="切换角色"
@@ -494,7 +542,8 @@ function MenuItem({
       role="menuitem"
       type="button"
       onClick={onClick}
-      className="fade-in-up"
+      onMouseDown={(e) => e.stopPropagation()}
+      className="fade-in-up pet-menu-item"
       style={{
         display: "flex",
         alignItems: "center",
@@ -513,8 +562,6 @@ function MenuItem({
       }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(178, 24, 88, 0.08)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-      onFocus={(e) => (e.currentTarget.style.background = "rgba(178, 24, 88, 0.08)")}
-      onBlur={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <span>{label}</span>
       <span style={{ color: "var(--ink-faint)", fontSize: 11, marginLeft: 12 }}>

@@ -95,6 +95,7 @@ interface NuwaWindow {
       renameSession(input: { characterId: string; sessionId: string; title: string }): Promise<{ ok: boolean }>;
       deleteSession(input: { characterId: string; sessionId: string }): Promise<{ ok: boolean }>;
       hide(): Promise<void>;
+      isVisible(): Promise<boolean>;
       getSize(): Promise<{ width: number; height: number }>;
       resize(input: { width: number; height: number }): Promise<{ width: number; height: number }>;
       deleteTurn(input: { characterId: string; sessionId: string; turnId: string }): Promise<{ ok: boolean }>;
@@ -234,6 +235,7 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       renameSession: async () => ({ ok: true }),
       deleteSession: async () => ({ ok: true }),
       hide: async () => undefined,
+      isVisible: async () => false,
       getSize: async () => ({ width: 380, height: 480 }),
       resize: async (input) => input,
       deleteTurn: async () => ({ ok: true }),

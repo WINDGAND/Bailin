@@ -59,6 +59,7 @@ const api = {
     renameSession: (input: unknown) => ipcRenderer.invoke(IPC.ChatRenameSession, input),
     deleteSession: (input: unknown) => ipcRenderer.invoke(IPC.ChatDeleteSession, input),
     hide: () => ipcRenderer.invoke(IPC.ChatHide),
+    isVisible: () => ipcRenderer.invoke(IPC.ChatIsVisible),
     getSize: () => ipcRenderer.invoke(IPC.ChatGetSize),
     resize: (input: { width: number; height: number }) =>
       ipcRenderer.invoke(IPC.ChatResize, input),
