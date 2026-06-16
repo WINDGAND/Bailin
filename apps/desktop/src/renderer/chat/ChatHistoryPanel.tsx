@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ChatSessionSummary } from "../../shared/ipc-contract.js";
 import { formatSessionListTime } from "../shared/format-chat-time.js";
+import { useConfirm } from "../shared/feedback.js";
 import { useNuwa } from "../shared/use-nuwa.js";
 
 export interface ChatHistoryPanelProps {
@@ -26,6 +27,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
     onError
   } = props;
   const nuwa = useNuwa();
+  const confirm = useConfirm();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
@@ -126,7 +128,19 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
 
   const handleDelete = useCallback(
     async (session: ChatSessionSummary) => {
-      if (!window.confirm(`删除「${session.title}」？此操作不可恢复。`)) return;
+      const ok = await confirm({
+        title: `删除「${session.title}」？`,
+        body: (
+          <span>
+            该对话的所有消息将被永久删除。
+            <p style={{ marginTop: 8, color: "var(--ink-soft)" }}>此操作不可恢复。</p>
+          </span>
+        ),
+        confirmLabel: "确认删除",
+        cancelLabel: "再想想",
+        danger: true
+      });
+      if (!ok) return;
       try {
         const res = await nuwa.chat.deleteSession({
           characterId,
@@ -147,7 +161,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
         onError(e instanceof Error ? e.message : "删除失败");
       }
     },
-    [characterId, nuwa, activeSessionId, onSwitch, loadSessions, onInfo, onError]
+    [characterId, nuwa, activeSessionId, onSwitch, loadSessions, onInfo, onError, confirm]
   );
 
   if (!open) return null;
