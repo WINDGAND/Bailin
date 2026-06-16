@@ -14,6 +14,8 @@ import { join } from "node:path";
  * 同时所有调用都改用 setContentBounds（不受同 bug 影响），双重保险。
  */
 export const PET_WINDOW_SIZE = { width: 240, height: 260 } as const;
+/** 右键菜单展开时临时加宽，给菜单留出桌宠右侧空间。 */
+export const PET_MENU_EXTRA_WIDTH = 224;
 
 export function createPetWindow(devUrl: string | undefined): BrowserWindow {
   const display = screen.getPrimaryDisplay();

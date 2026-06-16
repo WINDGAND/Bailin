@@ -109,7 +109,7 @@ interface NuwaWindow {
       clearPerCharacter(id: string): Promise<void>;
       clearAll(): Promise<void>;
     };
-    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(): Promise<void>; hide(): Promise<void>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
+    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(): Promise<void>; hide(): Promise<void>; setContextMenuOpen(open: boolean): Promise<void>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
     proactive: {
       getSettings(): Promise<ProactiveSettings>;
       setSettings(input: ProactiveSettings): Promise<ProactiveSettings>;
@@ -261,6 +261,7 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       openChat: async () => undefined,
       openSettings: async () => undefined,
       hide: async () => undefined,
+      setContextMenuOpen: async () => undefined,
       dragStart: async () => undefined,
       dragMove: async () => undefined,
       dragEnd: async () => undefined

@@ -146,6 +146,7 @@ export interface BailinApi {
     openChat(): Promise<void>;
     openSettings(): Promise<void>;
     hide(): Promise<void>;
+    setContextMenuOpen(open: boolean): Promise<void>;
     /** 拖动开始：主进程记录光标相对窗口的偏移（全在主进程物理坐标系内）。*/
     dragStart(): Promise<void>;
     /** 拖动移动：主进程用 getCursorScreenPoint() 算出新位置并 clamp。*/
@@ -501,6 +502,7 @@ export const IPC = {
   PetOpenChat: "nuwa.pet.openChat",
   PetOpenSettings: "nuwa.pet.openSettings",
   PetHide: "nuwa.pet.hide",
+  PetSetContextMenuOpen: "nuwa.pet.setContextMenuOpen",
   PetDragStart: "nuwa.pet.dragStart",
   PetDragMove: "nuwa.pet.dragMove",
   PetDragEnd: "nuwa.pet.dragEnd",

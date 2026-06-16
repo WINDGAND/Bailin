@@ -37,7 +37,7 @@ import {
 } from "./ipc/register.js";
 import { registerChatTurnHandlers } from "./ipc/chat-turn-handlers.js";
 import { registerChatSessionHandlers } from "./ipc/chat-session-handlers.js";
-import { createPetWindow, PET_WINDOW_SIZE } from "./windows/pet-window.js";
+import { createPetWindow, PET_MENU_EXTRA_WIDTH, PET_WINDOW_SIZE } from "./windows/pet-window.js";
 import { clampPetWindow, clampRectToDisplayBounds } from "./windows/window-bounds.js";
 import {
   CHAT_WINDOW_DEFAULT_SIZE,
@@ -75,6 +75,9 @@ let dragCursorOffset: { dx: number; dy: number } | null = null;
 let chatWindowSize: ChatWindowSize = { ...CHAT_WINDOW_DEFAULT_SIZE };
 /** 程序化 reposition / resize 期间忽略 resized 事件，防止把漂移值写回 chatWindowSize。 */
 let chatRepositioning = false;
+let petContextMenuOpen = false;
+/** 打开右键菜单前的窗口 bounds，关闭时原样恢复。 */
+let petBoundsBeforeMenu: { x: number; y: number; width: number; height: number } | null = null;
 
 const devUrl = process.env.VITE_DEV_SERVER || undefined;
 
@@ -236,6 +239,48 @@ function rebuildTrayMenu(): void {
 function syncChatNearPetIfVisible(): void {
   if (!isChatVisible() || !chatWin || chatWin.isDestroyed()) return;
   repositionChatNearPet(chatWin);
+}
+
+function setPetContextMenuOpen(open: boolean): void {
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return;
+  petContextMenuOpen = open;
+  const baseW = PET_WINDOW_SIZE.width;
+  const baseH = PET_WINDOW_SIZE.height;
+
+  if (!open) {
+    if (petBoundsBeforeMenu) {
+      pet.setContentBounds({ ...petBoundsBeforeMenu });
+      petBoundsBeforeMenu = null;
+    } else {
+      const geo = getPetGeometry(pet);
+      pet.setContentBounds({ x: geo.x, y: geo.y, width: baseW, height: baseH });
+    }
+    clampPetWindow(pet, { width: baseW, height: baseH });
+    return;
+  }
+
+  const geo = getPetGeometry(pet);
+  petBoundsBeforeMenu = { x: geo.x, y: geo.y, width: geo.width, height: geo.height };
+
+  const expandedW = baseW + PET_MENU_EXTRA_WIDTH;
+  const display = screen.getDisplayMatching({
+    x: geo.x,
+    y: geo.y,
+    width: geo.width,
+    height: geo.height
+  });
+  const screenRight = display.bounds.x + display.bounds.width;
+
+  // 默认：保持窗口左缘不动，向右加宽，桌宠仍在左侧 240px 内不位移
+  let nextX = geo.x;
+  if (nextX + expandedW > screenRight) {
+    // 贴屏幕右缘：整体左移，给菜单腾出空间
+    nextX = screenRight - expandedW;
+  }
+
+  pet.setContentBounds({ x: nextX, y: geo.y, width: expandedW, height: baseH });
+  pet.setIgnoreMouseEvents(false);
 }
 
 function getChatWindowSize(): ChatWindowSize {
@@ -434,6 +479,7 @@ void app.whenReady().then(() => {
     hideChat,
     isChatVisible,
     hidePet,
+    setPetContextMenuOpen,
     movePet,
     ensurePetOnScreen,
     ensureSettingsWindow,

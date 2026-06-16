@@ -82,6 +82,7 @@ const api = {
     openChat: () => ipcRenderer.invoke(IPC.PetOpenChat),
     openSettings: () => ipcRenderer.invoke(IPC.PetOpenSettings),
     hide: () => ipcRenderer.invoke(IPC.PetHide),
+    setContextMenuOpen: (open: boolean) => ipcRenderer.invoke(IPC.PetSetContextMenuOpen, open),
     dragStart: () => ipcRenderer.invoke(IPC.PetDragStart),
     dragMove: () => ipcRenderer.invoke(IPC.PetDragMove),
     dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd)

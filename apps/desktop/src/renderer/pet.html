@@ -25,6 +25,52 @@
         outline: 2px solid var(--magenta-soft);
         outline-offset: -2px;
       }
+      .pet-root {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: flex-end;
+        pointer-events: none;
+      }
+      .pet-slot {
+        flex-shrink: 0;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        pointer-events: none;
+      }
+      .pet-menu-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 9998;
+        pointer-events: auto;
+        background: transparent;
+      }
+      .pet-menu-column {
+        position: relative;
+        z-index: 9999;
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-start;
+        padding: 8px 6px 10px 0;
+        pointer-events: auto;
+      }
+      .pet-menu-panel {
+        width: 100%;
+        max-width: 220px;
+        max-height: calc(100vh - 20px);
+        overflow-y: auto;
+        pointer-events: auto;
+        background: var(--paper);
+        border: 1px solid var(--grid-strong);
+        border-radius: 12px;
+        box-shadow: 0 22px 50px rgba(0, 0, 0, 0.28);
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: var(--ink);
+      }
     </style>
   </head>
   <body>
