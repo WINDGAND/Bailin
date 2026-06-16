@@ -11,7 +11,10 @@ interface SetupWizardProps {
 }
 
 type Step = "welcome" | "disclaimer" | "provider" | "starter";
-const STEP_ORDER: Step[] = ["welcome", "disclaimer", "provider", "starter"];
+const HAS_STARTERS = STARTER_BUNDLES.length > 0;
+const STEP_ORDER: Step[] = HAS_STARTERS
+  ? ["welcome", "disclaimer", "provider", "starter"]
+  : ["welcome", "disclaimer", "provider"];
 const STEP_TITLE: Record<Step, string> = {
   welcome: "开始之前",
   disclaimer: "数据如何处理",
@@ -54,7 +57,9 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
           把一个有立场的视角，<br />请到你的桌面上。
         </h1>
         <p className="body-md" style={{ maxWidth: 420 }}>
-          四步搞定：免责声明 → 数据说明 → 连上你自己的 LLM → 选一只示例角色。所有数据留在这台机器，密钥用系统 DPAPI 加密。
+          {HAS_STARTERS
+            ? "四步搞定：免责声明 → 数据说明 → 连上你自己的 LLM → 选一只示例角色。所有数据留在这台机器，密钥用系统 DPAPI 加密。"
+            : "三步搞定：免责声明 → 数据说明 → 连上你自己的 LLM。所有数据留在这台机器，密钥用系统 DPAPI 加密。"}
         </p>
         <div className="row gap-1 body-sm">
           <span className="kbd">Ctrl</span>
@@ -68,7 +73,7 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
             className="row row--between"
             style={{ marginBottom: 8, fontSize: 12, color: "var(--ink-faint)" }}
           >
-            <span className="mono">第 {stepIndex + 1} / 4 步</span>
+            <span className="mono">第 {stepIndex + 1} / {STEP_ORDER.length} 步</span>
             <span>{STEP_TITLE[step]}</span>
           </div>
           <div className="steps">
@@ -114,7 +119,12 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
             onBack={back}
           />
         ) : null}
-        {step === "provider" ? <ProviderStep onNext={next} onBack={back} /> : null}
+        {step === "provider" ? (
+          <ProviderStep
+            onNext={HAS_STARTERS ? next : () => void onDone()}
+            onBack={back}
+          />
+        ) : null}
         {step === "starter" ? <StarterStep onDone={onDone} onBack={back} /> : null}
       </section>
     </div>

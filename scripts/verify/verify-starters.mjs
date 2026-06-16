@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 验证 6 个 starter sprite + sprite-builder 程序化生成的 sprite 都符合：
+// 验证 starter sprite（若有）+ sprite-builder 程序化生成的 sprite 都符合：
 //   - schema 通过
 //   - 画布 96×96 @2x
 //   - parts ≥ 10
@@ -86,9 +86,13 @@ function inspectSprite(label, sprite) {
 let allOk = true;
 
 console.log("=== Starter sprites (手工高精度版) ===");
-for (const bundle of STARTER_BUNDLES) {
-  const ok = inspectSprite(bundle.card.meta.name, bundle.sprite);
-  if (!ok) allOk = false;
+if (STARTER_BUNDLES.length === 0) {
+  console.log("(无内置 starter，跳过)");
+} else {
+  for (const bundle of STARTER_BUNDLES) {
+    const ok = inspectSprite(bundle.card.meta.name, bundle.sprite);
+    if (!ok) allOk = false;
+  }
 }
 
 console.log("\n=== sprite-builder 程序化生成（LLM 造人路径） ===");

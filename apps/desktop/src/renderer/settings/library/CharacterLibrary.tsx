@@ -341,7 +341,7 @@ export function CharacterLibrary({
 
   return (
     <div>
-      <div className="row row--between apple-page-header apple-page-header--wide" style={{ marginBottom: 26 }}>
+      <div className="row row--between" style={{ marginBottom: 26 }}>
         <div>
           <div className="eyebrow">Library</div>
           <div className="display display--page">角色仓库</div>

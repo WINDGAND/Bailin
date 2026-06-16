@@ -257,7 +257,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
 
   return (
     <div>
-      <div className="apple-page-header">
+      <div style={{ marginBottom: 26 }}>
         <div className="eyebrow">Forge</div>
         <div className="display display--page">造一个角色</div>
         <p className="apple-page-subtitle">
@@ -266,7 +266,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       </div>
 
       <form
-        className="forge-form apple-single-column"
+        className="forge-form"
         onSubmit={(e) => {
           e.preventDefault();
           submit();

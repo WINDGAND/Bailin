@@ -56,12 +56,9 @@ Get-Process electron, node | Stop-Process -Force
 Start-Sleep -Seconds 2
 
 $names = @(
-  @{ key='Musk'; file='1-musk' }
-  @{ key='Trump'; file='2-trump' }
-  @{ key='张雪峰'; file='3-zhang' }
-  @{ key='MrBeast'; file='4-mrbeast' }
-  @{ key='Eren'; file='5-eren' }
-  @{ key='Kobe'; file='6-kobe' }
+  @{ key='KUN'; file='1-kun' }
+  @{ key='三笠'; file='2-mikasa' }
+  @{ key='薇尔莉特'; file='3-violet' }
 )
 
 foreach ($n in $names) {
@@ -72,7 +69,7 @@ foreach ($n in $names) {
 
   # 启动 dev with NUWA_PET_DEV_ACTIVE
   $env:NUWA_PET_DEV_ACTIVE = $n.key
-  Push-Location "d:\桌面\文件夹\CAO"
+  Push-Location "d:\桌面\文件夹\Bailin"
   Start-Process -FilePath "pnpm" -ArgumentList "dev" -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\nuwa-dev-$($n.file).log"
   Pop-Location
   # 等 electron 起来 + sprite 渲染

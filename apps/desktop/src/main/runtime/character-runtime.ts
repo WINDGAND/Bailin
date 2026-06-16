@@ -43,8 +43,9 @@ export class CharacterRuntime {
     bundle: CharacterBundle;
     sessionId: string;
     userContent: string;
+    responseMode?: "bubble" | "full";
   }): AsyncGenerator<ChatChunk> {
-    const { bundle, sessionId, userContent } = input;
+    const { bundle, sessionId, userContent, responseMode = "full" } = input;
     const verdict = this.safety.check(userContent);
     if (verdict.kind === "hard-refuse") {
       yield { kind: "delta", text: verdict.defaultRefusal ?? this.safety.defaultRefusal() };
@@ -56,12 +57,20 @@ export class CharacterRuntime {
     if (isFirst) this.firstActivation.add(bundle.card.id);
 
     const profile = this.memory.getProfile();
-    const systemPrompt = buildSystemPrompt({
+    const systemPromptBase = buildSystemPrompt({
       card: bundle.card,
       userProfile: profile,
       safety: { globalRefusalList: GLOBAL_REFUSAL_LIST },
       isFirstActivation: isFirst
     });
+    const systemPrompt =
+      responseMode === "bubble"
+        ? `${systemPromptBase}
+
+【桌宠气泡模式】
+你现在是在桌面宠物旁边的短气泡里说话。最多回复 1-3 句中文短句，优先 12-40 个汉字。
+不要长篇分析，不要列很多点，不要像客服或通用大模型。像一个有性格、在主人桌边轻声回应的伙伴。`
+        : systemPromptBase;
 
     const history = this.vault.getRecentTurns(
       bundle.card.id,
@@ -97,7 +106,10 @@ export class CharacterRuntime {
         systemPrompt,
         messages,
         temperature: bundle.runtime.llm.temperature,
-        maxTokens: bundle.runtime.llm.maxTokens,
+        maxTokens:
+          responseMode === "bubble"
+            ? Math.min(bundle.runtime.llm.maxTokens, 160)
+            : bundle.runtime.llm.maxTokens,
         stream: true,
         signal: ac.signal
       });

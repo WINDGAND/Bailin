@@ -2,15 +2,18 @@ import { ipcMain, BrowserWindow } from "electron";
 import { ulid } from "ulid";
 import {
   IPC,
+  type AmbientSignal,
   type DistillationProgressEvent,
   type ImageGenerationConfigDTO,
   type ImageTierName,
+  type ProactiveSettings,
   type SendMessageInput
 } from "../../shared/ipc-contract.js";
 import type { LocalVault } from "../store/local-vault.js";
 import type { MemoryStore } from "../runtime/memory-store.js";
 import type { CharacterRuntime } from "../runtime/character-runtime.js";
 import type { NuwaOrchestrator } from "../orchestration/nuwa-orchestrator.js";
+import type { ProactiveOrchestrator } from "../proactive/proactive-orchestrator.js";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 import { DEFAULT_VISION_MODEL } from "../adapters/llm-adapter.js";
 import {
@@ -31,18 +34,26 @@ export interface IpcDeps {
   memory: MemoryStore;
   runtime: CharacterRuntime;
   orchestrator: NuwaOrchestrator;
+  proactive: ProactiveOrchestrator;
   llm: LLMAdapter;
   imageGen: ImageGenerationAdapter;
   getActiveCharacterId(): string | null;
   setActiveCharacterId(id: string | null): void;
   broadcast: (channel: string, payload: unknown) => void;
   getPetBounds: () => { x: number; y: number; width: number; height: number } | null;
+  summonPetBubble: () => void;
   showChatNearPet: () => void;
   hideChat: () => void;
   hidePet: () => void;
   movePet: (x: number, y: number) => { x: number; y: number };
   ensurePetOnScreen: () => void;
   ensureSettingsWindow: () => void;
+  /** 拖动开始：记录光标相对窗口偏移。*/
+  petDragStart: () => void;
+  /** 拖动中：读取最新光标位置并移动桌宠。*/
+  petDragMove: () => void;
+  /** 拖动结束：清理拖动状态并返回最终位置用于落盘。*/
+  petDragEnd: () => { x: number; y: number } | null;
 }
 
 const SETTING_FIRST_RUN_DONE = "first_run_done";
@@ -75,7 +86,7 @@ function makeGate(): ApprovalGate {
 }
 
 export function registerIpc(deps: IpcDeps): void {
-  const { vault, memory, runtime, orchestrator, llm, imageGen, broadcast } = deps;
+  const { vault, memory, runtime, orchestrator, proactive, llm, imageGen, broadcast } = deps;
   /** 进行中的深度蒸馏 jobs（jobId → state）。 */
   const activeJobs = new Map<string, DeepJobState>();
 
@@ -540,7 +551,8 @@ export function registerIpc(deps: IpcDeps): void {
         for await (const chunk of runtime.sendMessage({
           bundle,
           sessionId,
-          userContent: input.content
+          userContent: input.content,
+          responseMode: input.surface === "bubble" ? "bubble" : "full"
         })) {
           if (chunk.kind === "delta") {
             broadcast(IPC.EventChatStream, {
@@ -600,9 +612,9 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.MemoryClearAll, () => vault.clearAll());
 
   // ===== Pet =====
-  ipcMain.handle(IPC.PetSummon, () => deps.showChatNearPet());
-  ipcMain.handle(IPC.PetHush, () => {
-    /* MVP: 暂时无主动行为，无需 hush。 */
+  ipcMain.handle(IPC.PetSummon, () => deps.summonPetBubble());
+  ipcMain.handle(IPC.PetHush, (_e, durationMs: number) => {
+    proactive.hush(durationMs);
   });
   ipcMain.handle(IPC.PetSetPosition, (_e, x: number, y: number) => {
     const pos = deps.movePet(Math.round(x), Math.round(y));
@@ -617,8 +629,37 @@ export function registerIpc(deps: IpcDeps): void {
       win.setIgnoreMouseEvents(false);
     }
   });
+  ipcMain.handle(IPC.PetOpenChat, () => deps.showChatNearPet());
   ipcMain.handle(IPC.PetOpenSettings, () => deps.ensureSettingsWindow());
   ipcMain.handle(IPC.PetHide, () => deps.hidePet());
+
+  // ===== 拖动（主进程全程用 screen 坐标，规避渲染进程 CSS 像素 / DPI 差异） =====
+  ipcMain.handle(IPC.PetDragStart, () => deps.petDragStart());
+  ipcMain.handle(IPC.PetDragMove, () => deps.petDragMove());
+  ipcMain.handle(IPC.PetDragEnd, () => {
+    const pos = deps.petDragEnd();
+    if (pos) vault.setSetting(SETTING_PET_POS, JSON.stringify(pos));
+  });
+
+  // ===== Bubble window =====
+  ipcMain.handle(IPC.BubbleShow, () => deps.showBubbleNearPet());
+  ipcMain.handle(IPC.BubbleHide, () => deps.hideBubble());
+  ipcMain.handle(IPC.BubbleRefreshDirection, () => deps.refreshBubbleDirection());
+  ipcMain.handle(IPC.BubbleSetMode, (_e, mode: BubbleMode) => {
+    if (mode !== "greeting" && mode !== "talking" && mode !== "expanded") return;
+    deps.setBubbleMode(mode);
+  });
+  ipcMain.handle(IPC.BubbleAdvanceToTalking, () => deps.advanceBubbleToTalking());
+
+  // ===== Proactive companion =====
+  ipcMain.handle(IPC.ProactiveGetSettings, () => proactive.getSettings());
+  ipcMain.handle(IPC.ProactiveSetSettings, (_e, input: ProactiveSettings) =>
+    proactive.setSettings(input)
+  );
+  ipcMain.handle(IPC.ProactiveGetStatus, () => proactive.getStatus());
+  ipcMain.handle(IPC.ProactiveTriggerNow, (_e, reason?: string) =>
+    proactive.triggerNow(reason as AmbientSignal["kind"] | undefined)
+  );
 }
 
 const SETTING_PET_POS = "pet_position_json";

@@ -160,7 +160,7 @@ export function MemoryPanel(): JSX.Element {
 
   return (
     <div>
-      <div className="apple-page-header">
+      <div style={{ marginBottom: 26 }}>
         <div className="eyebrow">Memory</div>
         <div className="display display--page">用户画像</div>
         <p className="apple-page-subtitle">
@@ -168,7 +168,7 @@ export function MemoryPanel(): JSX.Element {
         </p>
       </div>
 
-      <div className="bl-card apple-panel">
+      <div style={{ maxWidth: 760 }}>
         <div className="row row--between gap-3" style={{ alignItems: "flex-start", marginBottom: 24 }}>
           <p className="body-md" style={{ margin: 0, maxWidth: 480 }}>
             建议至少填一下“称呼”。其余内容可以以后慢慢加，角色会在对话里自然参考。

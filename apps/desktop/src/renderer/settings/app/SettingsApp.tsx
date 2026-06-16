@@ -7,9 +7,10 @@ import { CharacterLibrary } from "../library/CharacterLibrary.js";
 import { CreateCharacter } from "../create/CreateCharacter.js";
 import { MemoryPanel } from "../memory/MemoryPanel.js";
 import { ApiKeyPanel } from "../provider/ApiKeyPanel.js";
+import { DesktopBehaviorPanel } from "../desktop/DesktopBehaviorPanel.js";
 import { DirtyContext, type DirtyContextValue } from "./dirty-context.js";
 
-type Tab = "library" | "create" | "memory" | "key";
+type Tab = "library" | "create" | "memory" | "desktop" | "key";
 
 interface TabDef {
   id: Tab;
@@ -21,6 +22,7 @@ const TABS: TabDef[] = [
   { id: "library", label: "角色仓库", icon: LibraryIcon },
   { id: "create", label: "造一个角色", icon: ForgeIcon },
   { id: "memory", label: "记忆 / 用户画像", icon: MemoryIcon },
+  { id: "desktop", label: "桌宠与陪伴", icon: CompanionIcon },
   { id: "key", label: "模型与 API Key", icon: KeyIcon }
 ];
 
@@ -89,6 +91,13 @@ export function SettingsApp(): JSX.Element {
     id: "tab-4",
     combo: "4",
     scope: "Settings",
+    label: "切到 桌宠与陪伴",
+    handler: () => void tryGoTab("desktop")
+  });
+  useShortcut({
+    id: "tab-5",
+    combo: "5",
+    scope: "Settings",
     label: "切到 模型与 API Key",
     handler: () => void tryGoTab("key")
   });
@@ -150,6 +159,7 @@ export function SettingsApp(): JSX.Element {
             {tab === "library" ? <CharacterLibrary onNewClick={() => void tryGoTab("create")} /> : null}
             {tab === "create" ? <CreateCharacter onDone={() => void tryGoTab("library")} /> : null}
             {tab === "memory" ? <MemoryPanel /> : null}
+            {tab === "desktop" ? <DesktopBehaviorPanel /> : null}
             {tab === "key" ? <ApiKeyPanel /> : null}
           </div>
         </main>
@@ -232,6 +242,31 @@ function MemoryIcon({ size = 18 }: IconProps): JSX.Element {
       <path d="M9 4a3 3 0 0 0-3 3v1a3 3 0 0 0-1 2v2a3 3 0 0 0 1 2v1a3 3 0 0 0 3 3" />
       <path d="M15 4a3 3 0 0 1 3 3v1a3 3 0 0 1 1 2v2a3 3 0 0 1-1 2v1a3 3 0 0 1-3 3" />
       <path d="M12 5v14" />
+    </svg>
+  );
+}
+
+function CompanionIcon({ size = 18 }: IconProps): JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 11a4 4 0 0 1 8 0v3a4 4 0 0 1-8 0z" />
+      <path d="M9 8 7 5" />
+      <path d="M15 8l2-3" />
+      <path d="M9.5 13h.01" />
+      <path d="M14.5 13h.01" />
+      <path d="M11 16h2" />
+      <path d="M5 18c-1.5-.5-2.5-1.5-2.5-3 0-1.2.8-2.2 2-2.5" />
+      <path d="M19 18c1.5-.5 2.5-1.5 2.5-3 0-1.2-.8-2.2-2-2.5" />
     </svg>
   );
 }

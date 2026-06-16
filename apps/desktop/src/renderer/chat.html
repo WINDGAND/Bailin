@@ -16,6 +16,22 @@
         height: 100%;
         overflow: hidden;
       }
+      /* 与气泡 pet-bubble-morph-out 接续：每次 ChatWindow show 时跑一次"小→大"渐入。
+         放在最外层 #root，让用户感觉是气泡膨胀变大成聊天窗。 */
+      @keyframes chat-window-morph-in {
+        0% {
+          transform: scale(0.94);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      #root {
+        animation: chat-window-morph-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+        transform-origin: center center;
+      }
     </style>
   </head>
   <body class="grain">

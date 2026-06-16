@@ -8,93 +8,28 @@ import {
 } from "react";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
-import { StreamCursor, useToast } from "../shared/feedback.js";
-
-interface Turn {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  error?: { code?: string; message: string };
-}
-
-type StreamPhase = "idle" | "thinking" | "streaming";
+import { useToast } from "../shared/feedback.js";
+import { ChatBubble } from "../shared/chat-bubble.js";
+import { useChatSession } from "../shared/use-chat-session.js";
 
 export function ChatApp(): JSX.Element {
   const nuwa = useNuwa();
   const { bundle } = useActiveCharacter();
   const { showToast } = useToast();
 
-  const [sessionId, setSessionId] = useState<string>("");
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [pending, setPending] = useState<string>("");
-  const [phase, setPhase] = useState<StreamPhase>("idle");
   const [input, setInput] = useState<string>("");
-  const [lastError, setLastError] = useState<{ code?: string; message: string } | null>(null);
-
-  const inFlightRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // ===== 初始化会话 + 拉历史 =====
-  useEffect(() => {
-    if (!bundle) return;
-    void (async () => {
-      const r = await nuwa.chat.newSession(bundle.card.id);
-      setSessionId(r.sessionId);
-      const recent = await nuwa.chat.getRecent(bundle.card.id);
-      setTurns(
-        recent
-          .filter((t) => t.role === "user" || t.role === "assistant")
-          .map((t) => ({ id: t.id, role: t.role as "user" | "assistant", content: t.content }))
-      );
-    })();
-  }, [bundle, nuwa]);
-
-  // ===== 订阅流式回包 =====
-  useEffect(() => {
-    return nuwa.on.chatStream((chunk) => {
-      if (chunk.requestId !== inFlightRef.current) return;
-      if (chunk.error) {
-        setPending("");
-        setPhase("idle");
-        const errObj = { code: chunk.finishReason, message: chunk.error };
-        setLastError(errObj);
-        setTurns((prev) => [
-          ...prev,
-          {
-            id: chunk.requestId + "-err",
-            role: "assistant",
-            content: "",
-            error: errObj
-          }
-        ]);
-        inFlightRef.current = null;
-        return;
-      }
-      if (chunk.delta) {
-        if (phase !== "streaming") setPhase("streaming");
-        setPending((cur) => cur + chunk.delta);
-      }
-      if (chunk.done) {
-        setPending((cur) => {
-          if (cur.length > 0) {
-            setTurns((prev) => [
-              ...prev,
-              { id: chunk.requestId + "-done", role: "assistant", content: cur }
-            ]);
-          }
-          return "";
-        });
-        setPhase("idle");
-        inFlightRef.current = null;
-      }
-    });
-  }, [nuwa, phase]);
+  const chat = useChatSession(bundle, {
+    surface: "chat",
+    onInfo: (text) => showToast({ kind: "info", text }),
+    onError: (text) => showToast({ kind: "error", text })
+  });
 
   // ===== 自动滚到底部 =====
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [turns, pending, phase]);
+  }, [chat.turns, chat.pending, chat.phase]);
 
   // ===== 差异化建议（取自 card） =====
   const suggestions = useMemo<Suggestion[]>(() => {
@@ -129,84 +64,22 @@ export function ChatApp(): JSX.Element {
   // ===== 发送 =====
   const submit = useCallback(
     async (text: string) => {
-      if (!bundle || !sessionId) return;
-      const trimmed = text.trim();
-      if (!trimmed) return;
       setInput("");
-      setLastError(null);
-      const userTurn: Turn = {
-        id: Math.random().toString(36).slice(2),
-        role: "user",
-        content: trimmed
-      };
-      setTurns((prev) => [...prev, userTurn]);
-      setPhase("thinking");
-      try {
-        const res = await nuwa.chat.send({
-          characterId: bundle.card.id,
-          sessionId,
-          content: trimmed
-        });
-        inFlightRef.current = res.requestId;
-      } catch (e) {
-        setPhase("idle");
-        showToast({
-          kind: "error",
-          text: e instanceof Error ? e.message : "发送失败"
-        });
-      }
+      await chat.submit(text);
     },
-    [bundle, sessionId, nuwa, showToast]
+    [chat]
   );
-
-  // ===== 中断流式 =====
-  const cancel = useCallback(async () => {
-    if (inFlightRef.current == null) return;
-    const id = inFlightRef.current;
-    inFlightRef.current = null;
-    await nuwa.chat.cancel(id);
-    setPending((cur) => {
-      if (cur.length > 0) {
-        setTurns((prev) => [
-          ...prev,
-          { id: id + "-cancel", role: "assistant", content: cur + " ⏹" }
-        ]);
-      }
-      return "";
-    });
-    setPhase("idle");
-    showToast({ kind: "info", text: "已中断这次回答" });
-  }, [nuwa, showToast]);
 
   // ===== 新对话 =====
   const startNewSession = useCallback(async () => {
-    if (!bundle) return;
-    if (inFlightRef.current) await cancel();
-    const r = await nuwa.chat.newSession(bundle.card.id);
-    setSessionId(r.sessionId);
-    setTurns([]);
-    setPending("");
-    setLastError(null);
-    setPhase("idle");
-    showToast({ kind: "success", text: "新对话已开始" });
+    await chat.startNewSession();
     textareaRef.current?.focus();
-  }, [bundle, nuwa, cancel, showToast]);
+  }, [chat]);
 
   // ===== 重试 =====
   const retryLastUser = useCallback(() => {
-    const lastUser = [...turns].reverse().find((t) => t.role === "user");
-    if (lastUser) {
-      // 去掉最后一条错误的 assistant turn
-      setTurns((prev) => {
-        const idx = [...prev].reverse().findIndex((t) => t.error);
-        if (idx < 0) return prev;
-        const realIdx = prev.length - 1 - idx;
-        return prev.filter((_, i) => i !== realIdx);
-      });
-      setLastError(null);
-      void submit(lastUser.content);
-    }
-  }, [turns, submit]);
+    chat.retryLastUser();
+  }, [chat]);
 
   // ===== 全局键盘 =====
   useEffect(() => {
@@ -228,15 +101,15 @@ export function ChatApp(): JSX.Element {
   function onTextareaKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      if (inFlightRef.current) {
-        void cancel();
+      if (chat.streaming) {
+        void chat.cancel();
       } else {
         void submit(input);
       }
       return;
     }
     if (e.key === "ArrowUp" && input.trim().length === 0) {
-      const lastUser = [...turns].reverse().find((t) => t.role === "user");
+      const lastUser = [...chat.turns].reverse().find((t) => t.role === "user");
       if (lastUser) {
         e.preventDefault();
         setInput(lastUser.content);
@@ -252,7 +125,7 @@ export function ChatApp(): JSX.Element {
     el.style.height = `${next}px`;
   }, [input]);
 
-  const streaming = inFlightRef.current != null;
+  const streaming = chat.streaming;
 
   return (
     <div
@@ -355,7 +228,7 @@ export function ChatApp(): JSX.Element {
           ref={listRef}
           style={{ flex: 1, overflow: "auto", padding: "14px 16px" }}
         >
-          {turns.length === 0 && !pending && phase === "idle" ? (
+          {chat.turns.length === 0 && !chat.pending && chat.phase === "idle" ? (
             <div className="stack fade-in-up" style={{ marginTop: 4 }}>
               <div className="eyebrow">不知道说什么？</div>
               {suggestions.map((s, i) => (
@@ -372,13 +245,12 @@ export function ChatApp(): JSX.Element {
             </div>
           ) : null}
 
-          {turns.map((t, i) => (
+          {chat.turns.map((t) => (
             <ChatBubble
               key={t.id}
               role={t.role}
               content={t.content}
               error={t.error}
-              indexFromEnd={turns.length - 1 - i}
               onRetry={t.error ? retryLastUser : undefined}
               onGoSettings={
                 t.error?.code === "AUTH_FAILED" || /401|auth|key/i.test(t.error?.message ?? "")
@@ -388,8 +260,8 @@ export function ChatApp(): JSX.Element {
             />
           ))}
 
-          {phase !== "idle" ? (
-            <ChatBubble role="assistant" content={pending} streamingKind={phase} />
+          {chat.phase !== "idle" ? (
+            <ChatBubble role="assistant" content={chat.pending} streamingKind={chat.phase} />
           ) : null}
         </div>
 
@@ -397,7 +269,7 @@ export function ChatApp(): JSX.Element {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (streaming) void cancel();
+            if (streaming) void chat.cancel();
             else void submit(input);
           }}
           style={{
@@ -434,7 +306,7 @@ export function ChatApp(): JSX.Element {
             <button
               type="button"
               className="btn btn--danger"
-              onClick={() => void cancel()}
+              onClick={() => void chat.cancel()}
               data-hint="中断 · Enter"
               aria-label="中断"
               style={{ minWidth: 64 }}
@@ -457,7 +329,7 @@ export function ChatApp(): JSX.Element {
       </div>
 
       {/* 持久错误提示条（次要） */}
-      {lastError && !streaming ? (
+      {chat.lastError && !streaming ? (
         <div
           className="row gap-2 fade-in"
           style={{
@@ -466,7 +338,7 @@ export function ChatApp(): JSX.Element {
             fontSize: 12
           }}
         >
-          <span>· 上次出错：{lastError.message}</span>
+          <span>· 上次出错：{chat.lastError.message}</span>
           <button className="btn btn--ghost btn--sm" onClick={retryLastUser}>
             重试
           </button>
@@ -476,99 +348,9 @@ export function ChatApp(): JSX.Element {
   );
 }
 
-// =============================================================
-// ChatBubble
-// =============================================================
-
 interface Suggestion {
   id: string;
   title: string;
   hint: string;
   prompt: string;
-}
-
-interface ChatBubbleProps {
-  role: "user" | "assistant";
-  content: string;
-  error?: { code?: string; message: string };
-  streamingKind?: StreamPhase;
-  indexFromEnd?: number;
-  onRetry?: () => void;
-  onGoSettings?: () => void;
-}
-
-function ChatBubble(props: ChatBubbleProps): JSX.Element {
-  const { role, content, error, streamingKind, onRetry, onGoSettings } = props;
-  const isUser = role === "user";
-
-  if (error) {
-    return (
-      <div
-        className="fade-in-up"
-        style={{
-          margin: "10px 0",
-          padding: "10px 12px",
-          background: "rgba(178, 24, 88, 0.06)",
-          border: "1px solid var(--magenta-soft)",
-          borderRadius: 12,
-          color: "var(--ink)"
-        }}
-      >
-        <div
-          className="eyebrow"
-          style={{ color: "var(--magenta)", marginBottom: 4 }}
-        >
-          出错了
-        </div>
-        <div className="body-md" style={{ color: "var(--ink-soft)", marginBottom: 8 }}>
-          {error.message}
-        </div>
-        <div className="row gap-2">
-          {onRetry ? (
-            <button type="button" className="btn btn--magenta btn--sm" onClick={onRetry}>
-              重试
-            </button>
-          ) : null}
-          {onGoSettings ? (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={onGoSettings}>
-              去设置改 Key
-            </button>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  const isStreamingThinking = streamingKind === "thinking" && content.length === 0;
-  const isStreamingDelta = streamingKind === "streaming";
-
-  return (
-    <div
-      className="fade-in-up"
-      style={{
-        display: "flex",
-        justifyContent: isUser ? "flex-end" : "flex-start",
-        margin: "8px 0"
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "86%",
-          padding: "9px 13px",
-          borderRadius: 13,
-          background: isUser ? "var(--ink)" : "var(--paper-deep)",
-          color: isUser ? "var(--paper)" : "var(--ink)",
-          border: isUser ? "none" : "1px solid var(--grid)",
-          fontSize: 14,
-          lineHeight: 1.55,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word"
-        }}
-      >
-        {content}
-        {isStreamingThinking ? <StreamCursor kind="thinking" /> : null}
-        {isStreamingDelta ? <StreamCursor kind="streaming" /> : null}
-      </div>
-    </div>
-  );
 }

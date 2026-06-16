@@ -45,7 +45,7 @@ const orch = new NuwaOrchestrator(llm);
 
 const characters = [
   { characterName: "蔡徐坤", sourceType: "public-figure", track: "companion" },
-  { characterName: "周杰伦", sourceType: "public-figure", track: "utility" },
+  { characterName: "三笠", sourceType: "fictional", track: "companion" },
   { characterName: "鲁路修", sourceType: "fictional", track: "companion" }
 ];
 

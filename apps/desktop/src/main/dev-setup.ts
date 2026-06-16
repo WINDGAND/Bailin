@@ -72,16 +72,16 @@ export function applyDevSetup(vault: LocalVault): void {
   }
 }
 
-/** 提升此值 → 下次启动 dev 会强制刷新所有 starter（保留用户自造的角色）。 */
-const STARTER_SEED_VERSION = "v5-bilingual-quotes";
+/** 开发期 starter 种子（当前无内置 starter，仅记录版本号以跳过旧逻辑）。 */
+const STARTER_SEED_VERSION = "v6-no-starters";
 
-/**
- * 开发期 starter 种子：
- *   - 仓库为空 → 全量导入 6 个 starter
- *   - 已经有 starter 但 seed 版本旧了 → 按 sourceName 找到旧 starter，原地更新 bundle（保留 id 与时间戳）
- *   - 用户自造的角色（不是 starter）一律不动
- */
 function seedStarterLibraryIfEmpty(vault: LocalVault): void {
+  if (STARTER_BUNDLES.length === 0) {
+    vault.setSetting("starter_seed_version", STARTER_SEED_VERSION);
+    log.info("[dev-setup] 无内置 starter，跳过种子导入");
+    return;
+  }
+
   const existing = vault.listCharacters();
   const prevVersion = vault.getSetting("starter_seed_version");
   const now = Date.now();
@@ -108,7 +108,6 @@ function seedStarterLibraryIfEmpty(vault: LocalVault): void {
     return;
   }
 
-  // 升级：按 sourceName 匹配旧 starter 并原地更新 bundle
   let updated = 0;
   for (const starter of STARTER_BUNDLES) {
     const old = existing.find((c) => c.sourceName === starter.card.meta.sourceName);

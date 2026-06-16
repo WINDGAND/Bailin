@@ -15,6 +15,7 @@ export default defineConfig({
       input: {
         pet: resolve(root, "pet.html"),
         chat: resolve(root, "chat.html"),
+        bubble: resolve(root, "bubble.html"),
         settings: resolve(root, "settings.html")
       }
     }

@@ -26,6 +26,7 @@ export function PetApp(): JSX.Element {
   const { bundle } = useActiveCharacter();
   const nuwa = useNuwa();
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const menuLayerRef = useRef<HTMLDivElement | null>(null);
 
   // ===== 首次破壳 =====
   const [hatchKey, setHatchKey] = useState<number>(0);
@@ -47,18 +48,22 @@ export function PetApp(): JSX.Element {
   }, [bundle?.card.id]);
 
   // ===== 鼠标穿透（仅在桌宠像素 BBox 内才接收事件） =====
+  const draggingRef = useRef(false);
   useEffect(() => {
     let mouseInside = false;
     let ignored = true;
     const handler = (e: MouseEvent) => {
-      const el = wrapRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const inside =
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom;
+      if (draggingRef.current) return;
+      const hitTargets = [wrapRef.current, menuLayerRef.current].filter(Boolean) as HTMLElement[];
+      const inside = hitTargets.some((el) => {
+        const rect = el.getBoundingClientRect();
+        return (
+          e.clientX >= rect.left &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom
+        );
+      });
       if (inside !== mouseInside) {
         mouseInside = inside;
         const nextIgnored = !inside;
@@ -73,14 +78,14 @@ export function PetApp(): JSX.Element {
     return () => window.removeEventListener("mousemove", handler);
   }, [nuwa]);
 
-  // ===== 长按拖动 + 单击唤起 =====
+  // ===== 拖动 + 单击唤起 =====
+  // 拖动判定：鼠标移动 ≥ 4px 即视为拖动（无延迟，完全跟手）。
+  // 位移计算全在主进程（getCursorScreenPoint），彻底规避 HiDPI 下
+  // 渲染进程 CSS 像素与 Electron 物理坐标系不一致的问题。
   const dragStateRef = useRef<{
-    timer: number | null;
     dragging: boolean;
     startScreenX: number;
     startScreenY: number;
-    startWinX: number;
-    startWinY: number;
   } | null>(null);
   const [externalEvent, setExternalEvent] = useState<{ kind: SpriteEvent; nonce: number } | null>(
     null
@@ -89,51 +94,58 @@ export function PetApp(): JSX.Element {
     setExternalEvent((prev) => ({ kind, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
-  const onPetMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const onPetPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       e.preventDefault();
-      const startScreenX = e.screenX;
-      const startScreenY = e.screenY;
-      const startWinX = window.screenX;
-      const startWinY = window.screenY;
+      e.currentTarget.setPointerCapture(e.pointerId);
       dragStateRef.current = {
-        timer: window.setTimeout(() => {
-          if (dragStateRef.current) {
-            dragStateRef.current.dragging = true;
-            sendSpriteEvent("dragStart");
-          }
-        }, 180),
         dragging: false,
-        startScreenX,
-        startScreenY,
-        startWinX,
-        startWinY
+        startScreenX: e.screenX,
+        startScreenY: e.screenY
       };
+      void nuwa.pet.setMouseIgnore(false);
+    },
+    [nuwa]
+  );
 
-      const onMove = (ev: MouseEvent) => {
-        const s = dragStateRef.current;
-        if (!s || !s.dragging) return;
-        const dx = ev.screenX - s.startScreenX;
-        const dy = ev.screenY - s.startScreenY;
-        void nuwa.pet.setPosition(s.startWinX + dx, s.startWinY + dy);
-      };
-      const onUp = () => {
-        const s = dragStateRef.current;
-        if (!s) return;
-        if (s.timer != null) window.clearTimeout(s.timer);
-        const wasDragging = s.dragging;
-        dragStateRef.current = null;
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-        if (wasDragging) {
-          sendSpriteEvent("dragEnd");
-        } else {
-          void nuwa.pet.summon();
-        }
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
+  const onPetPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const s = dragStateRef.current;
+      if (!s) return;
+      if (!s.dragging) {
+        // 超过 4px 才判定为拖动，避免误把点击识别为拖动。
+        if (Math.abs(e.screenX - s.startScreenX) < 4 && Math.abs(e.screenY - s.startScreenY) < 4) return;
+        s.dragging = true;
+        draggingRef.current = true;
+        void (async () => {
+          await nuwa.pet.dragStart();
+          await nuwa.pet.dragMove();
+        })();
+        sendSpriteEvent("dragStart");
+        return;
+      }
+      void nuwa.pet.dragMove();
+    },
+    [nuwa, sendSpriteEvent]
+  );
+
+  const onPetPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const s = dragStateRef.current;
+      if (!s) return;
+      const wasDragging = s.dragging;
+      dragStateRef.current = null;
+      draggingRef.current = false;
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+      if (wasDragging) {
+        void nuwa.pet.dragEnd();
+        sendSpriteEvent("dragEnd");
+      } else {
+        void nuwa.pet.summon();
+      }
     },
     [nuwa, sendSpriteEvent]
   );
@@ -146,6 +158,15 @@ export function PetApp(): JSX.Element {
       sendSpriteEvent("chatOpen");
     });
   }, [nuwa, sendSpriteEvent]);
+
+  useEffect(() => {
+    return nuwa.on.proactiveWhisper((evt) => {
+      if (!bundle || evt.characterId !== bundle.card.id) return;
+      // 气泡渲染搬到独立窗口；桌宠这边只负责放一个 nudge + chatOpen 动画。
+      setNudgeNonce((n) => n + 1);
+      sendSpriteEvent("chatOpen");
+    });
+  }, [nuwa, bundle?.card.id, sendSpriteEvent]);
 
   // ===== 右键菜单 =====
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -219,9 +240,12 @@ export function PetApp(): JSX.Element {
           cursor: "grab",
           userSelect: "none"
         }}
-        onMouseDown={onPetMouseDown}
+        onPointerDown={onPetPointerDown}
+        onPointerMove={onPetPointerMove}
+        onPointerUp={onPetPointerUp}
+        onPointerCancel={onPetPointerUp}
         onContextMenu={(e) => void onPetContextMenu(e)}
-        title="左键点击唤起 · 长按拖动 · 右键菜单"
+        title="左键点击唤起 · 拖动移动 · 右键菜单"
       >
         <PetRenderer
           key={`sprite-${hatchKey}-${bundle.card.id}`}
@@ -232,26 +256,33 @@ export function PetApp(): JSX.Element {
       </div>
 
       {menu ? (
-        <PetContextMenu
-          x={menu.x}
-          y={menu.y}
-          characters={characters}
-          starters={starters}
-          submenu={submenu}
-          onSubmenu={(s) => setSubmenu(s)}
-          onSummon={() => void nuwa.pet.summon()}
-          onOpenSettings={() => void nuwa.pet.openSettings()}
-          onHide={() => void nuwa.pet.hide()}
-          onActivate={async (id) => {
-            await nuwa.characters.activate(id);
-            setMenu(null);
-          }}
-          onImportStarter={async (id) => {
-            await nuwa.characters.importStarter(id);
-            setMenu(null);
-          }}
-          onClose={() => setMenu(null)}
-        />
+        <div ref={menuLayerRef} style={{ pointerEvents: "auto" }}>
+          <PetContextMenu
+            x={menu.x}
+            y={menu.y}
+            characters={characters}
+            starters={starters}
+            submenu={submenu}
+            onSubmenu={(s) => setSubmenu(s)}
+            onSummon={() => void nuwa.pet.summon()}
+            onHush={() => {
+              void nuwa.pet.hush(30 * 60 * 1000);
+              void nuwa.bubble.hide();
+              setMenu(null);
+            }}
+            onOpenSettings={() => void nuwa.pet.openSettings()}
+            onHide={() => void nuwa.pet.hide()}
+            onActivate={async (id) => {
+              await nuwa.characters.activate(id);
+              setMenu(null);
+            }}
+            onImportStarter={async (id) => {
+              await nuwa.characters.importStarter(id);
+              setMenu(null);
+            }}
+            onClose={() => setMenu(null)}
+          />
+        </div>
       ) : null}
     </div>
   );
@@ -321,6 +352,7 @@ interface MenuProps {
   submenu: null | "switch";
   onSubmenu: (s: null | "switch") => void;
   onSummon: () => void;
+  onHush: () => void;
   onOpenSettings: () => void;
   onHide: () => void;
   onActivate: (id: string) => void;
@@ -337,6 +369,7 @@ function PetContextMenu(props: MenuProps): JSX.Element {
     submenu,
     onSubmenu,
     onSummon,
+    onHush,
     onOpenSettings,
     onHide,
     onActivate,
@@ -374,6 +407,7 @@ function PetContextMenu(props: MenuProps): JSX.Element {
       }}
     >
       <MenuItem label="唤起对话" hint="Ctrl+Shift+P" onClick={onSummon} delay={0} />
+      <MenuItem label="安静 30 分钟" onClick={onHush} delay={20} />
       <MenuItem
         label="切换角色"
         hasSubmenu

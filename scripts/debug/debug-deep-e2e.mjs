@@ -5,7 +5,7 @@
  * 走完 6 Agent 并行调研 + 提炼 + 深度外貌 + Sprite + 自检。
  *
  * 跑法：node scripts/debug/debug-deep-e2e.mjs ["角色名"]
- *   默认角色：周杰伦
+ *   默认角色：三笠
  *
  * 输出：每个进度事件打日志；结束时打 isSkeleton / warnings / 调研引用统计 / 自检 verdict。
  */
@@ -46,7 +46,7 @@ const provider = {
 const llm = new LLMAdapter(() => provider);
 const orch = new NuwaOrchestrator(llm);
 
-const characterName = process.argv[2] ?? "周杰伦";
+const characterName = process.argv[2] ?? "三笠";
 const config = {
   characterName,
   sourceType: "public-figure",

@@ -6,9 +6,15 @@ import type {
   ResearchDoc
 } from "@nuwa-pet/character-protocol";
 import type {
+  AmbientSignal,
+  BubbleDirectionPayload,
+  BubbleMode,
   DistillationProgressEvent,
   ImageGenerationConfigDTO,
-  ImageTierName
+  ImageTierName,
+  ProactiveSettings,
+  ProactiveStatus,
+  ProactiveWhisperEvent
 } from "../../shared/ipc-contract.js";
 
 interface NuwaWindow {
@@ -76,7 +82,7 @@ interface NuwaWindow {
       }>;
     };
     chat: {
-      send(input: { characterId: string; sessionId: string; content: string }): Promise<{ requestId: string }>;
+      send(input: { characterId: string; sessionId: string; content: string; surface?: "bubble" | "chat" }): Promise<{ requestId: string }>;
       cancel(requestId: string): Promise<void>;
       newSession(characterId: string): Promise<{ sessionId: string }>;
       getRecent(characterId: string): Promise<Array<{ id: string; role: "user" | "assistant" | "system"; content: string; createdAt: number }>>;
@@ -90,11 +96,28 @@ interface NuwaWindow {
       clearPerCharacter(id: string): Promise<void>;
       clearAll(): Promise<void>;
     };
-    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openSettings(): Promise<void>; hide(): Promise<void> };
+    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(): Promise<void>; hide(): Promise<void>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
+    bubble: {
+      show(): Promise<void>;
+      hide(): Promise<void>;
+      refreshDirection(): Promise<void>;
+      setMode(mode: BubbleMode): Promise<void>;
+      advanceToTalking(): Promise<void>;
+    };
+    proactive: {
+      getSettings(): Promise<ProactiveSettings>;
+      setSettings(input: ProactiveSettings): Promise<ProactiveSettings>;
+      getStatus(): Promise<ProactiveStatus>;
+      triggerNow(reason?: AmbientSignal["kind"]): Promise<{ ok: boolean; reason?: string }>;
+    };
     on: {
       chatStream(h: (chunk: { requestId: string; sessionId: string; done: boolean; delta?: string; error?: string; finishReason?: string }) => void): () => void;
       activeCharacterChanged(h: (bundle: CharacterBundle | null) => void): () => void;
       petSummon(h: () => void): () => void;
+      bubbleDirection(h: (dir: BubbleDirectionPayload) => void): () => void;
+      bubbleMode(h: (mode: BubbleMode) => void): () => void;
+      proactiveWhisper(h: (evt: ProactiveWhisperEvent) => void): () => void;
+      ambientSignal(h: (evt: AmbientSignal) => void): () => void;
       distillationProgress(h: (evt: DistillationProgressEvent) => void): () => void;
     };
   };
@@ -221,13 +244,47 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       hush: async () => undefined,
       setPosition: async () => undefined,
       setMouseIgnore: async () => undefined,
+      openChat: async () => undefined,
       openSettings: async () => undefined,
-      hide: async () => undefined
+      hide: async () => undefined,
+      dragStart: async () => undefined,
+      dragMove: async () => undefined,
+      dragEnd: async () => undefined
+    },
+    bubble: {
+      show: async () => undefined,
+      hide: async () => undefined,
+      refreshDirection: async () => undefined,
+      setMode: async () => undefined,
+      advanceToTalking: async () => undefined
+    },
+    proactive: {
+      getSettings: async () => ({
+        enabled: false,
+        intensity: "off",
+        maxPerHour: 0,
+        defaultHushMinutes: 30,
+        quietHoursEnabled: false,
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+        screenAwareness: "off"
+      }),
+      setSettings: async (input) => input,
+      getStatus: async () => ({
+        enabled: false,
+        utterancesThisHour: 0,
+        screenAwareness: "off"
+      }),
+      triggerNow: async () => ({ ok: false, reason: "stub" })
     },
     on: {
       chatStream: noopOff,
       activeCharacterChanged: noopOff,
       petSummon: noopOff,
+      bubbleDirection: noopOff,
+      bubbleMode: noopOff,
+      proactiveWhisper: noopOff,
+      ambientSignal: noopOff,
       distillationProgress: noopOff
     }
   };

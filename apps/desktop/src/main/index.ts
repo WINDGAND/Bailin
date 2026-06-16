@@ -1,4 +1,4 @@
-import { app, globalShortcut, Tray, Menu, nativeImage, BrowserWindow, dialog } from "electron";
+import { app, globalShortcut, Tray, Menu, nativeImage, BrowserWindow, dialog, screen } from "electron";
 Menu.setApplicationMenu(null);
 import { join } from "node:path";
 import log from "electron-log/main";
@@ -22,6 +22,7 @@ process.on("unhandledRejection", (reason) => {
 
 import { LocalVault } from "./store/local-vault.js";
 import { applyDevSetup } from "./dev-setup.js";
+import { purgeRetiredCharacters } from "./retired-characters.js";
 import { LLMAdapter } from "./adapters/llm-adapter.js";
 import { ImageGenerationAdapter } from "./adapters/image-generation-adapter.js";
 import { SafetyPolicy } from "./safety/safety-policy.js";
@@ -34,11 +35,13 @@ import {
   registerIpc,
   SETTING_PET_POS
 } from "./ipc/register.js";
-import { createPetWindow } from "./windows/pet-window.js";
-import { clampPetWindow, clampRectToWorkArea } from "./windows/window-bounds.js";
+import { createPetWindow, PET_WINDOW_SIZE } from "./windows/pet-window.js";
+import { clampPetWindow, clampRectToDisplayBounds } from "./windows/window-bounds.js";
 import { createChatWindow, positionChatNear } from "./windows/chat-window.js";
 import { createSettingsWindow } from "./windows/settings-window.js";
-import type { LLMProviderConfig } from "../shared/ipc-contract.js";
+import { AmbientMonitor } from "./ambient/ambient-monitor.js";
+import { ProactiveOrchestrator } from "./proactive/proactive-orchestrator.js";
+import { type LLMProviderConfig } from "../shared/ipc-contract.js";
 
 log.initialize();
 log.info("[main] Bailin starting...");
@@ -54,6 +57,10 @@ let chatWin: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
 let activeCharacterId: string | null = null;
 let isQuitting = false;
+let ambientMonitor: AmbientMonitor | null = null;
+
+/** 拖动时光标相对窗口原点的偏移量（主进程坐标系，物理/逻辑像素与 screen API 一致）。 */
+let dragCursorOffset: { dx: number; dy: number } | null = null;
 
 const devUrl = process.env.VITE_DEV_SERVER || undefined;
 
@@ -64,6 +71,14 @@ function ensureSettingsWindow(): void {
     return;
   }
   settingsWin = createSettingsWindow(devUrl);
+  // 等 React 把首屏画完再 show，杜绝白闪 + 防止"创建即显示"时
+  // 抢走桌宠拖动的焦点。
+  settingsWin.once("ready-to-show", () => {
+    if (settingsWin && !settingsWin.isDestroyed()) {
+      settingsWin.show();
+      settingsWin.focus();
+    }
+  });
   settingsWin.on("closed", () => {
     settingsWin = null;
   });
@@ -94,45 +109,165 @@ function ensureChatWindow(): BrowserWindow {
   return chatWin;
 }
 
+/**
+ * 桌宠当前在屏幕里的几何。
+ * 永远用 getContentBounds 取位置 + 常量取尺寸，规避 electron#27651
+ * 在 Windows 非整数 DPI 下 getBounds 返回的 width/height 会随 setPosition
+ * 调用次数累积漂移的 bug。
+ */
+function getPetGeometry(pet: BrowserWindow): { x: number; y: number; width: number; height: number } {
+  const content = pet.getContentBounds();
+  const { width, height } = PET_WINDOW_SIZE;
+  return { x: content.x, y: content.y, width, height };
+}
+
+/**
+ * 打开（或保持显示）完整聊天窗。
+ *
+ * 这一版交互设计删除了独立的桌宠气泡窗 —— 所有"想跟桌宠说话"的入口都直接弹这个聊天窗。
+ * 入口包括：单击桌宠、Ctrl+Shift+P、托盘"唤起对话"、托盘"展开完整聊天窗"。
+ */
 function showChatNearPet(): void {
   const pet = ensurePetWindow();
   const chat = ensureChatWindow();
-  const bounds = pet.getBounds();
+  const geo = getPetGeometry(pet);
   positionChatNear(chat, {
-    petX: bounds.x,
-    petY: bounds.y,
-    petW: bounds.width,
-    petH: bounds.height
+    petX: geo.x,
+    petY: geo.y,
+    petW: geo.width,
+    petH: geo.height
   });
   chat.show();
   chat.focus();
   broadcastToAllWindows("nuwa.event.petSummon", null);
 }
 
+/**
+ * 单一"召唤桌宠"入口：
+ * - 聊天窗已可见 → toggle，hide 之；
+ * - 聊天窗不可见 → 显示并定位到桌宠旁。
+ *
+ * 用 toggle 而不是 always-show，是因为同一个手势（点桌宠 / Ctrl+Shift+P）
+ * 在用户已经看到聊天窗时再次触发，最自然的预期是"收起"。
+ */
+function summonPetBubble(): void {
+  const pet = ensurePetWindow();
+  if (!pet.isVisible()) pet.show();
+  pet.moveTop();
+  broadcastToAllWindows("nuwa.event.petSummon", null);
+
+  if (isChatVisible()) {
+    hideChat();
+    return;
+  }
+  showChatNearPet();
+}
+
 function hideChat(): void {
   if (chatWin && !chatWin.isDestroyed()) chatWin.hide();
+}
+
+function isChatVisible(): boolean {
+  return Boolean(chatWin && !chatWin.isDestroyed() && chatWin.isVisible());
 }
 
 function hidePet(): void {
   if (petWin && !petWin.isDestroyed()) petWin.hide();
 }
 
+/**
+ * 把桌宠"内容区"原点放到 (x, y)，并 clamp 在所属显示器的物理 bounds 内。
+ *
+ * 关键：用 setContentBounds + 固定 PET_WINDOW_SIZE，规避 Electron 在 Windows
+ * 非整数 DPI 下 setPosition / setBounds 反复调用导致 width/height 漂移的 bug
+ * （electron#27651），那个 bug 的表现就是"桌宠活动范围越用越小，最后被卡在
+ * 一条线上"。
+ */
+function setPetContentOrigin(pet: BrowserWindow, x: number, y: number): { x: number; y: number } {
+  const { width, height } = PET_WINDOW_SIZE;
+  const clamped = clampRectToDisplayBounds({ x, y, width, height });
+  pet.setContentBounds({ x: clamped.x, y: clamped.y, width, height });
+  return clamped;
+}
+
 function movePet(x: number, y: number): { x: number; y: number } {
   const pet = ensurePetWindow();
-  const bounds = pet.getBounds();
-  const clamped = clampRectToWorkArea({ x, y, width: bounds.width, height: bounds.height });
-  pet.setPosition(clamped.x, clamped.y);
-  return clamped;
+  return setPetContentOrigin(pet, x, y);
+}
+
+function positionPetAtPrimaryBottomRight(margin = 24): void {
+  const pet = ensurePetWindow();
+  const work = screen.getPrimaryDisplay().workArea;
+  const { width, height } = PET_WINDOW_SIZE;
+  // 默认初始位置走 workArea + margin（避免一启动桌宠就压在任务栏上），
+  // 但后续所有 clamp 都用 display.bounds，让用户能拖到物理边缘。
+  const x = Math.max(work.x, work.x + work.width - width - margin);
+  const y = Math.max(work.y, work.y + work.height - height - margin);
+  setPetContentOrigin(pet, Math.round(x), Math.round(y));
 }
 
 function ensurePetOnScreen(): void {
   const pet = ensurePetWindow();
-  clampPetWindow(pet);
+  clampPetWindow(pet, PET_WINDOW_SIZE);
   if (!pet.isVisible()) pet.show();
+}
+
+/**
+ * 记录拖动开始时光标与窗口"内容原点"的偏移。
+ * 全程使用主进程 screen API（getCursorScreenPoint / getContentBounds），
+ * 无需接触渲染进程的 CSS 像素，彻底规避 HiDPI 坐标空间差异。
+ *
+ * 用 getContentBounds 而不是 getBounds：避开 electron#27651 那个累积漂移 bug，
+ * 让 dx/dy 不会被错误的 width/height 误差污染。
+ */
+function petDragStart(): void {
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return;
+  const cursor = screen.getCursorScreenPoint();
+  const content = pet.getContentBounds();
+  dragCursorOffset = { dx: cursor.x - content.x, dy: cursor.y - content.y };
+}
+
+/**
+ * 拖动过程中持续调用：以当前光标位置减去初始偏移得到新窗口位置，
+ * clamp 后用 setContentBounds 写回（width/height 永远走常量 PET_WINDOW_SIZE，
+ * 完全屏蔽尺寸漂移，保证可达边界稳定）。
+ */
+function petDragMove(): void {
+  if (!dragCursorOffset) return;
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return;
+  const cursor = screen.getCursorScreenPoint();
+  const { width, height } = PET_WINDOW_SIZE;
+  const newX = cursor.x - dragCursorOffset.dx;
+  const newY = cursor.y - dragCursorOffset.dy;
+  const clamped = clampRectToDisplayBounds({ x: newX, y: newY, width, height });
+  pet.setContentBounds({ x: clamped.x, y: clamped.y, width, height });
+
+  // 关键：当窗口被 clamp 在屏幕边缘时，光标可能已经"溢出"到桌宠 sprite
+  // 之外（cursor.x 仍在递增，但 newX 一直被 clamp 到 maxX）。如果不处理，
+  // 用户把光标拉回时需要先把光标走过整个"溢出量"，桌宠才会重新跟手——
+  // 这就是用户感觉到的"桌宠在某个轴上被卡死，只能沿另一个轴移动"。
+  // 这里在 clamp 发生时同步重锚 offset，保持 cursor 与桌宠之间始终是有效绑定。
+  if (clamped.x !== newX) {
+    dragCursorOffset.dx = cursor.x - clamped.x;
+  }
+  if (clamped.y !== newY) {
+    dragCursorOffset.dy = cursor.y - clamped.y;
+  }
+
+}
+
+function petDragEnd(): { x: number; y: number } | null {
+  dragCursorOffset = null;
+  if (!petWin || petWin.isDestroyed()) return null;
+  const content = petWin.getContentBounds();
+  return { x: content.x, y: content.y };
 }
 
 void app.whenReady().then(() => {
   const vault = new LocalVault();
+  purgeRetiredCharacters(vault);
   applyDevSetup(vault);
   const llm = new LLMAdapter(() => {
     const json = vault.getSetting("llm_provider_json");
@@ -163,6 +298,22 @@ void app.whenReady().then(() => {
     }
   );
   const orchestrator = new NuwaOrchestrator(llm, { imageGen, vault });
+  const proactive = new ProactiveOrchestrator({
+    vault,
+    getActiveCharacterId: () => activeCharacterId,
+    isChatVisible,
+    broadcast: broadcastToAllWindows,
+    // 删了独立气泡窗后，主动 whisper 暂时不弹任何 UI（仍然 broadcast 事件，
+    // 方便未来按"系统通知"等更轻量的方式接入）。
+    onWhisperPublished: () => {
+      // intentionally noop —— see proactive intensity / hush settings to fully disable
+    }
+  });
+  ambientMonitor = new AmbientMonitor();
+  ambientMonitor.onSignal((signal) => {
+    void proactive.handleSignal(signal);
+  });
+  ambientMonitor.start();
 
   activeCharacterId = vault.getSetting("active_character_id") || null;
 
@@ -173,18 +324,30 @@ void app.whenReady().then(() => {
     orchestrator,
     llm,
     imageGen,
+    proactive,
     getActiveCharacterId: () => activeCharacterId,
     setActiveCharacterId: (id) => {
       activeCharacterId = id;
     },
     broadcast: broadcastToAllWindows,
-    getPetBounds: () => (petWin && !petWin.isDestroyed() ? petWin.getBounds() : null),
+    getPetBounds: () => {
+      if (!petWin || petWin.isDestroyed()) return null;
+      // 用 contentBounds 取位置（不受 electron#27651 size 漂移污染），
+      // width/height 永远走常量，让气泡定位 / chat 跟随等下游消费者拿到稳定的几何。
+      const content = petWin.getContentBounds();
+      const { width, height } = PET_WINDOW_SIZE;
+      return { x: content.x, y: content.y, width, height };
+    },
+    summonPetBubble,
     showChatNearPet,
     hideChat,
     hidePet,
     movePet,
     ensurePetOnScreen,
-    ensureSettingsWindow
+    ensureSettingsWindow,
+    petDragStart,
+    petDragMove,
+    petDragEnd
   });
 
   // 首启没完成 → 自动打开 Settings 走 Wizard；否则只确保桌宠在桌面，
@@ -195,31 +358,32 @@ void app.whenReady().then(() => {
   }
   ensurePetWindow();
 
-  // 恢复上次保存的桌宠位置（越界则拉回可见区域）
+  // 恢复上次保存的桌宠位置（越界则拉回完整屏幕内）
+  // 注意：这里用 display.bounds + margin 0，跟拖动 clamp 一致；
+  // 之前用 workArea + margin 8 会把保存位置每次启动都"收缩"一截，
+  // 多次后用户能感觉到桌宠的活动范围越用越小。
+  // 同时统一走 setContentBounds + 常量 PET_WINDOW_SIZE，避开 electron#27651
+  // 在 Windows 非整数 DPI 上 setPosition 累积漂移的 bug。
   try {
     const posJson = vault.getSetting(SETTING_PET_POS);
     if (posJson && petWin) {
       const pos = JSON.parse(posJson) as { x: number; y: number };
       if (typeof pos.x === "number" && typeof pos.y === "number") {
-        const bounds = petWin.getBounds();
-        const clamped = clampRectToWorkArea({
-          x: pos.x,
-          y: pos.y,
-          width: bounds.width,
-          height: bounds.height
-        });
-        petWin.setPosition(clamped.x, clamped.y);
+        const clamped = setPetContentOrigin(petWin, pos.x, pos.y);
         if (clamped.x !== pos.x || clamped.y !== pos.y) {
           vault.setSetting(SETTING_PET_POS, JSON.stringify(clamped));
         }
       }
+    } else {
+      positionPetAtPrimaryBottomRight();
     }
   } catch {
     // ignore corrupted position
+    positionPetAtPrimaryBottomRight();
   }
 
   const ok = globalShortcut.register("CommandOrControl+Shift+P", () => {
-    showChatNearPet();
+    summonPetBubble();
   });
   if (!ok) {
     log.warn("[main] global shortcut Ctrl+Shift+P registration failed");
@@ -228,11 +392,15 @@ void app.whenReady().then(() => {
   const trayIcon = nativeImage.createEmpty();
   tray = new Tray(trayIcon);
   tray.setToolTip("百灵 Bailin");
-  tray.on("click", () => showChatNearPet());
+  tray.on("click", () => summonPetBubble());
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
         label: "唤起对话",
+        click: () => summonPetBubble()
+      },
+      {
+        label: "展开完整聊天窗",
         click: () => showChatNearPet()
       },
       {
@@ -263,5 +431,6 @@ void app.whenReady().then(() => {
 });
 
 app.on("will-quit", () => {
+  ambientMonitor?.stop();
   globalShortcut.unregisterAll();
 });

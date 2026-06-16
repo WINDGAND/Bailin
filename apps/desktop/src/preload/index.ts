@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type ImageTierName } from "../shared/ipc-contract.js";
+import { IPC, type BubbleMode, type ImageTierName } from "../shared/ipc-contract.js";
 
 const api = {
   app: {
@@ -66,8 +66,25 @@ const api = {
     hush: (ms: number) => ipcRenderer.invoke(IPC.PetHush, ms),
     setPosition: (x: number, y: number) => ipcRenderer.invoke(IPC.PetSetPosition, x, y),
     setMouseIgnore: (ignore: boolean) => ipcRenderer.invoke(IPC.PetSetMouseIgnore, ignore),
+    openChat: () => ipcRenderer.invoke(IPC.PetOpenChat),
     openSettings: () => ipcRenderer.invoke(IPC.PetOpenSettings),
-    hide: () => ipcRenderer.invoke(IPC.PetHide)
+    hide: () => ipcRenderer.invoke(IPC.PetHide),
+    dragStart: () => ipcRenderer.invoke(IPC.PetDragStart),
+    dragMove: () => ipcRenderer.invoke(IPC.PetDragMove),
+    dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd)
+  },
+  bubble: {
+    show: () => ipcRenderer.invoke(IPC.BubbleShow),
+    hide: () => ipcRenderer.invoke(IPC.BubbleHide),
+    refreshDirection: () => ipcRenderer.invoke(IPC.BubbleRefreshDirection),
+    setMode: (mode: BubbleMode) => ipcRenderer.invoke(IPC.BubbleSetMode, mode),
+    advanceToTalking: () => ipcRenderer.invoke(IPC.BubbleAdvanceToTalking)
+  },
+  proactive: {
+    getSettings: () => ipcRenderer.invoke(IPC.ProactiveGetSettings),
+    setSettings: (input: unknown) => ipcRenderer.invoke(IPC.ProactiveSetSettings, input),
+    getStatus: () => ipcRenderer.invoke(IPC.ProactiveGetStatus),
+    triggerNow: (reason?: string) => ipcRenderer.invoke(IPC.ProactiveTriggerNow, reason)
   },
   on: {
     chatStream(handler: (chunk: unknown) => void) {
@@ -84,6 +101,26 @@ const api = {
       const listener = () => handler();
       ipcRenderer.on(IPC.EventPetSummon, listener);
       return () => ipcRenderer.removeListener(IPC.EventPetSummon, listener);
+    },
+    bubbleDirection(handler: (dir: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventBubbleDirection, listener);
+      return () => ipcRenderer.removeListener(IPC.EventBubbleDirection, listener);
+    },
+    bubbleMode(handler: (mode: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventBubbleMode, listener);
+      return () => ipcRenderer.removeListener(IPC.EventBubbleMode, listener);
+    },
+    proactiveWhisper(handler: (evt: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventProactiveWhisper, listener);
+      return () => ipcRenderer.removeListener(IPC.EventProactiveWhisper, listener);
+    },
+    ambientSignal(handler: (evt: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventAmbientSignal, listener);
+      return () => ipcRenderer.removeListener(IPC.EventAmbientSignal, listener);
     },
     distillationProgress(handler: (evt: unknown) => void) {
       const listener = (_e: unknown, p: unknown) => handler(p);

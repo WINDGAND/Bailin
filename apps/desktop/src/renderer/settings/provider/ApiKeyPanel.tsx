@@ -398,7 +398,7 @@ export function ApiKeyPanel(): JSX.Element {
 
   return (
     <div>
-      <div className="apple-page-header">
+      <div style={{ marginBottom: 26 }}>
         <div className="eyebrow">Provider</div>
         <div className="display display--page">模型与 API Key</div>
         <p className="apple-page-subtitle">
@@ -406,7 +406,7 @@ export function ApiKeyPanel(): JSX.Element {
         </p>
       </div>
 
-      <div className="bl-card apple-panel">
+      <div style={{ maxWidth: 760 }}>
         <div className="bl-card__head">
           <div>
             <div className="bl-card__title">对话模型</div>
@@ -585,7 +585,7 @@ export function ApiKeyPanel(): JSX.Element {
         </div>
       </div>
 
-      <details className="bl-card apple-panel" style={{ padding: 0 }}>
+      <details style={{ maxWidth: 760, borderTop: "1px solid var(--grid-strong)", marginTop: 8, padding: 0 }}>
         <summary
           style={{
             cursor: "pointer",
