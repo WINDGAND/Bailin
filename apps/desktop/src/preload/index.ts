@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type BubbleMode, type ImageTierName } from "../shared/ipc-contract.js";
+import { IPC, type ImageTierName } from "../shared/ipc-contract.js";
 
 const api = {
   app: {
@@ -73,13 +73,6 @@ const api = {
     dragMove: () => ipcRenderer.invoke(IPC.PetDragMove),
     dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd)
   },
-  bubble: {
-    show: () => ipcRenderer.invoke(IPC.BubbleShow),
-    hide: () => ipcRenderer.invoke(IPC.BubbleHide),
-    refreshDirection: () => ipcRenderer.invoke(IPC.BubbleRefreshDirection),
-    setMode: (mode: BubbleMode) => ipcRenderer.invoke(IPC.BubbleSetMode, mode),
-    advanceToTalking: () => ipcRenderer.invoke(IPC.BubbleAdvanceToTalking)
-  },
   proactive: {
     getSettings: () => ipcRenderer.invoke(IPC.ProactiveGetSettings),
     setSettings: (input: unknown) => ipcRenderer.invoke(IPC.ProactiveSetSettings, input),
@@ -101,16 +94,6 @@ const api = {
       const listener = () => handler();
       ipcRenderer.on(IPC.EventPetSummon, listener);
       return () => ipcRenderer.removeListener(IPC.EventPetSummon, listener);
-    },
-    bubbleDirection(handler: (dir: unknown) => void) {
-      const listener = (_e: unknown, p: unknown) => handler(p);
-      ipcRenderer.on(IPC.EventBubbleDirection, listener);
-      return () => ipcRenderer.removeListener(IPC.EventBubbleDirection, listener);
-    },
-    bubbleMode(handler: (mode: unknown) => void) {
-      const listener = (_e: unknown, p: unknown) => handler(p);
-      ipcRenderer.on(IPC.EventBubbleMode, listener);
-      return () => ipcRenderer.removeListener(IPC.EventBubbleMode, listener);
     },
     proactiveWhisper(handler: (evt: unknown) => void) {
       const listener = (_e: unknown, p: unknown) => handler(p);

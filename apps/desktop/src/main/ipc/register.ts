@@ -641,16 +641,6 @@ export function registerIpc(deps: IpcDeps): void {
     if (pos) vault.setSetting(SETTING_PET_POS, JSON.stringify(pos));
   });
 
-  // ===== Bubble window =====
-  ipcMain.handle(IPC.BubbleShow, () => deps.showBubbleNearPet());
-  ipcMain.handle(IPC.BubbleHide, () => deps.hideBubble());
-  ipcMain.handle(IPC.BubbleRefreshDirection, () => deps.refreshBubbleDirection());
-  ipcMain.handle(IPC.BubbleSetMode, (_e, mode: BubbleMode) => {
-    if (mode !== "greeting" && mode !== "talking" && mode !== "expanded") return;
-    deps.setBubbleMode(mode);
-  });
-  ipcMain.handle(IPC.BubbleAdvanceToTalking, () => deps.advanceBubbleToTalking());
-
   // ===== Proactive companion =====
   ipcMain.handle(IPC.ProactiveGetSettings, () => proactive.getSettings());
   ipcMain.handle(IPC.ProactiveSetSettings, (_e, input: ProactiveSettings) =>

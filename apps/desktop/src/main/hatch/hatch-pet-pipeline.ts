@@ -26,7 +26,9 @@ import {
   mirrorStripHorizontally,
   prepareHatchPetRun,
   validateAtlas,
-  type AtlasValidationReport
+  type AtlasValidationReport,
+  type ExtractedFrame,
+  type HatchJobSpec
 } from "@nuwa-pet/pet-atlas-tools";
 import type { LocalVault } from "../store/local-vault.js";
 import {
@@ -189,7 +191,7 @@ export class HatchPetPipeline {
       estimatedCostPerImageUsd: 0.05
     });
 
-    const totalJobsCount = manifest.jobs.filter((j) => !j.mirrorableFrom).length;
+    const totalJobsCount = manifest.jobs.filter((j: HatchJobSpec) => !j.mirrorableFrom).length;
     const estimatedCost = totalJobsCount * 0.05;
     input.onProgress?.({
       kind: "start",
@@ -326,7 +328,7 @@ export class HatchPetPipeline {
           },
           cell
         );
-        rowFramesPng[rowState] = frames.map((f) => f.png);
+        rowFramesPng[rowState] = frames.map((f: ExtractedFrame) => f.png);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         warnings.push(`row-${rowState} 裁帧失败：${msg}，用 base 兜底`);

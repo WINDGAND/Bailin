@@ -144,25 +144,6 @@ export interface BailinApi {
     dragEnd(): Promise<void>;
   };
 
-  // ===== 桌宠气泡（独立窗口） =====
-  bubble: {
-    show(): Promise<void>;
-    hide(): Promise<void>;
-    /** 重新计算并应用方位（拖动后等场景）。 */
-    refreshDirection(): Promise<void>;
-    /**
-     * 渲染层主动告知主进程：气泡当前已经升级到 talking / expanded。
-     * 主进程把它记到 currentBubbleMode 上，让"再点桌宠"等入口可以根据当前模式做对应分支。
-     */
-    setMode(mode: BubbleMode): Promise<void>;
-    /**
-     * 渲染层显式请求 greeting → talking 升级。
-     * 主进程会广播 EventBubbleMode = "talking"，让所有订阅者保持一致。
-     * （之所以走主进程而不是渲染层自己 setState：未来"再点桌宠"会从主进程触发同一动作。）
-     */
-    advanceToTalking(): Promise<void>;
-  };
-
   // ===== 主动陪伴 / 屏幕感知 =====
   proactive: {
     getSettings(): Promise<ProactiveSettings>;
@@ -176,26 +157,12 @@ export interface BailinApi {
     chatStream(handler: (chunk: ChatStreamChunk) => void): () => void;
     activeCharacterChanged(handler: (bundle: CharacterBundle | null) => void): () => void;
     petSummon(handler: () => void): () => void;
-    bubbleDirection(handler: (direction: BubbleDirectionPayload) => void): () => void;
-    /**
-     * 主进程广播气泡当前应该处于哪种模式。
-     * 渲染层据此切换 PetSpeechBubble 的 greeting / talking / expanded 形态。
-     */
-    bubbleMode(handler: (mode: BubbleMode) => void): () => void;
     proactiveWhisper(handler: (evt: ProactiveWhisperEvent) => void): () => void;
     ambientSignal(handler: (evt: AmbientSignal) => void): () => void;
     /** 深度蒸馏的实时进度（包含 6 个 Agent 各自的开始 / 结束）。 */
     distillationProgress(handler: (evt: DistillationProgressEvent) => void): () => void;
   };
 }
-
-/**
- * 桌宠气泡的三种交互形态。
- * - greeting：桌宠主动说一句（点击招呼 / 主动 whisper），无输入框，0 cost。
- * - talking：在最新一句之下再加输入框，让用户可以轻量回应而不必打开完整聊天窗。
- * - expanded：talking 之上临时展开最近 3-5 轮上下文，离开就折回 talking。
- */
-export type BubbleMode = "greeting" | "talking" | "expanded";
 
 /** 渲染进程接收到的深度蒸馏事件（与 NuwaOrchestrator.DeepProgressEvent 对齐，但去掉了 bundle 类型）。 */
 export type DistillationProgressEvent =
@@ -423,8 +390,6 @@ export interface ProactiveWhisperEvent {
   createdAt: number;
 }
 
-export type BubbleDirectionPayload = "TL" | "TR" | "BL" | "BR" | "L" | "R";
-
 export const IPC = {
   AppIsFirstRun: "nuwa.app.isFirstRun",
   AppCompleteFirstRun: "nuwa.app.completeFirstRun",
@@ -485,12 +450,6 @@ export const IPC = {
   PetDragMove: "nuwa.pet.dragMove",
   PetDragEnd: "nuwa.pet.dragEnd",
 
-  BubbleShow: "nuwa.bubble.show",
-  BubbleHide: "nuwa.bubble.hide",
-  BubbleRefreshDirection: "nuwa.bubble.refreshDirection",
-  BubbleSetMode: "nuwa.bubble.setMode",
-  BubbleAdvanceToTalking: "nuwa.bubble.advanceToTalking",
-
   ProactiveGetSettings: "nuwa.proactive.getSettings",
   ProactiveSetSettings: "nuwa.proactive.setSettings",
   ProactiveGetStatus: "nuwa.proactive.getStatus",
@@ -499,8 +458,6 @@ export const IPC = {
   EventChatStream: "nuwa.event.chatStream",
   EventActiveCharacterChanged: "nuwa.event.activeCharacterChanged",
   EventPetSummon: "nuwa.event.petSummon",
-  EventBubbleDirection: "nuwa.event.bubbleDirection",
-  EventBubbleMode: "nuwa.event.bubbleMode",
   EventProactiveWhisper: "nuwa.event.proactiveWhisper",
   EventAmbientSignal: "nuwa.event.ambientSignal",
   EventDistillationProgress: "nuwa.event.distillationProgress"

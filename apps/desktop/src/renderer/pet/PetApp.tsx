@@ -267,7 +267,9 @@ export function PetApp(): JSX.Element {
             onSummon={() => void nuwa.pet.summon()}
             onHush={() => {
               void nuwa.pet.hush(30 * 60 * 1000);
-              void nuwa.bubble.hide();
+              // hush 后顺手把聊天窗也收起来，让"安静 30 分钟"是真的安静——
+              // 没有任何窗口在前台等用户回应。
+              void nuwa.chat.hide();
               setMenu(null);
             }}
             onOpenSettings={() => void nuwa.pet.openSettings()}

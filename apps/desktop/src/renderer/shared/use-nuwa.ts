@@ -7,8 +7,6 @@ import type {
 } from "@nuwa-pet/character-protocol";
 import type {
   AmbientSignal,
-  BubbleDirectionPayload,
-  BubbleMode,
   DistillationProgressEvent,
   ImageGenerationConfigDTO,
   ImageTierName,
@@ -97,13 +95,6 @@ interface NuwaWindow {
       clearAll(): Promise<void>;
     };
     pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(): Promise<void>; hide(): Promise<void>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
-    bubble: {
-      show(): Promise<void>;
-      hide(): Promise<void>;
-      refreshDirection(): Promise<void>;
-      setMode(mode: BubbleMode): Promise<void>;
-      advanceToTalking(): Promise<void>;
-    };
     proactive: {
       getSettings(): Promise<ProactiveSettings>;
       setSettings(input: ProactiveSettings): Promise<ProactiveSettings>;
@@ -114,8 +105,6 @@ interface NuwaWindow {
       chatStream(h: (chunk: { requestId: string; sessionId: string; done: boolean; delta?: string; error?: string; finishReason?: string }) => void): () => void;
       activeCharacterChanged(h: (bundle: CharacterBundle | null) => void): () => void;
       petSummon(h: () => void): () => void;
-      bubbleDirection(h: (dir: BubbleDirectionPayload) => void): () => void;
-      bubbleMode(h: (mode: BubbleMode) => void): () => void;
       proactiveWhisper(h: (evt: ProactiveWhisperEvent) => void): () => void;
       ambientSignal(h: (evt: AmbientSignal) => void): () => void;
       distillationProgress(h: (evt: DistillationProgressEvent) => void): () => void;
@@ -251,13 +240,6 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       dragMove: async () => undefined,
       dragEnd: async () => undefined
     },
-    bubble: {
-      show: async () => undefined,
-      hide: async () => undefined,
-      refreshDirection: async () => undefined,
-      setMode: async () => undefined,
-      advanceToTalking: async () => undefined
-    },
     proactive: {
       getSettings: async () => ({
         enabled: false,
@@ -281,8 +263,6 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       chatStream: noopOff,
       activeCharacterChanged: noopOff,
       petSummon: noopOff,
-      bubbleDirection: noopOff,
-      bubbleMode: noopOff,
       proactiveWhisper: noopOff,
       ambientSignal: noopOff,
       distillationProgress: noopOff
