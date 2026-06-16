@@ -83,7 +83,17 @@ interface NuwaWindow {
       send(input: { characterId: string; sessionId: string; content: string; surface?: "bubble" | "chat"; userTurnId?: string; skipUserAppend?: boolean }): Promise<{ requestId: string; userTurnId: string; assistantTurnId: string }>;
       cancel(requestId: string): Promise<void>;
       newSession(characterId: string): Promise<{ sessionId: string }>;
-      getRecent(characterId: string): Promise<Array<{ id: string; role: "user" | "assistant" | "system"; content: string; createdAt: number }>>;
+      getActiveSession(characterId: string): Promise<{ sessionId: string }>;
+      getRecent(
+        characterId: string,
+        sessionId?: string
+      ): Promise<Array<{ id: string; role: "user" | "assistant" | "system"; content: string; createdAt: number }>>;
+      listSessions(
+        characterId: string
+      ): Promise<Array<{ id: string; title: string; messageCount: number; createdAt: number; updatedAt: number }>>;
+      switchSession(input: { characterId: string; sessionId: string }): Promise<{ ok: boolean }>;
+      renameSession(input: { characterId: string; sessionId: string; title: string }): Promise<{ ok: boolean }>;
+      deleteSession(input: { characterId: string; sessionId: string }): Promise<{ ok: boolean }>;
       hide(): Promise<void>;
       getSize(): Promise<{ width: number; height: number }>;
       resize(input: { width: number; height: number }): Promise<{ width: number; height: number }>;
@@ -217,7 +227,12 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       send: async () => ({ requestId: "stub", userTurnId: "stub-u", assistantTurnId: "stub-a" }),
       cancel: async () => undefined,
       newSession: async () => ({ sessionId: "stub" }),
+      getActiveSession: async () => ({ sessionId: "stub" }),
       getRecent: async () => [],
+      listSessions: async () => [],
+      switchSession: async () => ({ ok: true }),
+      renameSession: async () => ({ ok: true }),
+      deleteSession: async () => ({ ok: true }),
       hide: async () => undefined,
       getSize: async () => ({ width: 380, height: 480 }),
       resize: async (input) => input,

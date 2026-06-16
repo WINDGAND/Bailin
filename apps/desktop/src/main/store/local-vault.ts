@@ -12,6 +12,13 @@ import { RESEARCH_AGENT_LABELS } from "@nuwa-pet/character-protocol";
 
 const USER_DATA_DIR = "Bailin";
 const LEGACY_USER_DATA_DIR = "NuwaPet";
+const DEFAULT_CHAT_SESSION_TITLE = "新的对话";
+
+function deriveChatSessionTitle(content: string): string {
+  const oneLine = content.replace(/\s+/g, " ").trim();
+  if (!oneLine) return DEFAULT_CHAT_SESSION_TITLE;
+  return oneLine.length > 36 ? `${oneLine.slice(0, 36)}…` : oneLine;
+}
 
 function resolveUserDataRoot(): string {
   const base = app.getPath("userData");
@@ -94,6 +101,15 @@ export class LocalVault {
       );
       CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_turns(character_id, session_id, created_at);
 
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id TEXT PRIMARY KEY,
+        character_id TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '新的对话',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_chat_sessions_char ON chat_sessions(character_id, updated_at DESC);
+
       CREATE TABLE IF NOT EXISTS distillation_jobs (
         id TEXT PRIMARY KEY,
         character_id TEXT,
@@ -125,6 +141,41 @@ export class LocalVault {
       );
       CREATE INDEX IF NOT EXISTS idx_research_char ON research_docs(character_id, agent_id);
     `);
+    this.backfillChatSessions();
+  }
+
+  private backfillChatSessions(): void {
+    const rows = this.db
+      .prepare(
+        `SELECT character_id, session_id,
+                MIN(created_at) AS created_at,
+                MAX(created_at) AS updated_at
+         FROM chat_turns
+         GROUP BY character_id, session_id`
+      )
+      .all() as Array<{
+      character_id: string;
+      session_id: string;
+      created_at: number;
+      updated_at: number;
+    }>;
+    const insert = this.db.prepare(
+      `INSERT INTO chat_sessions (id, character_id, title, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO NOTHING`
+    );
+    const firstUser = this.db.prepare(
+      `SELECT content FROM chat_turns
+       WHERE character_id = ? AND session_id = ? AND role = 'user'
+       ORDER BY created_at ASC LIMIT 1`
+    );
+    for (const row of rows) {
+      const userRow = firstUser.get(row.character_id, row.session_id) as
+        | { content: string }
+        | undefined;
+      const title = deriveChatSessionTitle(userRow?.content ?? "");
+      insert.run(row.session_id, row.character_id, title, row.created_at, row.updated_at);
+    }
   }
 
   // ===== Settings =====
@@ -331,6 +382,115 @@ export class LocalVault {
          VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run(turn.id, turn.characterId, turn.sessionId, turn.role, turn.content, turn.createdAt);
+    this.touchChatSession(turn.characterId, turn.sessionId, turn.createdAt);
+    if (turn.role === "user") {
+      this.maybeSetSessionTitleFromFirstUser(turn.sessionId, turn.content);
+    }
+  }
+
+  createChatSession(characterId: string, sessionId: string, title = DEFAULT_CHAT_SESSION_TITLE): void {
+    const now = Date.now();
+    this.db
+      .prepare(
+        `INSERT INTO chat_sessions (id, character_id, title, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO NOTHING`
+      )
+      .run(sessionId, characterId, title, now, now);
+  }
+
+  chatSessionExists(sessionId: string): boolean {
+    const row = this.db.prepare("SELECT 1 FROM chat_sessions WHERE id = ?").get(sessionId);
+    return row != null;
+  }
+
+  touchChatSession(characterId: string, sessionId: string, updatedAt: number): void {
+    this.createChatSession(characterId, sessionId);
+    this.db
+      .prepare("UPDATE chat_sessions SET updated_at = ? WHERE id = ?")
+      .run(updatedAt, sessionId);
+  }
+
+  maybeSetSessionTitleFromFirstUser(sessionId: string, content: string): void {
+    const row = this.db
+      .prepare("SELECT title FROM chat_sessions WHERE id = ?")
+      .get(sessionId) as { title: string } | undefined;
+    if (!row || row.title !== DEFAULT_CHAT_SESSION_TITLE) return;
+    const title = deriveChatSessionTitle(content);
+    this.db.prepare("UPDATE chat_sessions SET title = ? WHERE id = ?").run(title, sessionId);
+  }
+
+  listChatSessions(
+    characterId: string,
+    limit = 50
+  ): Array<{
+    id: string;
+    title: string;
+    messageCount: number;
+    createdAt: number;
+    updatedAt: number;
+  }> {
+    const rows = this.db
+      .prepare(
+        `SELECT s.id, s.title, s.created_at, s.updated_at,
+                (SELECT COUNT(*) FROM chat_turns t
+                 WHERE t.character_id = s.character_id AND t.session_id = s.id) AS message_count
+         FROM chat_sessions s
+         WHERE s.character_id = ?
+         ORDER BY s.updated_at DESC
+         LIMIT ?`
+      )
+      .all(characterId, limit) as Array<{
+      id: string;
+      title: string;
+      created_at: number;
+      updated_at: number;
+      message_count: number;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      messageCount: r.message_count,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    }));
+  }
+
+  renameChatSession(sessionId: string, title: string): boolean {
+    const trimmed = title.trim();
+    if (!trimmed) return false;
+    const r = this.db
+      .prepare("UPDATE chat_sessions SET title = ? WHERE id = ?")
+      .run(trimmed.slice(0, 80), sessionId);
+    return r.changes > 0;
+  }
+
+  deleteChatSession(characterId: string, sessionId: string): boolean {
+    this.db
+      .prepare("DELETE FROM chat_turns WHERE character_id = ? AND session_id = ?")
+      .run(characterId, sessionId);
+    const r = this.db.prepare("DELETE FROM chat_sessions WHERE id = ?").run(sessionId);
+    return r.changes > 0;
+  }
+
+  getLatestChatSession(characterId: string): { id: string } | null {
+    const row = this.db
+      .prepare(
+        `SELECT id FROM chat_sessions
+         WHERE character_id = ?
+         ORDER BY updated_at DESC
+         LIMIT 1`
+      )
+      .get(characterId) as { id: string } | undefined;
+    return row ?? null;
+  }
+
+  getActiveSessionId(characterId: string): string | null {
+    return this.getSetting(`session.${characterId}`);
+  }
+
+  setActiveSessionId(characterId: string, sessionId: string): void {
+    this.setSetting(`session.${characterId}`, sessionId);
   }
 
   deleteTurn(turnId: string): boolean {
@@ -386,6 +546,7 @@ export class LocalVault {
                   DELETE FROM user_profile;
                   DELETE FROM per_character_notes;
                   DELETE FROM chat_turns;
+                  DELETE FROM chat_sessions;
                   DELETE FROM settings;
                   DELETE FROM distillation_jobs;
                   DELETE FROM research_docs;`);

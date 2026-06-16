@@ -27,7 +27,41 @@ export class CharacterRuntime {
 
   newSession(characterId: string): string {
     this.firstActivation.delete(characterId);
-    return ulid();
+    const sessionId = ulid();
+    this.vault.createChatSession(characterId, sessionId);
+    this.vault.setActiveSessionId(characterId, sessionId);
+    return sessionId;
+  }
+
+  getOrCreateActiveSession(characterId: string): string {
+    const active = this.vault.getActiveSessionId(characterId);
+    if (active && this.vault.chatSessionExists(active)) {
+      return active;
+    }
+    const latest = this.vault.getLatestChatSession(characterId);
+    if (latest) {
+      this.vault.setActiveSessionId(characterId, latest.id);
+      return latest.id;
+    }
+    return this.newSession(characterId);
+  }
+
+  listChatSessions(characterId: string, limit = 50) {
+    return this.vault.listChatSessions(characterId, limit);
+  }
+
+  switchSession(characterId: string, sessionId: string): boolean {
+    if (!this.vault.chatSessionExists(sessionId)) return false;
+    this.vault.setActiveSessionId(characterId, sessionId);
+    return true;
+  }
+
+  renameChatSession(sessionId: string, title: string): boolean {
+    return this.vault.renameChatSession(sessionId, title);
+  }
+
+  deleteChatSession(characterId: string, sessionId: string): boolean {
+    return this.vault.deleteChatSession(characterId, sessionId);
   }
 
   ensureSession(characterId: string, sessionId: string | undefined): string {

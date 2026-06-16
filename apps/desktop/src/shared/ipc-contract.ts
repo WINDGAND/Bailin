@@ -113,7 +113,12 @@ export interface BailinApi {
     send(input: SendMessageInput): Promise<{ requestId: string; userTurnId: string; assistantTurnId: string }>;
     cancel(requestId: string): Promise<void>;
     newSession(characterId: string): Promise<{ sessionId: string }>;
-    getRecent(characterId: string): Promise<ChatTurn[]>;
+    getActiveSession(characterId: string): Promise<{ sessionId: string }>;
+    getRecent(characterId: string, sessionId?: string): Promise<ChatTurn[]>;
+    listSessions(characterId: string): Promise<ChatSessionSummary[]>;
+    switchSession(input: SwitchChatSessionInput): Promise<{ ok: boolean }>;
+    renameSession(input: RenameChatSessionInput): Promise<{ ok: boolean }>;
+    deleteSession(input: DeleteChatSessionInput): Promise<{ ok: boolean }>;
     hide(): Promise<void>;
     getSize(): Promise<{ width: number; height: number }>;
     resize(input: { width: number; height: number }): Promise<{ width: number; height: number }>;
@@ -345,6 +350,30 @@ export interface DeleteChatTurnInput {
   turnId: string;
 }
 
+export interface SwitchChatSessionInput {
+  characterId: string;
+  sessionId: string;
+}
+
+export interface RenameChatSessionInput {
+  characterId: string;
+  sessionId: string;
+  title: string;
+}
+
+export interface DeleteChatSessionInput {
+  characterId: string;
+  sessionId: string;
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  title: string;
+  messageCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ChatStreamChunk {
   requestId: string;
   sessionId: string;
@@ -444,7 +473,12 @@ export const IPC = {
   ChatSend: "nuwa.chat.send",
   ChatCancel: "nuwa.chat.cancel",
   ChatNewSession: "nuwa.chat.newSession",
+  ChatGetActiveSession: "nuwa.chat.getActiveSession",
   ChatGetRecent: "nuwa.chat.getRecent",
+  ChatListSessions: "nuwa.chat.listSessions",
+  ChatSwitchSession: "nuwa.chat.switchSession",
+  ChatRenameSession: "nuwa.chat.renameSession",
+  ChatDeleteSession: "nuwa.chat.deleteSession",
   ChatHide: "nuwa.chat.hide",
   ChatGetSize: "nuwa.chat.getSize",
   ChatResize: "nuwa.chat.resize",

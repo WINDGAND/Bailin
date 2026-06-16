@@ -13,6 +13,7 @@ import { ChatBubble } from "../shared/chat-bubble.js";
 import { useChatSession } from "../shared/use-chat-session.js";
 import { useChatScroll } from "../shared/use-chat-scroll.js";
 import { ChatResizeHandles } from "./ChatResizeHandles.js";
+import { ChatHistoryPanel } from "./ChatHistoryPanel.js";
 
 export function ChatApp(): JSX.Element {
   const nuwa = useNuwa();
@@ -20,6 +21,7 @@ export function ChatApp(): JSX.Element {
   const { showToast } = useToast();
 
   const [input, setInput] = useState<string>("");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const chat = useChatSession(bundle, {
@@ -88,6 +90,10 @@ export function ChatApp(): JSX.Element {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (historyOpen) {
+          setHistoryOpen(false);
+          return;
+        }
         void nuwa.chat.hide();
         return;
       }
@@ -98,7 +104,7 @@ export function ChatApp(): JSX.Element {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [nuwa, startNewSession]);
+  }, [nuwa, startNewSession, historyOpen]);
 
   // ===== textarea 自动高度 + 快捷键 =====
   function onTextareaKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
@@ -186,6 +192,18 @@ export function ChatApp(): JSX.Element {
           ) : null}
           <button
             type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="btn btn--icon"
+            data-hint="历史对话"
+            data-hint-placement="bottom"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+            aria-label="历史对话"
+            disabled={!bundle}
+          >
+            <HistoryIcon />
+          </button>
+          <button
+            type="button"
             onClick={() => void startNewSession()}
             className="btn btn--icon"
             data-hint="新对话 · Ctrl+L"
@@ -193,7 +211,7 @@ export function ChatApp(): JSX.Element {
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             aria-label="新对话"
           >
-            ↻
+            <PlusIcon />
           </button>
           <button
             type="button"
@@ -347,6 +365,22 @@ export function ChatApp(): JSX.Element {
             </button>
           )}
         </form>
+
+        {bundle && historyOpen ? (
+          <ChatHistoryPanel
+            open={historyOpen}
+            characterId={bundle.card.id}
+            activeSessionId={chat.sessionId}
+            onClose={() => setHistoryOpen(false)}
+            onSwitch={(sessionId) => {
+              forceScrollOnNextUpdate();
+              void chat.switchSession(sessionId);
+            }}
+            onNewSession={() => void startNewSession()}
+            onInfo={(text) => showToast({ kind: "info", text })}
+            onError={(text) => showToast({ kind: "error", text })}
+          />
+        ) : null}
       </div>
 
       {/* 持久错误提示条（次要） */}
@@ -374,6 +408,42 @@ interface Suggestion {
   title: string;
   hint: string;
   prompt: string;
+}
+
+function PlusIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="17"
+      height="17"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function HistoryIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="17"
+      height="17"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18M3 12h12M3 18h8" />
+      <circle cx="19" cy="12" r="2" fill="currentColor" stroke="none" />
+    </svg>
+  );
 }
 
 function ChevronDownIcon(): JSX.Element {

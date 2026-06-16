@@ -36,6 +36,7 @@ import {
   SETTING_PET_POS
 } from "./ipc/register.js";
 import { registerChatTurnHandlers } from "./ipc/chat-turn-handlers.js";
+import { registerChatSessionHandlers } from "./ipc/chat-session-handlers.js";
 import { createPetWindow, PET_WINDOW_SIZE } from "./windows/pet-window.js";
 import { clampPetWindow, clampRectToDisplayBounds } from "./windows/window-bounds.js";
 import {
@@ -409,6 +410,7 @@ void app.whenReady().then(() => {
   });
 
   registerChatTurnHandlers(runtime);
+  registerChatSessionHandlers(runtime, vault);
   log.info("[main] chat turn IPC registered (deleteTurn, deleteTurnsFrom)");
 
   // 首启没完成 → 自动打开 Settings 走 Wizard；否则只确保桌宠在桌面，

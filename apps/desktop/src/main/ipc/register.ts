@@ -526,9 +526,11 @@ export function registerIpc(deps: IpcDeps): void {
     sessionId: runtime.newSession(characterId)
   }));
 
-  ipcMain.handle(IPC.ChatGetRecent, (_e, characterId: string) => {
-    const sessionKey = vault.getSetting("session." + characterId);
-    if (!sessionKey) return [];
+  ipcMain.handle(IPC.ChatGetRecent, (_e, characterId: string, sessionId?: string) => {
+    const sessionKey =
+      sessionId && sessionId.length > 0
+        ? sessionId
+        : runtime.getOrCreateActiveSession(characterId);
     return runtime.getRecentTurns(characterId, sessionKey, 24);
   });
 

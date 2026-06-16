@@ -25,6 +25,7 @@ export interface ChatSessionState {
   submit(text: string): Promise<void>;
   cancel(): Promise<void>;
   startNewSession(): Promise<void>;
+  switchSession(sessionId: string): Promise<void>;
   retryLastUser(): void;
   clearError(): void;
   deleteTurn(turnId: string): Promise<void>;
@@ -50,6 +51,21 @@ export function useChatSession(
   const inFlightRef = useRef<string | null>(null);
   const pendingAssistantTurnIdRef = useRef<string | null>(null);
 
+  const loadSession = useCallback(
+    async (targetSessionId: string) => {
+      if (!bundle) return;
+      const recent = await nuwa.chat.getRecent(bundle.card.id, targetSessionId);
+      setSessionId(targetSessionId);
+      setTurns(toUiTurns(recent).slice(-(options.historyLimit ?? 24)));
+      setPending("");
+      setLastError(null);
+      setPhase("idle");
+      inFlightRef.current = null;
+      pendingAssistantTurnIdRef.current = null;
+    },
+    [bundle, nuwa, options.historyLimit]
+  );
+
   useEffect(() => {
     if (!bundle) {
       setSessionId("");
@@ -61,17 +77,10 @@ export function useChatSession(
       return;
     }
     void (async () => {
-      const r = await nuwa.chat.newSession(bundle.card.id);
-      setSessionId(r.sessionId);
-      const recent = await nuwa.chat.getRecent(bundle.card.id);
-      setTurns(toUiTurns(recent).slice(-(options.historyLimit ?? 24)));
-      setPending("");
-      setLastError(null);
-      setPhase("idle");
-      inFlightRef.current = null;
-      pendingAssistantTurnIdRef.current = null;
+      const active = await nuwa.chat.getActiveSession(bundle.card.id);
+      await loadSession(active.sessionId);
     })();
-  }, [bundle?.card.id, nuwa, options.historyLimit]);
+  }, [bundle?.card.id, nuwa, loadSession]);
 
   useEffect(() => {
     return nuwa.on.chatStream((chunk) => {
@@ -189,13 +198,26 @@ export function useChatSession(
     if (!bundle) return;
     if (inFlightRef.current) await cancel();
     const r = await nuwa.chat.newSession(bundle.card.id);
-    setSessionId(r.sessionId);
-    setTurns([]);
-    setPending("");
-    setLastError(null);
-    setPhase("idle");
+    await loadSession(r.sessionId);
     options.onInfo?.("新对话已开始");
-  }, [bundle, nuwa, cancel, options.onInfo]);
+  }, [bundle, nuwa, cancel, loadSession, options.onInfo]);
+
+  const switchSession = useCallback(
+    async (targetSessionId: string) => {
+      if (!bundle || targetSessionId === sessionId) return;
+      if (inFlightRef.current) await cancel();
+      const res = await nuwa.chat.switchSession({
+        characterId: bundle.card.id,
+        sessionId: targetSessionId
+      });
+      if (!res.ok) {
+        options.onError?.("切换对话失败");
+        return;
+      }
+      await loadSession(targetSessionId);
+    },
+    [bundle, sessionId, nuwa, cancel, loadSession, options.onError]
+  );
 
   const retryLastUser = useCallback(() => {
     const lastUser = [...turns].reverse().find((t) => t.role === "user");
@@ -305,6 +327,7 @@ export function useChatSession(
     submit,
     cancel,
     startNewSession,
+    switchSession,
     retryLastUser,
     clearError: () => setLastError(null),
     deleteTurn,

@@ -50,7 +50,14 @@ const api = {
     send: (input: unknown) => ipcRenderer.invoke(IPC.ChatSend, input),
     cancel: (requestId: string) => ipcRenderer.invoke(IPC.ChatCancel, requestId),
     newSession: (characterId: string) => ipcRenderer.invoke(IPC.ChatNewSession, characterId),
-    getRecent: (characterId: string) => ipcRenderer.invoke(IPC.ChatGetRecent, characterId),
+    getActiveSession: (characterId: string) =>
+      ipcRenderer.invoke(IPC.ChatGetActiveSession, characterId),
+    getRecent: (characterId: string, sessionId?: string) =>
+      ipcRenderer.invoke(IPC.ChatGetRecent, characterId, sessionId),
+    listSessions: (characterId: string) => ipcRenderer.invoke(IPC.ChatListSessions, characterId),
+    switchSession: (input: unknown) => ipcRenderer.invoke(IPC.ChatSwitchSession, input),
+    renameSession: (input: unknown) => ipcRenderer.invoke(IPC.ChatRenameSession, input),
+    deleteSession: (input: unknown) => ipcRenderer.invoke(IPC.ChatDeleteSession, input),
     hide: () => ipcRenderer.invoke(IPC.ChatHide),
     getSize: () => ipcRenderer.invoke(IPC.ChatGetSize),
     resize: (input: { width: number; height: number }) =>
