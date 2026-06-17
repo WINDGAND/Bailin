@@ -5,7 +5,17 @@ import type {
   PreferredNameField,
   UserProfile
 } from "./ipc-contract.js";
-import { PROFILE_FACT_CATEGORY_ORDER } from "./ipc-contract.js";
+
+export const PROFILE_FACT_CATEGORY_ORDER: ProfileFactCategory[] = [
+  "identity",
+  "goal",
+  "concern",
+  "interest",
+  "skill",
+  "preference",
+  "boundary",
+  "other"
+];
 
 export function emptyProfile(): UserProfile {
   return { facts: [] };
@@ -198,5 +208,3 @@ export function groupFactsByCategory(
   }
   return map;
 }
-
-export { PROFILE_FACT_CATEGORY_ORDER };

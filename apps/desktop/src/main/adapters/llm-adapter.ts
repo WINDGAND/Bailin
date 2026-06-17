@@ -32,6 +32,38 @@ export interface ChatRequest {
   modelOverride?: string;
 }
 
+const CHAT_FETCH_TIMEOUT_MS = 90_000;
+
+function mergeChatFetchSignal(userSignal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(CHAT_FETCH_TIMEOUT_MS);
+  if (!userSignal) return timeoutSignal;
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([userSignal, timeoutSignal]);
+  }
+  const ac = new AbortController();
+  const abort = () => ac.abort();
+  if (userSignal.aborted) {
+    ac.abort();
+    return ac.signal;
+  }
+  userSignal.addEventListener("abort", abort, { once: true });
+  timeoutSignal.addEventListener("abort", abort, { once: true });
+  return ac.signal;
+}
+
+function fetchErrorMessage(e: unknown): string {
+  if (e instanceof Error) {
+    if (e.name === "TimeoutError" || e.message.includes("timeout")) {
+      return "模型响应超时（90s），请检查网络或 API 配置后重试";
+    }
+    if (e.name === "AbortError") {
+      return "请求已取消";
+    }
+    return e.message;
+  }
+  return String(e);
+}
+
 export type ChatChunk =
   | { kind: "delta"; text: string }
   | { kind: "done"; finishReason: "stop" | "length" | "error" | "safety"; usage?: { promptTokens: number; completionTokens: number } }
@@ -442,13 +474,14 @@ export class LLMAdapter {
           authorization: `Bearer ${p.apiKey}`
         },
         body: JSON.stringify(body),
-        signal: req.signal
+        signal: mergeChatFetchSignal(req.signal)
       });
     } catch (e) {
+      const isTimeout = e instanceof Error && (e.name === "TimeoutError" || e.message.includes("timeout"));
       yield {
         kind: "error",
-        code: "NETWORK_ERROR",
-        message: e instanceof Error ? e.message : String(e)
+        code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
+        message: fetchErrorMessage(e)
       };
       return;
     }
@@ -511,13 +544,14 @@ export class LLMAdapter {
           "x-api-key": p.apiKey
         },
         body: JSON.stringify(body),
-        signal: req.signal
+        signal: mergeChatFetchSignal(req.signal)
       });
     } catch (e) {
+      const isTimeout = e instanceof Error && (e.name === "TimeoutError" || e.message.includes("timeout"));
       yield {
         kind: "error",
-        code: "NETWORK_ERROR",
-        message: e instanceof Error ? e.message : String(e)
+        code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
+        message: fetchErrorMessage(e)
       };
       return;
     }
@@ -745,10 +779,11 @@ export class LLMAdapter {
           authorization: `Bearer ${p.apiKey}`
         },
         body: JSON.stringify(body),
-        signal: req.signal
+        signal: mergeChatFetchSignal(req.signal)
       });
     } catch (e) {
       const httpDt = Date.now() - startedAt;
+      const isTimeout = e instanceof Error && (e.name === "TimeoutError" || e.message.includes("timeout"));
       logSearchCall({
         requestId,
         phase,
@@ -758,12 +793,12 @@ export class LLMAdapter {
         httpStatus: 0,
         httpDt,
         ok: false,
-        errorPreview: "NETWORK: " + (e instanceof Error ? e.message : String(e))
+        errorPreview: "NETWORK: " + fetchErrorMessage(e)
       });
       return {
         kind: "error",
-        code: "NETWORK_ERROR",
-        message: e instanceof Error ? e.message : String(e),
+        code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
+        message: fetchErrorMessage(e),
         toolEvents: []
       };
     }
@@ -922,13 +957,14 @@ export class LLMAdapter {
           "x-api-key": p.apiKey
         },
         body: JSON.stringify(body),
-        signal: req.signal
+        signal: mergeChatFetchSignal(req.signal)
       });
     } catch (e) {
+      const isTimeout = e instanceof Error && (e.name === "TimeoutError" || e.message.includes("timeout"));
       return {
         kind: "error",
-        code: "NETWORK_ERROR",
-        message: e instanceof Error ? e.message : String(e),
+        code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
+        message: fetchErrorMessage(e),
         toolEvents: []
       };
     }

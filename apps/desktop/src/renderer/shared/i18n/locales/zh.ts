@@ -699,6 +699,7 @@ export const zh = {
     historyToastDeleted: "已删除",
     historyToastLoadFailed: "加载历史失败",
     sessionSendFailed: "发送失败",
+    sessionTimeout: "等待模型回复超时，可能是网络或 API 不稳定。请点「重试」，或到设置页检查模型与 API Key。",
     sessionCancelled: "已中断这次回答",
     sessionNewStarted: "新对话已开始",
     sessionSwitchFailed: "切换对话失败",

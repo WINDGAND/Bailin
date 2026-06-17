@@ -34,6 +34,8 @@ export interface ChatSessionState {
   regenerateAssistant(assistantTurnId: string): Promise<void>;
 }
 
+const STALL_TIMEOUT_MS = 100_000;
+
 export function useChatSession(
   bundle: CharacterBundle | null,
   options: {
@@ -52,6 +54,8 @@ export function useChatSession(
   const [lastError, setLastError] = useState<{ code?: string; message: string } | null>(null);
   const inFlightRef = useRef<string | null>(null);
   const pendingAssistantTurnIdRef = useRef<string | null>(null);
+  const phaseRef = useRef<StreamPhase>("idle");
+  phaseRef.current = phase;
 
   const loadSession = useCallback(
     async (targetSessionId: string) => {
@@ -133,6 +137,37 @@ export function useChatSession(
       }
     });
   }, [nuwa]);
+
+  useEffect(() => {
+    if (phase === "idle") return;
+    const timer = window.setTimeout(() => {
+      if (phaseRef.current === "idle") return;
+      const requestId = inFlightRef.current;
+      void (async () => {
+        if (requestId) await nuwa.chat.cancel(requestId);
+        setPending("");
+        setPhase("idle");
+        const errObj = { code: "TIMEOUT", message: t("chat.sessionTimeout") };
+        setLastError(errObj);
+        if (requestId) {
+          setTurns((prev) => [
+            ...prev,
+            {
+              id: requestId + "-timeout",
+              role: "assistant",
+              content: "",
+              createdAt: Date.now(),
+              error: errObj
+            }
+          ]);
+        }
+        inFlightRef.current = null;
+        pendingAssistantTurnIdRef.current = null;
+        options.onError?.(errObj.message);
+      })();
+    }, STALL_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [phase, nuwa, t, options.onError]);
 
   const sendInternal = useCallback(
     async (text: string, opts?: { skipUserAppend?: boolean }) => {

@@ -706,6 +706,7 @@ export const en: TranslationTree = {
     historyToastDeleted: "Deleted",
     historyToastLoadFailed: "Failed to load history",
     sessionSendFailed: "Send failed",
+    sessionTimeout: "Timed out waiting for the model. Check your network or API settings, then retry.",
     sessionCancelled: "Response stopped",
     sessionNewStarted: "New chat started",
     sessionSwitchFailed: "Failed to switch conversation",

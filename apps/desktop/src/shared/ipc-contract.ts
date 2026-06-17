@@ -477,16 +477,7 @@ export type ProfileFactCategory =
   | "preference"
   | "other";
 
-export const PROFILE_FACT_CATEGORY_ORDER: ProfileFactCategory[] = [
-  "identity",
-  "goal",
-  "concern",
-  "interest",
-  "skill",
-  "preference",
-  "boundary",
-  "other"
-];
+export { PROFILE_FACT_CATEGORY_ORDER } from "./profile.js";
 
 export interface ProfileFact extends ProfileEntry {
   category: ProfileFactCategory;

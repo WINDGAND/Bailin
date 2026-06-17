@@ -23,6 +23,11 @@ release/
 # Vite / TS
 *.tsbuildinfo
 .vite/
+# 主进程 tsc 输出在 dist/main；勿在 src/shared 留编译产物（会遮蔽 .ts 导致渲染白屏）
+apps/desktop/src/shared/*.js
+apps/desktop/src/shared/*.js.map
+apps/desktop/src/shared/*.d.ts
+apps/desktop/src/shared/*.d.ts.map
 
 # Logs
 logs/
