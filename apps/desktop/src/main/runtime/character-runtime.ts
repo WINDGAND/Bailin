@@ -1,6 +1,7 @@
 import { ulid } from "ulid";
 import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import { buildSystemPrompt } from "@nuwa-pet/nuwa-prompts";
+import { profileForPrompt } from "../../shared/profile.js";
 import type { LLMAdapter, ChatChunk } from "../adapters/llm-adapter.js";
 import type { LocalVault } from "../store/local-vault.js";
 import type { MemoryStore } from "./memory-store.js";
@@ -103,9 +104,13 @@ export class CharacterRuntime {
     if (isFirst) this.firstActivation.add(bundle.card.id);
 
     const profile = this.memory.getProfile();
+    const flat = profileForPrompt(profile);
     const systemPromptBase = buildSystemPrompt({
       card: bundle.card,
-      userProfile: profile,
+      userProfile: {
+        preferredName: flat.preferredName,
+        factsByCategory: flat.factsByCategory
+      },
       safety: { globalRefusalList: GLOBAL_REFUSAL_LIST },
       isFirstActivation: isFirst
     });

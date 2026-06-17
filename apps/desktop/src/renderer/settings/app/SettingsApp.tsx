@@ -72,6 +72,15 @@ export function SettingsApp(): JSX.Element {
     [tab, confirm, t]
   );
 
+  const tryGoTabRef = useRef(tryGoTab);
+  tryGoTabRef.current = tryGoTab;
+
+  useEffect(() => {
+    return nuwa.on.navigateSettings((evt) => {
+      if (evt.tab) void tryGoTabRef.current(evt.tab);
+    });
+  }, [nuwa]);
+
   useShortcut({
     id: "tab-1",
     combo: "1",

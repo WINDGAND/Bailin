@@ -144,6 +144,10 @@ export interface BailinApi {
     getPerCharacter(characterId: string): Promise<string[]>;
     clearPerCharacter(characterId: string): Promise<void>;
     clearAll(): Promise<void>;
+    getSettings(): Promise<MemorySettings>;
+    setSettings(input: Partial<MemorySettings>): Promise<MemorySettings>;
+    getRecentChanges(limit?: number): Promise<ProfileChangeRecord[]>;
+    undoLastChange(): Promise<{ ok: boolean; profile?: UserProfile; reason?: string }>;
   };
 
   // ===== 桌宠窗口控制 =====
@@ -153,7 +157,7 @@ export interface BailinApi {
     setPosition(x: number, y: number): Promise<void>;
     setMouseIgnore(ignore: boolean): Promise<void>;
     openChat(): Promise<void>;
-    openSettings(): Promise<void>;
+    openSettings(tab?: SettingsTab): Promise<void>;
     hide(): Promise<void>;
     setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>;
     /** 拖动开始：主进程记录光标相对窗口的偏移（全在主进程物理坐标系内）。*/
@@ -181,7 +185,15 @@ export interface BailinApi {
     ambientSignal(handler: (evt: AmbientSignal) => void): () => void;
     /** 深度蒸馏的实时进度（包含 6 个 Agent 各自的开始 / 结束）。 */
     distillationProgress(handler: (evt: DistillationProgressEvent) => void): () => void;
+    profileUpdated(handler: (evt: ProfileUpdatedEvent) => void): () => void;
+    navigateSettings(handler: (evt: NavigateSettingsEvent) => void): () => void;
   };
+}
+
+export type SettingsTab = "library" | "create" | "memory" | "desktop" | "key" | "language";
+
+export interface NavigateSettingsEvent {
+  tab: SettingsTab;
 }
 
 /** 渲染进程接收到的深度蒸馏事件（与 NuwaOrchestrator.DeepProgressEvent 对齐，但去掉了 bundle 类型）。 */
@@ -438,11 +450,91 @@ export interface ChatTurn {
   createdAt: number;
 }
 
+export interface ProfileEntry {
+  id: string;
+  text: string;
+  updatedAt: number;
+  source: "manual" | "auto";
+  characterId?: string;
+  sessionId?: string;
+}
+
+export interface PreferredNameField {
+  text: string;
+  updatedAt: number;
+  source: "manual" | "auto";
+  characterId?: string;
+  sessionId?: string;
+}
+
+export type ProfileFactCategory =
+  | "identity"
+  | "goal"
+  | "concern"
+  | "boundary"
+  | "interest"
+  | "skill"
+  | "preference"
+  | "other";
+
+export const PROFILE_FACT_CATEGORY_ORDER: ProfileFactCategory[] = [
+  "identity",
+  "goal",
+  "concern",
+  "interest",
+  "skill",
+  "preference",
+  "boundary",
+  "other"
+];
+
+export interface ProfileFact extends ProfileEntry {
+  category: ProfileFactCategory;
+}
+
 export interface UserProfile {
-  preferredName?: string;
-  currentGoals: string[];
-  ongoingConcerns: string[];
-  tabooTopics: string[];
+  preferredName?: PreferredNameField;
+  facts: ProfileFact[];
+}
+
+export interface MemorySettings {
+  autoLearnEnabled: boolean;
+  extractEveryNTurns: number;
+}
+
+export type ProfileChangeKind = "add_name" | "add_fact" | "remove_fact";
+
+export interface ProfileChange {
+  kind: ProfileChangeKind;
+  text: string;
+  at: number;
+  category?: ProfileFactCategory;
+}
+
+export interface ProfileChangeRecord {
+  id: string;
+  appliedAt: number;
+  changes: ProfileChange[];
+}
+
+export interface ProfileUpdatedEvent {
+  changes: ProfileChange[];
+  profile: UserProfile;
+}
+
+export interface ProfileFactInput {
+  category: ProfileFactCategory;
+  text: string;
+}
+
+export interface ProfileExtractionDiff {
+  add: {
+    preferredName?: string;
+    facts?: ProfileFactInput[];
+  };
+  remove: {
+    facts?: ProfileFactInput[];
+  };
 }
 
 export interface ProactiveSettings {
@@ -541,6 +633,10 @@ export const IPC = {
   MemoryGetPerCharacter: "nuwa.memory.getPerCharacter",
   MemoryClearPerCharacter: "nuwa.memory.clearPerCharacter",
   MemoryClearAll: "nuwa.memory.clearAll",
+  MemoryGetSettings: "nuwa.memory.getSettings",
+  MemorySetSettings: "nuwa.memory.setSettings",
+  MemoryGetRecentChanges: "nuwa.memory.getRecentChanges",
+  MemoryUndoLastChange: "nuwa.memory.undoLastChange",
 
   PetSummon: "nuwa.pet.summon",
   PetHush: "nuwa.pet.hush",
@@ -565,5 +661,7 @@ export const IPC = {
   EventProactiveWhisper: "nuwa.event.proactiveWhisper",
   EventAmbientSignal: "nuwa.event.ambientSignal",
   EventDistillationProgress: "nuwa.event.distillationProgress",
-  EventLocaleChanged: "nuwa.event.localeChanged"
+  EventLocaleChanged: "nuwa.event.localeChanged",
+  EventProfileUpdated: "nuwa.event.profileUpdated",
+  EventNavigateSettings: "nuwa.event.navigateSettings"
 } as const;

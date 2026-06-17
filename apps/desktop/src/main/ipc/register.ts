@@ -8,10 +8,13 @@ import {
   type ImageGenerationConfigDTO,
   type ImageTierName,
   type ProactiveSettings,
-  type SendMessageInput
+  type SendMessageInput,
+  type SettingsTab,
+  type UserProfile
 } from "../../shared/ipc-contract.js";
 import type { LocalVault } from "../store/local-vault.js";
 import type { MemoryStore } from "../runtime/memory-store.js";
+import type { ProfileExtractor } from "../runtime/profile-extractor.js";
 import type { CharacterRuntime } from "../runtime/character-runtime.js";
 import type { NuwaOrchestrator } from "../orchestration/nuwa-orchestrator.js";
 import type { ProactiveOrchestrator } from "../proactive/proactive-orchestrator.js";
@@ -33,6 +36,7 @@ import {
 export interface IpcDeps {
   vault: LocalVault;
   memory: MemoryStore;
+  profileExtractor: ProfileExtractor;
   runtime: CharacterRuntime;
   orchestrator: NuwaOrchestrator;
   proactive: ProactiveOrchestrator;
@@ -50,7 +54,7 @@ export interface IpcDeps {
   setPetContextMenuOpen: (open: boolean) => "left" | "right" | null;
   movePet: (x: number, y: number) => { x: number; y: number };
   ensurePetOnScreen: () => void;
-  ensureSettingsWindow: () => void;
+  ensureSettingsWindow: (tab?: SettingsTab) => void;
   /** 拖动开始：记录光标相对窗口偏移。*/
   petDragStart: () => void;
   /** 拖动中：读取最新光标位置并移动桌宠。*/
@@ -93,7 +97,8 @@ function makeGate(): ApprovalGate {
 }
 
 export function registerIpc(deps: IpcDeps): void {
-  const { vault, memory, runtime, orchestrator, proactive, llm, imageGen, broadcast } = deps;
+  const { vault, memory, runtime, orchestrator, proactive, llm, imageGen, broadcast, profileExtractor } =
+    deps;
   /** 进行中的深度蒸馏 jobs（jobId → state）。 */
   const activeJobs = new Map<string, DeepJobState>();
 
@@ -606,6 +611,13 @@ export function registerIpc(deps: IpcDeps): void {
               finishReason: chunk.finishReason,
               assistantTurnId
             });
+            if (chunk.finishReason !== "safety") {
+              void profileExtractor.maybeExtract({
+                characterId: input.characterId,
+                sessionId,
+                characterName: bundle.card.meta.name
+              });
+            }
           } else {
             broadcast(IPC.EventChatStream, {
               requestId,
@@ -647,7 +659,9 @@ export function registerIpc(deps: IpcDeps): void {
 
   // ===== Memory =====
   ipcMain.handle(IPC.MemoryGetProfile, () => memory.getProfile());
-  ipcMain.handle(IPC.MemoryUpdateProfile, (_e, patch) => memory.updateProfile(patch));
+  ipcMain.handle(IPC.MemoryUpdateProfile, (_e, patch: Partial<UserProfile>) =>
+    memory.updateProfile(patch)
+  );
   ipcMain.handle(IPC.MemoryClearProfile, () => memory.clearProfile());
   ipcMain.handle(IPC.MemoryGetPerCharacter, (_e, characterId: string) =>
     memory.getPerCharacter(characterId)
@@ -656,6 +670,12 @@ export function registerIpc(deps: IpcDeps): void {
     memory.clearPerCharacter(characterId)
   );
   ipcMain.handle(IPC.MemoryClearAll, () => vault.clearAll());
+  ipcMain.handle(IPC.MemoryGetSettings, () => memory.getSettings());
+  ipcMain.handle(IPC.MemorySetSettings, (_e, patch) => memory.setSettings(patch));
+  ipcMain.handle(IPC.MemoryGetRecentChanges, (_e, limit?: number) =>
+    memory.getRecentChanges(limit ?? 5)
+  );
+  ipcMain.handle(IPC.MemoryUndoLastChange, () => memory.undoLastChange());
 
   // ===== Pet =====
   ipcMain.handle(IPC.PetSummon, () => deps.summonPetBubble());
@@ -676,7 +696,9 @@ export function registerIpc(deps: IpcDeps): void {
     }
   });
   ipcMain.handle(IPC.PetOpenChat, () => deps.showChatNearPet());
-  ipcMain.handle(IPC.PetOpenSettings, () => deps.ensureSettingsWindow());
+  ipcMain.handle(IPC.PetOpenSettings, (_e, tab?: SettingsTab) => {
+    deps.ensureSettingsWindow(tab);
+  });
   ipcMain.handle(IPC.PetHide, () => deps.hidePet());
   ipcMain.handle(IPC.PetSetContextMenuOpen, (_e, open: boolean) => {
     return deps.setPetContextMenuOpen(open);

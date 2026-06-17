@@ -9,6 +9,8 @@ import type {
   ResearchDoc
 } from "@nuwa-pet/character-protocol";
 import { RESEARCH_AGENT_LABELS } from "@nuwa-pet/character-protocol";
+import type { ProfileChangeRecord, UserProfile } from "../../shared/ipc-contract.js";
+import { emptyProfile, normalizeProfile } from "../../shared/profile.js";
 
 const USER_DATA_DIR = "Bailin";
 const LEGACY_USER_DATA_DIR = "NuwaPet";
@@ -140,6 +142,14 @@ export class LocalVault {
         PRIMARY KEY (job_id, agent_id)
       );
       CREATE INDEX IF NOT EXISTS idx_research_char ON research_docs(character_id, agent_id);
+
+      CREATE TABLE IF NOT EXISTS profile_changelog (
+        id TEXT PRIMARY KEY,
+        applied_at INTEGER NOT NULL,
+        snapshot_json TEXT NOT NULL,
+        changes_json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_profile_changelog_at ON profile_changelog(applied_at DESC);
     `);
     this.backfillChatSessions();
   }
@@ -303,31 +313,21 @@ export class LocalVault {
 
   // ===== Profile =====
 
-  getProfile(): {
-    preferredName?: string;
-    currentGoals: string[];
-    ongoingConcerns: string[];
-    tabooTopics: string[];
-  } {
+  getProfile(): UserProfile {
     const row = this.db.prepare("SELECT json FROM user_profile WHERE id = 1").get() as
       | { json: string }
       | undefined;
     if (!row) {
-      return { currentGoals: [], ongoingConcerns: [], tabooTopics: [] };
+      return emptyProfile();
     }
     try {
-      return JSON.parse(row.json);
+      return normalizeProfile(JSON.parse(row.json));
     } catch {
-      return { currentGoals: [], ongoingConcerns: [], tabooTopics: [] };
+      return emptyProfile();
     }
   }
 
-  setProfile(profile: {
-    preferredName?: string;
-    currentGoals: string[];
-    ongoingConcerns: string[];
-    tabooTopics: string[];
-  }): void {
+  setProfile(profile: UserProfile): void {
     this.db
       .prepare(
         `INSERT INTO user_profile (id, json) VALUES (1, ?)
@@ -338,6 +338,76 @@ export class LocalVault {
 
   clearProfile(): void {
     this.db.prepare("DELETE FROM user_profile WHERE id = 1").run();
+    this.db.prepare("DELETE FROM profile_changelog").run();
+  }
+
+  appendProfileChangelog(entry: ProfileChangeRecord, snapshot: UserProfile): void {
+    this.db
+      .prepare(
+        `INSERT INTO profile_changelog (id, applied_at, snapshot_json, changes_json)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run(
+        entry.id,
+        entry.appliedAt,
+        JSON.stringify(snapshot),
+        JSON.stringify(entry.changes)
+      );
+    this.db
+      .prepare(
+        `DELETE FROM profile_changelog WHERE id NOT IN (
+           SELECT id FROM profile_changelog ORDER BY applied_at DESC LIMIT 20
+         )`
+      )
+      .run();
+  }
+
+  getRecentProfileChangelog(limit = 5): ProfileChangeRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, applied_at, changes_json FROM profile_changelog
+         ORDER BY applied_at DESC LIMIT ?`
+      )
+      .all(limit) as Array<{ id: string; applied_at: number; changes_json: string }>;
+    return rows.map((r) => {
+      try {
+        return {
+          id: r.id,
+          appliedAt: r.applied_at,
+          changes: JSON.parse(r.changes_json)
+        };
+      } catch {
+        return { id: r.id, appliedAt: r.applied_at, changes: [] };
+      }
+    });
+  }
+
+  getLatestProfileChangelogSnapshot(): { entry: ProfileChangeRecord; snapshot: UserProfile } | null {
+    const row = this.db
+      .prepare(
+        `SELECT id, applied_at, snapshot_json, changes_json FROM profile_changelog
+         ORDER BY applied_at DESC LIMIT 1`
+      )
+      .get() as
+      | { id: string; applied_at: number; snapshot_json: string; changes_json: string }
+      | undefined;
+    if (!row) return null;
+    try {
+      return {
+        entry: {
+          id: row.id,
+          appliedAt: row.applied_at,
+          changes: JSON.parse(row.changes_json)
+        },
+        snapshot: normalizeProfile(JSON.parse(row.snapshot_json))
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  deleteProfileChangelogEntry(id: string): void {
+    this.db.prepare("DELETE FROM profile_changelog WHERE id = ?").run(id);
   }
 
   getPerCharacterNotes(characterId: string): string[] {
@@ -544,6 +614,7 @@ export class LocalVault {
   clearAll(): void {
     this.db.exec(`DELETE FROM characters;
                   DELETE FROM user_profile;
+                  DELETE FROM profile_changelog;
                   DELETE FROM per_character_notes;
                   DELETE FROM chat_turns;
                   DELETE FROM chat_sessions;

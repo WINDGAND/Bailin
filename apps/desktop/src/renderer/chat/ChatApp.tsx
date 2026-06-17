@@ -14,6 +14,7 @@ import { useChatSession } from "../shared/use-chat-session.js";
 import { useChatScroll } from "../shared/use-chat-scroll.js";
 import { ChatResizeHandles } from "./ChatResizeHandles.js";
 import { ChatHistoryPanel } from "./ChatHistoryPanel.js";
+import type { ProfileChange, ProfileUpdatedEvent } from "../../shared/ipc-contract.js";
 import { useT } from "../shared/i18n/index.js";
 
 export function ChatApp(): JSX.Element {
@@ -36,6 +37,42 @@ export function ChatApp(): JSX.Element {
     pending: chat.pending,
     phase: chat.phase
   });
+
+  const profileToastBuf = useRef<ProfileChange[]>([]);
+  const profileToastTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return nuwa.on.profileUpdated((evt: ProfileUpdatedEvent) => {
+      profileToastBuf.current.push(...evt.changes.filter((c) => !c.kind.startsWith("remove")));
+      if (profileToastTimer.current !== null) {
+        window.clearTimeout(profileToastTimer.current);
+      }
+      profileToastTimer.current = window.setTimeout(() => {
+        const adds = profileToastBuf.current;
+        profileToastBuf.current = [];
+        profileToastTimer.current = null;
+        if (adds.length === 0) return;
+        const summary = adds
+          .slice(0, 2)
+          .map((c) => c.text)
+          .join("、");
+        showToast({
+          kind: "info",
+          text: t("chat.profileRemembered", { summary }),
+          ttlMs: 5000,
+          onClick: () => void nuwa.pet.openSettings("memory")
+        });
+      }, 500);
+    });
+  }, [nuwa, showToast, t]);
+
+  useEffect(() => {
+    return () => {
+      if (profileToastTimer.current !== null) {
+        window.clearTimeout(profileToastTimer.current);
+      }
+    };
+  }, []);
 
   // ===== 差异化建议（取自 card） =====
   const suggestions = useMemo<Suggestion[]>(() => {

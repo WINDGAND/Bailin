@@ -1,14 +1,36 @@
 import type { CharacterCard } from "@nuwa-pet/character-protocol";
 import { formatAnswerProtocolForPrompt, resolveAnswerProtocol } from "./agentic-protocol.js";
 
+export interface SystemPromptUserProfile {
+  preferredName?: string;
+  factsByCategory: Record<string, string[]>;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  identity: "基础信息",
+  goal: "当前目标",
+  concern: "长期烦恼",
+  interest: "兴趣爱好",
+  skill: "特长技能",
+  preference: "偏好习惯",
+  boundary: "避讳",
+  other: "其他"
+};
+
+const CATEGORY_ORDER = [
+  "identity",
+  "goal",
+  "concern",
+  "interest",
+  "skill",
+  "preference",
+  "boundary",
+  "other"
+];
+
 export interface SystemPromptInput {
   card: CharacterCard;
-  userProfile?: {
-    preferredName?: string;
-    currentGoals: string[];
-    ongoingConcerns: string[];
-    tabooTopics: string[];
-  };
+  userProfile?: SystemPromptUserProfile;
   safety?: {
     globalRefusalList: string[];
   };
@@ -67,18 +89,22 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
   lines.push("[ANSWER WORKFLOW]");
   lines.push(...formatAnswerProtocolForPrompt(resolveAnswerProtocol(card)));
 
-  if (userProfile && (
-    userProfile.preferredName ||
-    userProfile.currentGoals.length > 0 ||
-    userProfile.ongoingConcerns.length > 0 ||
-    userProfile.tabooTopics.length > 0
-  )) {
+  const hasFacts =
+    userProfile &&
+    (userProfile.preferredName ||
+      CATEGORY_ORDER.some((cat) => (userProfile.factsByCategory[cat]?.length ?? 0) > 0));
+
+  if (hasFacts && userProfile) {
     lines.push("");
     lines.push("[USER PROFILE]");
     if (userProfile.preferredName) lines.push(`称呼：${userProfile.preferredName}`);
-    if (userProfile.currentGoals.length > 0) lines.push(`当前目标：${userProfile.currentGoals.slice(0, 3).join("；")}`);
-    if (userProfile.ongoingConcerns.length > 0) lines.push(`长期烦恼：${userProfile.ongoingConcerns.slice(0, 3).join("；")}`);
-    if (userProfile.tabooTopics.length > 0) lines.push(`禁忌话题：${userProfile.tabooTopics.join("、")}`);
+    for (const cat of CATEGORY_ORDER) {
+      const items = userProfile.factsByCategory[cat];
+      if (!items?.length) continue;
+      const label = CATEGORY_LABELS[cat] ?? cat;
+      const sep = cat === "boundary" ? "、" : "；";
+      lines.push(`${label}：${items.join(sep)}`);
+    }
   }
 
   lines.push("");

@@ -107,14 +107,18 @@ interface NuwaWindow {
       deleteTurnsFrom(input: { characterId: string; sessionId: string; turnId: string }): Promise<{ ok: boolean }>;
     };
     memory: {
-      getProfile(): Promise<{ preferredName?: string; currentGoals: string[]; ongoingConcerns: string[]; tabooTopics: string[] }>;
-      updateProfile(patch: unknown): Promise<unknown>;
+      getProfile(): Promise<import("../../shared/ipc-contract.js").UserProfile>;
+      updateProfile(patch: unknown): Promise<import("../../shared/ipc-contract.js").UserProfile>;
       clearProfile(): Promise<void>;
       getPerCharacter(id: string): Promise<string[]>;
       clearPerCharacter(id: string): Promise<void>;
       clearAll(): Promise<void>;
+      getSettings(): Promise<import("../../shared/ipc-contract.js").MemorySettings>;
+      setSettings(input: Partial<import("../../shared/ipc-contract.js").MemorySettings>): Promise<import("../../shared/ipc-contract.js").MemorySettings>;
+      getRecentChanges(limit?: number): Promise<import("../../shared/ipc-contract.js").ProfileChangeRecord[]>;
+      undoLastChange(): Promise<{ ok: boolean; profile?: import("../../shared/ipc-contract.js").UserProfile; reason?: string }>;
     };
-    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(): Promise<void>; hide(): Promise<void>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
+    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(tab?: import("../../shared/ipc-contract.js").SettingsTab): Promise<void>; hide(): Promise<void>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
     proactive: {
       getSettings(): Promise<ProactiveSettings>;
       setSettings(input: ProactiveSettings): Promise<ProactiveSettings>;
@@ -129,6 +133,8 @@ interface NuwaWindow {
       ambientSignal(h: (evt: AmbientSignal) => void): () => void;
       distillationProgress(h: (evt: DistillationProgressEvent) => void): () => void;
       localeChanged(h: (locale: "zh" | "en") => void): () => void;
+      profileUpdated(h: (evt: import("../../shared/ipc-contract.js").ProfileUpdatedEvent) => void): () => void;
+      navigateSettings(h: (evt: import("../../shared/ipc-contract.js").NavigateSettingsEvent) => void): () => void;
     };
   };
 }
@@ -256,16 +262,19 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       deleteTurnsFrom: async () => ({ ok: true })
     },
     memory: {
-      getProfile: async () => ({
-        currentGoals: [],
-        ongoingConcerns: [],
-        tabooTopics: []
-      }),
-      updateProfile: async () => ({}),
+      getProfile: async () => ({ facts: [] }),
+      updateProfile: async () => ({ facts: [] }),
       clearProfile: async () => undefined,
       getPerCharacter: async () => [],
       clearPerCharacter: async () => undefined,
-      clearAll: async () => undefined
+      clearAll: async () => undefined,
+      getSettings: async () => ({ autoLearnEnabled: true, extractEveryNTurns: 2 }),
+      setSettings: async (input) => ({
+        autoLearnEnabled: input.autoLearnEnabled ?? true,
+        extractEveryNTurns: input.extractEveryNTurns ?? 2
+      }),
+      getRecentChanges: async () => [],
+      undoLastChange: async () => ({ ok: false, reason: "stub" })
     },
     pet: {
       summon: async () => undefined,
@@ -322,7 +331,9 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
           window.removeEventListener("storage", onStorage);
           window.removeEventListener("bailin-locale", onCustom);
         };
-      }
+      },
+      profileUpdated: noopOff,
+      navigateSettings: noopOff
     }
   };
 }

@@ -36,12 +36,14 @@ interface ToastItem {
   kind: ToastKind;
   text: string;
   ttlMs: number;
+  onClick?: () => void;
 }
 
 interface ToastInput {
   kind?: ToastKind;
   text: string;
   ttlMs?: number;
+  onClick?: () => void;
 }
 
 interface ToastContextValue {
@@ -112,7 +114,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }): JSX.Ele
       id,
       kind: input.kind ?? "info",
       text: input.text,
-      ttlMs: input.ttlMs ?? 3500
+      ttlMs: input.ttlMs ?? 3500,
+      onClick: input.onClick
     };
     setToasts((prev) => [...prev, item]);
     window.setTimeout(() => {
@@ -178,13 +181,18 @@ function ToastStack({
           key={toast.id}
           className={`toast toast--${toast.kind}`}
           role={toast.kind === "error" ? "alert" : "status"}
+          onClick={toast.onClick}
+          style={toast.onClick ? { cursor: "pointer" } : undefined}
         >
           <span style={{ flex: 1 }}>{toast.text}</span>
           <button
             type="button"
             className="toast__close"
             aria-label={t("feedback.toastClose")}
-            onClick={() => onDismiss(toast.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismiss(toast.id);
+            }}
           >
             ×
           </button>

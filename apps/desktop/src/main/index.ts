@@ -27,6 +27,7 @@ import { LLMAdapter } from "./adapters/llm-adapter.js";
 import { ImageGenerationAdapter } from "./adapters/image-generation-adapter.js";
 import { SafetyPolicy } from "./safety/safety-policy.js";
 import { MemoryStore } from "./runtime/memory-store.js";
+import { ProfileExtractor } from "./runtime/profile-extractor.js";
 import { CharacterRuntime } from "./runtime/character-runtime.js";
 import { NuwaOrchestrator } from "./orchestration/nuwa-orchestrator.js";
 import {
@@ -58,7 +59,7 @@ import {
 import { createSettingsWindow } from "./windows/settings-window.js";
 import { AmbientMonitor } from "./ambient/ambient-monitor.js";
 import { ProactiveOrchestrator } from "./proactive/proactive-orchestrator.js";
-import { type LLMProviderConfig } from "../shared/ipc-contract.js";
+import { IPC, type LLMProviderConfig, type SettingsTab } from "../shared/ipc-contract.js";
 
 log.initialize();
 log.info("[main] Bailin starting...");
@@ -90,10 +91,11 @@ let petBoundsBeforeMenu: { x: number; y: number; width: number; height: number }
 
 const devUrl = process.env.VITE_DEV_SERVER || undefined;
 
-function ensureSettingsWindow(): void {
+function ensureSettingsWindow(tab?: SettingsTab): void {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.show();
     settingsWin.focus();
+    if (tab) broadcastToAllWindows(IPC.EventNavigateSettings, { tab });
     return;
   }
   settingsWin = createSettingsWindow(devUrl);
@@ -103,6 +105,7 @@ function ensureSettingsWindow(): void {
     if (settingsWin && !settingsWin.isDestroyed()) {
       settingsWin.show();
       settingsWin.focus();
+      if (tab) broadcastToAllWindows(IPC.EventNavigateSettings, { tab });
     }
   });
   settingsWin.on("closed", () => {
@@ -442,6 +445,10 @@ void app.whenReady().then(() => {
   });
   const safety = new SafetyPolicy();
   const memory = new MemoryStore(vault);
+  const profileExtractor = new ProfileExtractor(vault, memory, llm);
+  profileExtractor.onApplied = (payload) => {
+    broadcastToAllWindows(IPC.EventProfileUpdated, payload);
+  };
   const runtime = new CharacterRuntime(vault, memory, llm, safety);
   const imageGen = new ImageGenerationAdapter(
     () => readImageConfigForMain(vault),
@@ -480,6 +487,7 @@ void app.whenReady().then(() => {
   registerIpc({
     vault,
     memory,
+    profileExtractor,
     runtime,
     orchestrator,
     llm,

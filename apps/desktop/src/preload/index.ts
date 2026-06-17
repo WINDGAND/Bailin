@@ -74,7 +74,11 @@ const api = {
     clearProfile: () => ipcRenderer.invoke(IPC.MemoryClearProfile),
     getPerCharacter: (id: string) => ipcRenderer.invoke(IPC.MemoryGetPerCharacter, id),
     clearPerCharacter: (id: string) => ipcRenderer.invoke(IPC.MemoryClearPerCharacter, id),
-    clearAll: () => ipcRenderer.invoke(IPC.MemoryClearAll)
+    clearAll: () => ipcRenderer.invoke(IPC.MemoryClearAll),
+    getSettings: () => ipcRenderer.invoke(IPC.MemoryGetSettings),
+    setSettings: (input: unknown) => ipcRenderer.invoke(IPC.MemorySetSettings, input),
+    getRecentChanges: (limit?: number) => ipcRenderer.invoke(IPC.MemoryGetRecentChanges, limit),
+    undoLastChange: () => ipcRenderer.invoke(IPC.MemoryUndoLastChange)
   },
   pet: {
     summon: () => ipcRenderer.invoke(IPC.PetSummon),
@@ -82,7 +86,7 @@ const api = {
     setPosition: (x: number, y: number) => ipcRenderer.invoke(IPC.PetSetPosition, x, y),
     setMouseIgnore: (ignore: boolean) => ipcRenderer.invoke(IPC.PetSetMouseIgnore, ignore),
     openChat: () => ipcRenderer.invoke(IPC.PetOpenChat),
-    openSettings: () => ipcRenderer.invoke(IPC.PetOpenSettings),
+    openSettings: (tab?: unknown) => ipcRenderer.invoke(IPC.PetOpenSettings, tab),
     hide: () => ipcRenderer.invoke(IPC.PetHide),
     setContextMenuOpen: (open: boolean) => ipcRenderer.invoke(IPC.PetSetContextMenuOpen, open),
     dragStart: () => ipcRenderer.invoke(IPC.PetDragStart),
@@ -130,6 +134,16 @@ const api = {
       const listener = (_e: unknown, p: unknown) => handler(p as "zh" | "en");
       ipcRenderer.on(IPC.EventLocaleChanged, listener);
       return () => ipcRenderer.removeListener(IPC.EventLocaleChanged, listener);
+    },
+    profileUpdated(handler: (evt: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventProfileUpdated, listener);
+      return () => ipcRenderer.removeListener(IPC.EventProfileUpdated, listener);
+    },
+    navigateSettings(handler: (evt: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventNavigateSettings, listener);
+      return () => ipcRenderer.removeListener(IPC.EventNavigateSettings, listener);
     }
   }
 };
