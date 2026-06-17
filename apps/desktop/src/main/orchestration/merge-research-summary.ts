@@ -1,5 +1,6 @@
 import type { ResearchDoc } from "@nuwa-pet/character-protocol";
 import type {
+  MaterialModeUsed,
   ResearchReviewAgentRow,
   ResearchReviewPayload
 } from "../../shared/ipc-contract.js";
@@ -15,7 +16,10 @@ const URL_PATTERN = /https?:\/\/[^\s)>\]]+/g;
  * 合并 6 份调研 doc，生成 Phase 1.5 checkpoint 用的结构化 Review。
  * 纯本地启发式，不调用 LLM。
  */
-export function mergeResearchSummary(docs: ResearchDoc[]): ResearchReviewPayload {
+export function mergeResearchSummary(
+  docs: ResearchDoc[],
+  materialModeUsed: MaterialModeUsed = "web"
+): ResearchReviewPayload {
   const sorted = [...docs].sort((a, b) => a.agentId - b.agentId);
   const allUrls = new Set<string>();
   let primaryMarkerTotal = 0;
@@ -43,6 +47,7 @@ export function mergeResearchSummary(docs: ResearchDoc[]): ResearchReviewPayload
       agentName: doc.agentName,
       status: doc.status,
       confidence: doc.confidence,
+      webSearchUsed: doc.webSearchUsed,
       uniqueUrlCount: uniqueUrls.size,
       primaryMarkerCount,
       secondaryMarkerCount,
@@ -50,18 +55,28 @@ export function mergeResearchSummary(docs: ResearchDoc[]): ResearchReviewPayload
     };
   });
 
+  const localMaterialAgentCount = agents.filter(
+    (a) => a.status === "ok" && !a.webSearchUsed
+  ).length;
+
   const weakDimensions = agents
-    .filter(
-      (a) =>
-        a.status !== "ok" ||
-        a.confidence === "low" ||
-        (a.uniqueUrlCount === 0 && a.status === "ok")
-    )
+    .filter((a) => isWeakDimension(a))
     .map((a) => a.agentName);
 
   const markerSum = primaryMarkerTotal + secondaryMarkerTotal;
   const primaryRatioLabel =
     markerSum > 0 ? `${primaryMarkerTotal}/${markerSum}` : "未标记";
+
+  const isLocalMode = materialModeUsed === "local-first" || materialModeUsed === "local-only";
+  const lowSourceWarning = !isLocalMode && allUrls.size < 10;
+
+  const gapResearchWarning =
+    materialModeUsed === "local-first" &&
+    agents.some(
+      (a) =>
+        a.webSearchUsed &&
+        (a.status !== "ok" || a.confidence === "low" || a.uniqueUrlCount === 0)
+    );
 
   return {
     agents,
@@ -71,8 +86,19 @@ export function mergeResearchSummary(docs: ResearchDoc[]): ResearchReviewPayload
     primaryRatioLabel,
     contradictions: contradictions.slice(0, 8),
     weakDimensions,
-    lowSourceWarning: allUrls.size < 10
+    lowSourceWarning,
+    localMaterialAgentCount,
+    gapResearchWarning
   };
+}
+
+function isWeakDimension(a: ResearchReviewAgentRow): boolean {
+  if (a.status !== "ok") return true;
+  if (a.confidence === "low") return true;
+  // 本地摘要 Agent 无 URL 是预期行为
+  if (!a.webSearchUsed && a.status === "ok") return false;
+  if (a.uniqueUrlCount === 0 && a.status === "ok") return true;
+  return false;
 }
 
 /** 补跑后合并：新 doc 按 agentId 覆盖旧 doc。 */

@@ -12,6 +12,9 @@ type MaterialMode = "web" | "local-first" | "local-only";
 const MAX_NAME = 40;
 const MAX_USER_HINT = 200;
 const MAX_USER_MATERIAL = 8000;
+/** 与 material-coverage-plan LOCAL_FIRST_SUGGEST_MIN_CHARS 对齐。 */
+const LOCAL_FIRST_SUGGEST_MIN_CHARS = 600;
+const LOCAL_ONLY_SUGGEST_MIN_CHARS = 200;
 const MAX_REFERENCE_IMAGES = 4;
 /** 单图大小上限（base64 字符长度，对应约 3MB 原图）。 */
 const MAX_REFERENCE_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -164,6 +167,18 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const trimmedName = name.trim();
   const webSearchUnavailable = caps != null && !caps.webSearch;
   const deepDisabled = webSearchUnavailable && materialMode !== "local-only";
+  const materialLen = userMaterial.trim().length;
+  const showMaterialModeOptions =
+    mode === "deep" && (materialLen > 0 || sourceType === "original");
+  const effectiveMaterialMode: MaterialMode = showMaterialModeOptions ? materialMode : "web";
+  const showLocalFirstSuggest =
+    mode === "deep" && materialMode === "web" && materialLen >= LOCAL_FIRST_SUGGEST_MIN_CHARS;
+  const showLocalOnlySuggest =
+    mode === "deep" &&
+    materialMode === "web" &&
+    sourceType === "original" &&
+    materialLen >= LOCAL_ONLY_SUGGEST_MIN_CHARS &&
+    materialLen < LOCAL_FIRST_SUGGEST_MIN_CHARS;
   const visionUnavailable = vision != null && !vision.vision;
   const hasUploadedRefs = referenceImages.length > 0;
 
@@ -202,14 +217,15 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
 
   async function submitDeep(): Promise<void> {
     setBusy(true);
-    const localOnly = materialMode === "local-only";
+    const resolvedMode = effectiveMaterialMode;
+    const localOnly = resolvedMode === "local-only";
     const r = await nuwa.characters.createDeep({
       characterName: trimmedName,
       sourceType,
       track,
       userHint: userHint.trim() || undefined,
       userMaterial: userMaterial.trim() || undefined,
-      materialMode,
+      materialMode: resolvedMode,
       enableWebSearch: !localOnly,
       referenceImages: referenceImagesForIpc()
     });
@@ -246,6 +262,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       <DistillationProgress
         jobId={runningJobId}
         characterName={trimmedName}
+        track={track}
         onComplete={() => onDone()}
         onCancel={() => {
           void nuwa.characters.cancelDistillation(runningJobId);
@@ -519,11 +536,72 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
               max={MAX_USER_MATERIAL}
               placeholder={t("forge.textMaterialPlaceholder")}
             />
-            {mode === "deep" ? (
+            {showLocalFirstSuggest ? (
+              <div
+                className="fade-in"
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "rgba(31,58,58,0.05)",
+                  border: "1px solid var(--grid-strong)",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}
+              >
+                <p className="body-sm" style={{ margin: 0, color: "var(--ink-soft)", flex: "1 1 200px" }}>
+                  {t("forge.materialModeSuggestLong")}
+                </p>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setMaterialMode("local-first")}
+                >
+                  {t("forge.materialModeSuggestAction")}
+                </button>
+              </div>
+            ) : null}
+            {showLocalOnlySuggest ? (
+              <div
+                className="fade-in"
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "rgba(31,58,58,0.05)",
+                  border: "1px solid var(--grid-strong)",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}
+              >
+                <p className="body-sm" style={{ margin: 0, color: "var(--ink-soft)", flex: "1 1 200px" }}>
+                  {t("forge.materialModeSuggestOriginal")}
+                </p>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setMaterialMode("local-only")}
+                >
+                  {t("forge.materialModeSuggestOriginalAction")}
+                </button>
+              </div>
+            ) : null}
+            {mode === "deep" && showMaterialModeOptions ? (
               <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
                 <legend className="eyebrow" style={{ marginBottom: 8 }}>
                   {t("forge.materialModeLabel")}
                 </legend>
+                {sourceType === "original" ? (
+                  <p className="body-sm" style={{ margin: "0 0 8px", color: "var(--ink-soft)" }}>
+                    {t("forge.materialModeOriginalHint")}
+                  </p>
+                ) : null}
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(
                     [
@@ -539,7 +617,10 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                         hintKey: "forge.materialModeLocalOnlyHint"
                       }
                     ] as const
-                  ).map((opt) => (
+                  ).map((opt) => {
+                    const suggestLocalOnly =
+                      sourceType === "original" && opt.id === "local-only" && materialMode !== "local-only";
+                    return (
                     <label
                       key={opt.id}
                       style={{
@@ -552,7 +633,9 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                         border:
                           materialMode === opt.id
                             ? "1px solid var(--teal)"
-                            : "1px solid var(--grid-strong)",
+                            : suggestLocalOnly
+                              ? "1px dashed var(--teal)"
+                              : "1px solid var(--grid-strong)",
                         background: materialMode === opt.id ? "rgba(31,58,58,0.04)" : "transparent"
                       }}
                     >
@@ -572,13 +655,9 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                         </span>
                       </span>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
-                {userMaterial.trim().length >= 600 && materialMode === "web" ? (
-                  <p className="body-sm" style={{ margin: "8px 0 0", color: "var(--ink-soft)" }}>
-                    {t("forge.materialModeAutoHint")}
-                  </p>
-                ) : null}
               </fieldset>
             ) : null}
           </div>

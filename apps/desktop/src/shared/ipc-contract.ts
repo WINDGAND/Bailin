@@ -249,11 +249,14 @@ export type DistillationApprovalResult = {
   supplementalAgentIds?: ResearchAgentId[];
 };
 
+export type MaterialModeUsed = "web" | "local-first" | "local-only";
+
 export interface ResearchReviewAgentRow {
   agentId: ResearchAgentId;
   agentName: string;
   status: ResearchDoc["status"];
   confidence: ResearchDoc["confidence"];
+  webSearchUsed: boolean;
   uniqueUrlCount: number;
   primaryMarkerCount: number;
   secondaryMarkerCount: number;
@@ -270,6 +273,10 @@ export interface ResearchReviewPayload {
   contradictions: string[];
   weakDimensions: string[];
   lowSourceWarning: boolean;
+  /** webSearchUsed=false 且 status=ok 的路数（本地素材摘要）。 */
+  localMaterialAgentCount: number;
+  /** local-first 模式下，联网 gap Agent 调研质量不足。 */
+  gapResearchWarning: boolean;
 }
 
 export interface ResearchSummaryPayload {
@@ -282,6 +289,7 @@ export interface ResearchSummaryPayload {
   okCount: number;
   failedCount: number;
   totalDurationMs: number;
+  materialModeUsed: MaterialModeUsed;
   review: ResearchReviewPayload;
 }
 

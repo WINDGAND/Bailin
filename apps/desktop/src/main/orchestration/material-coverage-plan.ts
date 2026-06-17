@@ -11,8 +11,14 @@ import {
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 import type { AgentResearchPlan } from "./research-pipeline.js";
 
-/** 用户素材超过此字数且 mode=web 时，自动升级为 local-first。 */
-export const LOCAL_FIRST_AUTO_MIN_CHARS = 600;
+/** 创建页建议条阈值：素材超过此字数且仍为 web 时，推荐（非强制）本地优先。 */
+export const LOCAL_FIRST_SUGGEST_MIN_CHARS = 600;
+
+/** 原创角色纯本地建议阈值。 */
+export const LOCAL_ONLY_SUGGEST_MIN_CHARS = 200;
+
+/** covered 摘要低于此长度时降级为 partial（走不联网 LLM 整理）。 */
+export const MIN_COVERED_SUMMARY_CHARS = 400;
 
 export type EffectiveMaterialMode = "web" | "local-first" | "local-only";
 
@@ -20,9 +26,6 @@ export function resolveEffectiveMaterialMode(config: DistillationJobConfig): Eff
   if (config.materialMode === "local-only") return "local-only";
   if (!config.enableWebSearch) return "local-only";
   if (config.materialMode === "local-first") return "local-first";
-  const materialLen = config.userMaterial?.trim().length ?? 0;
-  if (materialLen >= LOCAL_FIRST_AUTO_MIN_CHARS) return "local-first";
-  if (config.sourceType === "original" && materialLen >= 200) return "local-first";
   return "web";
 }
 
@@ -51,17 +54,34 @@ export async function classifyMaterialCoverage(
   return parseMaterialCoverage(r.text);
 }
 
+export interface AgentPlansFromCoverageResult {
+  plans: AgentResearchPlan[];
+  /** covered 因摘要过短被降级为 partial 的 Agent 编号。 */
+  downgradedAgentIds: Array<1 | 2 | 3 | 4 | 5 | 6>;
+}
+
 export function buildAgentPlansFromCoverage(
   coverage: MaterialCoverageResult,
   enableWebSearch: boolean
-): AgentResearchPlan[] {
+): AgentPlansFromCoverageResult {
   const plans: AgentResearchPlan[] = [];
+  const downgradedAgentIds: Array<1 | 2 | 3 | 4 | 5 | 6> = [];
 
   for (const slug of RESEARCH_AGENT_ORDER) {
     const id = RESEARCH_AGENT_ORDER.indexOf(slug) + 1 as 1 | 2 | 3 | 4 | 5 | 6;
     const summary = coverage.localSummaries[id];
 
     if (coverage.coveredAgentIds.includes(id) && summary) {
+      if (summary.length < MIN_COVERED_SUMMARY_CHARS) {
+        downgradedAgentIds.push(id);
+        plans.push({
+          slug,
+          webSearchEnabled: false,
+          skipRun: false,
+          localMaterialFocus: summary
+        });
+        continue;
+      }
       plans.push({
         slug,
         webSearchEnabled: false,
@@ -87,7 +107,7 @@ export function buildAgentPlansFromCoverage(
     });
   }
 
-  return plans;
+  return { plans, downgradedAgentIds };
 }
 
 export function buildLocalOnlyAgentPlans(): AgentResearchPlan[] {

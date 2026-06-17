@@ -352,7 +352,11 @@ export class NuwaOrchestrator {
       yield phaseEvent(jobId, "researching", 3, "分析用户素材覆盖范围…");
       coverageResult = await classifyMaterialCoverage(this.llm, config);
       if (coverageResult) {
-        agentPlans = buildAgentPlansFromCoverage(coverageResult, config.enableWebSearch);
+        const coveragePlans = buildAgentPlansFromCoverage(coverageResult, config.enableWebSearch);
+        agentPlans = coveragePlans.plans;
+        for (const agentId of coveragePlans.downgradedAgentIds) {
+          yield yieldWarn(`Agent ${agentId} 本地摘要偏短，已改为本地整理（不联网）`);
+        }
         yield yieldWarn(`本地素材优先：${coverageSummaryForWarning(coverageResult)}`);
       } else {
         yield yieldWarn("素材覆盖分类失败，将回退为全网调研。");
@@ -416,7 +420,8 @@ export class NuwaOrchestrator {
         researchDocs,
         Date.now() - researchStartedAt,
         okCount,
-        failedCount
+        failedCount,
+        effectiveMaterialMode
       );
       yield { kind: "research_complete", jobId, summary: researchSummary };
       yield phaseEvent(
@@ -662,7 +667,7 @@ export class NuwaOrchestrator {
         jobId,
         "synthesizing",
         42,
-        `第 ${synthesisRound} 轮提炼中…`
+        `第 ${synthesisRound} 轮提炼中：正在优化思维框架与表达逻辑，不影响外貌与桌宠绘制`
       );
 
       const patch = await runTargetedResynthesis(
@@ -1739,7 +1744,8 @@ function buildResearchSummaryPayload(
   docs: ResearchDoc[],
   totalDurationMs: number,
   okCount: number,
-  failedCount: number
+  failedCount: number,
+  materialModeUsed: "web" | "local-first" | "local-only" = "web"
 ): ResearchSummaryPayload {
   return {
     docs: docs.map((d) => ({
@@ -1756,7 +1762,8 @@ function buildResearchSummaryPayload(
     okCount,
     failedCount,
     totalDurationMs,
-    review: mergeResearchSummary(docs)
+    materialModeUsed,
+    review: mergeResearchSummary(docs, materialModeUsed)
   };
 }
 
