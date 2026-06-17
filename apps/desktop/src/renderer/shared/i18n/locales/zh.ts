@@ -85,7 +85,6 @@ export const zh = {
     toastRegenerateSuccess: "形象已基于新参考图重生{{warnings}}",
     toastSpriteRegenerateFailed: "形象生成失败：{{error}}",
     toastSpriteUpdated: "形象已更新{{warnings}}",
-    toastSpriteRegenerated: "形象已重生{{warnings}}",
     warningsSuffix: "（{{count}} 条警告）",
     deleteTitle: "删除「{{name}}」？",
     deleteBodyIntro: "删除此角色将一并清除：",

@@ -87,7 +87,6 @@ export const en: TranslationTree = {
     toastRegenerateSuccess: "Appearance regenerated from new reference{{warnings}}",
     toastSpriteRegenerateFailed: "Sprite generation failed: {{error}}",
     toastSpriteUpdated: "Appearance updated{{warnings}}",
-    toastSpriteRegenerated: "Appearance regenerated{{warnings}}",
     warningsSuffix: " ({{count}} warnings)",
     deleteTitle: "Delete \"{{name}}\"?",
     deleteBodyIntro: "Deleting this character will also remove:",
