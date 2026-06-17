@@ -1,8 +1,24 @@
+import { looksLikeForeignTranslitWithoutDot } from "./character-names.js";
+
 const CJK_RE = /[\u4e00-\u9fff\u3400-\u4dbf]/;
 const LATIN_RE = /[A-Za-z]/;
 const KANA_RE = /[\u3040-\u309f\u30a0-\u30ff]/;
 const HANGUL_RE = /[\uac00-\ud7af]/;
 const BILINGUAL_QUOTE_RE = /^(.+?)（([^）]+)）$/;
+
+const SKELETON_PLACEHOLDER_QUOTES = [
+  "我还没准备好。",
+  "I'm not ready yet.",
+  "I am not ready yet."
+] as const;
+
+export function isSkeletonPlaceholderQuote(quote: string | undefined): boolean {
+  const trimmed = quote?.trim();
+  if (!trimmed) return false;
+  return SKELETON_PLACEHOLDER_QUOTES.some(
+    (s) => s.toLowerCase() === trimmed.toLowerCase()
+  );
+}
 
 function hasCjk(value: string): boolean {
   return CJK_RE.test(value);
@@ -97,6 +113,7 @@ export function needsQuoteLookup(
   sourceType: "public-figure" | "fictional" | "original",
   options?: { chineseNative?: boolean }
 ): boolean {
+  if (isSkeletonPlaceholderQuote(quote)) return true;
   const chineseNative = options?.chineseNative ?? false;
   if (!quote?.trim()) return true;
   return !isQuoteAcceptable(quote, { chineseNative });
@@ -106,10 +123,20 @@ export function needsQuoteLookup(
 export function isChineseNativeForQuote(
   chineseName: string,
   englishName: string,
-  pinyinEnglish: string
+  pinyinEnglish: string,
+  sourceType?: "public-figure" | "fictional" | "original"
 ): boolean {
   if (!hasCjk(chineseName)) return false;
-  return englishName.trim().toLowerCase() === pinyinEnglish.trim().toLowerCase();
+  const isPinyin = englishName.trim().toLowerCase() === pinyinEnglish.trim().toLowerCase();
+  if (!isPinyin) return false;
+  // 拼音英文名 + 长无间隔号中文 → 实为外文角色误标，座右铭应「原文（中文）」
+  if (
+    (sourceType === "public-figure" || sourceType === "fictional") &&
+    looksLikeForeignTranslitWithoutDot(chineseName)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function normalizeQuoteOneLiner(value: string): string {

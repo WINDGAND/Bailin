@@ -61,7 +61,7 @@ function titleCase(segment: string): string {
 
 /** 中文名 → 拼音英文名（GivenName FamilyName），用于无常用英文译名时。 */
 export function chineseNameToPinyinEnglish(chinese: string): string {
-  const compact = chinese.replace(/\s+/g, "").replace(/[·•]/g, "");
+  const compact = chinese.replace(/\s+/g, "").replace(/[·•・]/g, "");
   if (!hasCjk(compact)) return compact;
 
   const chars = [...compact];
@@ -77,6 +77,29 @@ export function chineseNameToPinyinEnglish(chinese: string): string {
   return `${givenPinyin} ${surnamePinyin}`;
 }
 
+/** 英文名是否为中文名拼音回退（非真实艺名/官方英文名）。 */
+export function isPinyinFallbackEnglish(chineseName: string, englishName: string): boolean {
+  if (!hasCjk(chineseName) || !isLatinName(englishName)) return false;
+  const pinyin = chineseNameToPinyinEnglish(chineseName);
+  return englishName.trim().toLowerCase() === pinyin.trim().toLowerCase();
+}
+
+/**
+ * 外文角色常见译名应含间隔号（·），如「科比·布莱恩特」。
+ * 连续 4+ 汉字且无间隔号，多半是用户随手输入未规范化。
+ */
+export function looksLikeForeignTranslitWithoutDot(chineseName: string): boolean {
+  if (!hasCjk(chineseName)) return false;
+  if (/[·•・]/.test(chineseName)) return false;
+  const compact = chineseName.replace(/\s/g, "");
+  return compact.length >= 4;
+}
+
+/** 统一中文间隔号为「·」。 */
+export function normalizeChineseNameDots(chineseName: string): string {
+  return chineseName.replace(/[•・]/g, "·").trim();
+}
+
 function isUsableEnglishName(value: string | undefined, chineseName: string): boolean {
   if (!value?.trim()) return false;
   if (!isLatinName(value)) return false;
@@ -87,17 +110,25 @@ export function needsCharacterNameLookup(
   names: CharacterNamePair,
   sourceType: "public-figure" | "fictional" | "original"
 ): boolean {
-  const hasCompletePair =
-    Boolean(names.chineseName.trim()) &&
-    Boolean(names.englishName.trim()) &&
-    hasCjk(names.chineseName) &&
-    isUsableEnglishName(names.englishName, names.chineseName);
+  const chineseName = normalizeChineseNameDots(names.chineseName);
+  const englishName = names.englishName.trim();
 
-  if (sourceType === "public-figure" || sourceType === "fictional") {
+  const hasCompletePair =
+    Boolean(chineseName) &&
+    Boolean(englishName) &&
+    hasCjk(chineseName) &&
+    isUsableEnglishName(englishName, chineseName);
+
+  if (sourceType === "original") {
     return !hasCompletePair;
   }
 
-  return !hasCompletePair;
+  // 公众人物 / 虚构：用户输入不可直接当标准译名，需联网核验
+  if (isPinyinFallbackEnglish(chineseName, englishName)) return true;
+  if (looksLikeForeignTranslitWithoutDot(chineseName)) return true;
+  if (!hasCompletePair) return true;
+
+  return false;
 }
 
 export function normalizeCharacterNames(
@@ -149,7 +180,7 @@ export function normalizeCharacterNames(
   }
 
   return {
-    chineseName: stripRoleSuffix(chineseName),
+    chineseName: normalizeChineseNameDots(stripRoleSuffix(chineseName)),
     englishName: englishName.trim()
   };
 }

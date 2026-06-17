@@ -6,6 +6,8 @@ import {
   applyCharacterNamesToMeta,
   normalizeCharacterNames,
   needsCharacterNameLookup,
+  normalizeChineseNameDots,
+  isPinyinFallbackEnglish,
   needsQuoteLookup,
   needsQuoteTranslation,
   isQuoteAcceptable,
@@ -237,11 +239,11 @@ export class NuwaOrchestrator {
       card,
       input.characterName,
       input.sourceType,
-      false,
+      this.metadataWebSearchEnabled(input.sourceType),
       warnings
     );
 
-    const quoteWebSearch = this.llm.detectCapabilities().webSearch;
+    const quoteWebSearch = this.metadataWebSearchEnabled(input.sourceType);
     await this.finalizeCharacterQuote(
       card,
       input.sourceType,
@@ -548,7 +550,7 @@ export class NuwaOrchestrator {
       card,
       config.characterName,
       config.sourceType,
-      config.enableWebSearch,
+      this.metadataWebSearchEnabled(config.sourceType),
       warnings,
       config.researchModel
     );
@@ -556,7 +558,7 @@ export class NuwaOrchestrator {
     await this.finalizeCharacterQuote(
       card,
       config.sourceType,
-      config.enableWebSearch,
+      this.metadataWebSearchEnabled(config.sourceType),
       warnings,
       config.researchModel,
       config.userMaterial
@@ -899,6 +901,14 @@ export class NuwaOrchestrator {
   }
 
   /** 解析并写回 meta.chineseName / meta.englishName，同时同步 name / sourceName。 */
+  private metadataWebSearchEnabled(
+    sourceType: CharacterCard["meta"]["sourceType"]
+  ): boolean {
+    if (sourceType === "original") return false;
+    return this.llm.detectCapabilities().webSearch;
+  }
+
+  /** 解析并写回 meta.chineseName / meta.englishName，同时同步 name / sourceName。 */
   private async finalizeCharacterNames(
     card: CharacterCard,
     inputCharacterName: string,
@@ -930,12 +940,22 @@ export class NuwaOrchestrator {
         researchModel
       );
       if (resolved) {
+        const normalizedChinese = normalizeChineseNameDots(resolved.chineseName);
+        const normalizedEnglish = resolved.englishName.trim();
+        if (
+          sourceType !== "original" &&
+          isPinyinFallbackEnglish(normalizedChinese, normalizedEnglish)
+        ) {
+          warnings.push(
+            "[name·lookup] 检索结果仍为拼音英文名，可能未命中正确人物，请检查模型联网能力"
+          );
+        }
         names = normalizeCharacterNames({
           inputName: inputCharacterName,
-          chineseName: resolved.chineseName,
-          englishName: resolved.englishName,
-          name: resolved.chineseName,
-          sourceName: resolved.englishName
+          chineseName: normalizedChinese,
+          englishName: normalizedEnglish,
+          name: normalizedChinese,
+          sourceName: normalizedEnglish
         });
       }
     }
@@ -1073,7 +1093,12 @@ export class NuwaOrchestrator {
     const chineseName = card.meta.chineseName ?? card.meta.name;
     const englishName = card.meta.englishName ?? card.meta.sourceName ?? "";
     const pinyinEnglish = chineseNameToPinyinEnglish(chineseName);
-    const chineseNative = isChineseNativeForQuote(chineseName, englishName, pinyinEnglish);
+    const chineseNative = isChineseNativeForQuote(
+      chineseName,
+      englishName,
+      pinyinEnglish,
+      sourceType
+    );
     const quoteOpts = { chineseNative };
 
     let quote = card.meta.quoteOneLiner;

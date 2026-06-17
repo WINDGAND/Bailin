@@ -1,7 +1,9 @@
 import {
   isQuoteAcceptable,
   needsQuoteLookup,
-  needsQuoteTranslation
+  needsQuoteTranslation,
+  isChineseNativeForQuote,
+  chineseNameToPinyinEnglish
 } from "../../packages/character-protocol/dist/index.js";
 
 const mikasa =
@@ -37,6 +39,21 @@ assert(
 
 assert("张雪峰纯中文有效", isQuoteAcceptable(zhang, { chineseNative: true }));
 assert("张雪峰无需补译", !needsQuoteTranslation(zhang, { chineseNative: true }));
+
+assert(
+  "骨架座右铭需重新检索",
+  needsQuoteLookup("我还没准备好。", "public-figure", { chineseNative: false })
+);
+
+const kobePinyin = chineseNameToPinyinEnglish("科比布莱恩特");
+assert(
+  "科比误标拼音时座右铭应走外文格式",
+  !isChineseNativeForQuote("科比布莱恩特", kobePinyin, kobePinyin, "public-figure")
+);
+assert(
+  "张雪峰拼音英文名仍为中文母语座右铭",
+  isChineseNativeForQuote("张雪峰", "Xuefeng Zhang", "Xuefeng Zhang", "public-figure")
+);
 
 if (failed > 0) {
   process.exit(1);
