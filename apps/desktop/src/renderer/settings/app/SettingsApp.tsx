@@ -10,6 +10,8 @@ import { ApiKeyPanel } from "../provider/ApiKeyPanel.js";
 import { DesktopBehaviorPanel } from "../desktop/DesktopBehaviorPanel.js";
 import { LanguagePanel } from "../language/LanguagePanel.js";
 import { DirtyContext, type DirtyContextValue } from "./dirty-context.js";
+import { VisualJobProvider } from "./visual-job-context.js";
+import { VisualJobBanner } from "./VisualJobBanner.js";
 import { useI18n } from "../../shared/i18n/index.js";
 
 type Tab = "library" | "create" | "memory" | "desktop" | "key" | "language";
@@ -141,41 +143,44 @@ export function SettingsApp(): JSX.Element {
 
   return (
     <DirtyContext.Provider value={dirtyCtx}>
-      <div className="settings-shell">
-        <aside className="settings-sidebar" aria-label={t("common.settingsSidebar")}>
-          <div className="settings-brand">
-            <div className="eyebrow">Bailin · 0.0.1</div>
-            <div className="display display--section" style={{ marginTop: 4 }}>
-              百灵
+      <VisualJobProvider>
+        <div className="settings-shell">
+          <aside className="settings-sidebar" aria-label={t("common.settingsSidebar")}>
+            <div className="settings-brand">
+              <div className="eyebrow">Bailin · 0.0.1</div>
+              <div className="display display--section" style={{ marginTop: 4 }}>
+                百灵
+              </div>
             </div>
-          </div>
 
-          <nav className="settings-nav" aria-label={t("common.settingsNav")}>
-            {TABS.map((tabDef) => (
-              <button
-                key={tabDef.id}
-                type="button"
-                className={tab === tabDef.id ? "settings-nav__item is-active" : "settings-nav__item"}
-                onClick={() => void tryGoTab(tabDef.id)}
-                aria-current={tab === tabDef.id ? "page" : undefined}
-              >
-                <tabDef.icon size={17} />
-                <span>{t(tabDef.labelKey)}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
-        <main key={tab} className="settings-main fade-in-up">
-          <div className="settings-page settings-page--centered">
-            {tab === "library" ? <CharacterLibrary onNewClick={() => void tryGoTab("create")} /> : null}
-            {tab === "create" ? <CreateCharacter onDone={() => void tryGoTab("library")} /> : null}
-            {tab === "memory" ? <MemoryPanel /> : null}
-            {tab === "desktop" ? <DesktopBehaviorPanel /> : null}
-            {tab === "key" ? <ApiKeyPanel /> : null}
-            {tab === "language" ? <LanguagePanel /> : null}
-          </div>
-        </main>
-      </div>
+            <nav className="settings-nav" aria-label={t("common.settingsNav")}>
+              {TABS.map((tabDef) => (
+                <button
+                  key={tabDef.id}
+                  type="button"
+                  className={tab === tabDef.id ? "settings-nav__item is-active" : "settings-nav__item"}
+                  onClick={() => void tryGoTab(tabDef.id)}
+                  aria-current={tab === tabDef.id ? "page" : undefined}
+                >
+                  <tabDef.icon size={17} />
+                  <span>{t(tabDef.labelKey)}</span>
+                </button>
+              ))}
+            </nav>
+          </aside>
+          <main key={tab} className="settings-main fade-in-up">
+            <div className="settings-page settings-page--centered">
+              <VisualJobBanner onGoLibrary={() => void tryGoTab("library")} />
+              {tab === "library" ? <CharacterLibrary onNewClick={() => void tryGoTab("create")} /> : null}
+              {tab === "create" ? <CreateCharacter onDone={() => void tryGoTab("library")} /> : null}
+              {tab === "memory" ? <MemoryPanel /> : null}
+              {tab === "desktop" ? <DesktopBehaviorPanel /> : null}
+              {tab === "key" ? <ApiKeyPanel /> : null}
+              {tab === "language" ? <LanguagePanel /> : null}
+            </div>
+          </main>
+        </div>
+      </VisualJobProvider>
     </DirtyContext.Provider>
   );
 }

@@ -16,6 +16,7 @@ import type {
   SpriteProgram
 } from "@nuwa-pet/character-protocol";
 import { useT } from "../../shared/i18n/index.js";
+import { useVisualJobs } from "../app/visual-job-context.js";
 
 interface LibraryItem {
   id: string;
@@ -31,6 +32,26 @@ const TRACK_KEYS: Record<LibraryItem["track"], "library.trackUtility" | "library
   companion: "library.trackCompanion"
 };
 
+const LIBRARY_PAGE_SIZE = 5;
+
+function libraryItemMatchesSearch(item: LibraryItem, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const displayName = getCharacterDisplayNames({
+    name: item.name,
+    sourceName: item.sourceName
+  });
+  const haystack = [
+    displayName.chineseName,
+    displayName.englishName,
+    item.name,
+    item.sourceName ?? ""
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
 export function CharacterLibrary({
   onNewClick
 }: {
@@ -40,16 +61,24 @@ export function CharacterLibrary({
   const nuwa = useNuwa();
   const confirm = useConfirm();
   const { showToast } = useToast();
+  const {
+    getJob,
+    isBusy,
+    runSpriteRegeneration,
+    runAppearanceRegeneration,
+    subscribeJobSettled
+  } = useVisualJobs();
 
   const [items, setItems] = useState<LibraryItem[] | null>(null);
   const [thumbnails, setThumbnails] = useState<Record<string, SpriteProgram | null>>({});
   const [selected, setSelected] = useState<CharacterBundle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [regenerating, setRegenerating] = useState(false);
   const [activating, setActivating] = useState(false);
   const [researchDocs, setResearchDocs] = useState<ResearchDoc[]>([]);
   const [qualityReport, setQualityReport] = useState<QualityReport | undefined>(undefined);
   const [openedAgentId, setOpenedAgentId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [listPage, setListPage] = useState(1);
 
   async function pick(id: string): Promise<void> {
     setSelectedId(id);
@@ -128,9 +157,22 @@ export function CharacterLibrary({
 
   useEffect(() => {
     void refreshList(false);
-    const off = nuwa.on.activeCharacterChanged(() => void refreshList(true));
-    return off;
-  }, [nuwa]);
+    const offActive = nuwa.on.activeCharacterChanged(() => void refreshList(true));
+    const offSettled = subscribeJobSettled((characterId, outcome) => {
+      if (outcome !== "success") return;
+      void (async () => {
+        await refreshList(true);
+        const next = await nuwa.characters.get(characterId);
+        if (next) {
+          setThumbnails((prev) => ({ ...prev, [characterId]: next.sprite ?? null }));
+        }
+      })();
+    });
+    return () => {
+      offActive();
+      offSettled();
+    };
+  }, [nuwa, subscribeJobSettled]);
 
   async function activate(id: string): Promise<void> {
     setActivating(true);
@@ -192,116 +234,6 @@ export function CharacterLibrary({
 
   const newRefFileInput = useRef<HTMLInputElement | null>(null);
 
-  async function regenerateAppearanceWithNewImage(
-    id: string,
-    file: File
-  ): Promise<void> {
-    if (file.size > 4 * 1024 * 1024) {
-      showToast({
-        kind: "warn",
-        text: t("library.toastImageTooLarge", {
-          size: (file.size / 1024 / 1024).toFixed(1)
-        })
-      });
-      return;
-    }
-    const ok = await confirm({
-      title: t("library.confirmNewRefTitle"),
-      body: t("library.confirmNewRefBody"),
-      confirmLabel: t("library.confirmNewRefConfirm"),
-      cancelLabel: t("common.cancel")
-    });
-    if (!ok) return;
-    setRegenerating(true);
-    try {
-      const dataUri = await new Promise<string>((res, rej) => {
-        const reader = new FileReader();
-        reader.onload = () => res(String(reader.result ?? ""));
-        reader.onerror = () => rej(reader.error ?? new Error("read failed"));
-        reader.readAsDataURL(file);
-      });
-      const r = await nuwa.characters.regenerateAppearance({
-        characterId: id,
-        referenceImages: [
-          {
-            url: dataUri,
-            source: "user-upload",
-            role: "primary",
-            notes: file.name
-          }
-        ]
-      });
-      const warnTail =
-        r.warnings && r.warnings.length > 0
-          ? t("library.warningsSuffix", { count: r.warnings.length })
-          : "";
-      if (!r.ok) {
-        showToast({
-          kind: "error",
-          text: t("library.toastRegenerateFailed", {
-            error: r.error ?? t("common.unknownError")
-          })
-        });
-      } else {
-        showToast({
-          kind: "success",
-          text: t("library.toastRegenerateSuccess", { warnings: warnTail })
-        });
-        const next = await nuwa.characters.get(id);
-        setSelected(next);
-        setThumbnails((prev) => ({
-          ...prev,
-          [id]: next?.sprite ?? null
-        }));
-      }
-    } catch (e) {
-      showToast({
-        kind: "error",
-        text: t("library.toastRegenerateFailed", {
-          error: e instanceof Error ? e.message : t("common.unknownError")
-        })
-      });
-    } finally {
-      setRegenerating(false);
-    }
-  }
-
-  async function regenerateSprite(id: string): Promise<void> {
-    const ok = await confirm({
-      title: t("library.confirmSpriteTitle"),
-      body: t("library.confirmSpriteBody"),
-      confirmLabel: t("library.confirmSpriteConfirm"),
-      cancelLabel: t("common.cancel")
-    });
-    if (!ok) return;
-    setRegenerating(true);
-    try {
-      const r = await nuwa.characters.regenerateSprite(id);
-      const warnTail =
-        r.warnings && r.warnings.length > 0
-          ? t("library.warningsSuffix", { count: r.warnings.length })
-          : "";
-      if (!r.ok) {
-        showToast({
-          kind: "error",
-          text: t("library.toastSpriteRegenerateFailed", {
-            error: r.error ?? t("common.unknownError")
-          })
-        });
-      } else {
-        showToast({ kind: "success", text: t("library.toastSpriteUpdated", { warnings: warnTail }) });
-        const next = await nuwa.characters.get(id);
-        setSelected(next);
-        setThumbnails((prev) => ({
-          ...prev,
-          [id]: next?.sprite ?? null
-        }));
-      }
-    } finally {
-      setRegenerating(false);
-    }
-  }
-
   const qualityWarning = useMemo<{ severity: "warn" | "error"; text: string } | null>(
     () => deriveQualityWarning(qualityReport, selected?.researchDocs, t),
     [qualityReport, selected, t]
@@ -320,7 +252,35 @@ export function CharacterLibrary({
     [items, selected]
   );
   const isSelectedActive = selectedItem?.isActive ?? false;
-  const anyBusy = regenerating || activating;
+  const selectedVisualJob = selected ? getJob(selected.card.id) : undefined;
+  const selectedRegenerating = selected ? isBusy(selected.card.id) : false;
+  const anyBusy = selectedRegenerating || activating;
+
+  const filteredItems = useMemo(() => {
+    if (!items) return null;
+    return items.filter((c) => libraryItemMatchesSearch(c, searchQuery));
+  }, [items, searchQuery]);
+
+  const totalPages = useMemo(() => {
+    const count = filteredItems?.length ?? 0;
+    return Math.max(1, Math.ceil(count / LIBRARY_PAGE_SIZE));
+  }, [filteredItems]);
+
+  const currentPage = Math.min(listPage, totalPages);
+
+  const paginatedItems = useMemo(() => {
+    if (!filteredItems) return null;
+    const start = (currentPage - 1) * LIBRARY_PAGE_SIZE;
+    return filteredItems.slice(start, start + LIBRARY_PAGE_SIZE);
+  }, [filteredItems, currentPage]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (listPage > totalPages) setListPage(totalPages);
+  }, [listPage, totalPages]);
 
   return (
     <div>
@@ -336,7 +296,25 @@ export function CharacterLibrary({
       </div>
       <div className="apple-two-column">
         {/* —————— 列表 —————— */}
-        <div className="plain-list">
+        <div style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 0 }}>
+          {items && items.length > 0 ? (
+            <div style={{ padding: "0 0 12px" }}>
+              <div className="input-group">
+                <span className="input-group__prefix" aria-hidden="true">
+                  <SearchIcon size={16} />
+                </span>
+                <input
+                  type="search"
+                  className="input input--with-prefix"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t("library.searchPlaceholder")}
+                  aria-label={t("library.searchPlaceholder")}
+                />
+              </div>
+            </div>
+          ) : null}
+          <div className="plain-list">
           {items === null ? (
             <>
               {[0, 1, 2].map((i) => (
@@ -350,12 +328,23 @@ export function CharacterLibrary({
             </>
           ) : items.length === 0 ? (
             <EmptyLibrary onNew={onNewClick} t={t} />
+          ) : filteredItems!.length === 0 ? (
+            <div
+              className="card"
+              style={{ padding: "24px 16px", textAlign: "center", borderTop: "1px solid var(--grid-strong)" }}
+            >
+              <p className="body-sm" style={{ color: "var(--ink-soft)", margin: 0 }}>
+                {t("library.searchNoResults")}
+              </p>
+            </div>
           ) : (
-            items.map((c, i) => {
+            paginatedItems!.map((c, i) => {
               const displayName = getCharacterDisplayNames({
                 name: c.name,
                 sourceName: c.sourceName
               });
+              const itemJob = getJob(c.id);
+              const itemBusy = itemJob?.status === "running";
               return (
                 <button
                   key={c.id}
@@ -417,6 +406,12 @@ export function CharacterLibrary({
                           {t("library.current")}
                         </span>
                       ) : null}
+                      {itemBusy ? (
+                        <span className="bl-tag" style={{ transform: "scale(0.92)" }}>
+                          <Spinner />
+                          {t("library.processing")}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="row gap-2" style={{ marginTop: 6 }}>
                       <span
@@ -454,6 +449,43 @@ export function CharacterLibrary({
               );
             })
           )}
+          </div>
+          {filteredItems && filteredItems.length > LIBRARY_PAGE_SIZE ? (
+            <div
+              className="row row--between"
+              style={{
+                padding: "12px 4px 0",
+                gap: 8,
+                flexWrap: "wrap"
+              }}
+            >
+              <span className="body-sm" style={{ color: "var(--ink-soft)" }}>
+                {t("library.paginationSummary", {
+                  total: filteredItems.length,
+                  page: currentPage,
+                  pages: totalPages
+                })}
+              </span>
+              <div className="row gap-2">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  disabled={currentPage <= 1}
+                  onClick={() => setListPage((p) => Math.max(1, p - 1))}
+                >
+                  {t("library.paginationPrev")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setListPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  {t("library.paginationNext")}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* —————— 详情 —————— */}
@@ -575,6 +607,36 @@ export function CharacterLibrary({
                 </div>
               </section>
 
+              {selectedVisualJob && selectedVisualJob.status !== "running" ? (
+                <div
+                  className="body-sm fade-in"
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: `1px solid ${
+                      selectedVisualJob.status === "error"
+                        ? "rgba(220, 38, 38, 0.35)"
+                        : "rgba(22, 163, 74, 0.35)"
+                    }`,
+                    color:
+                      selectedVisualJob.status === "error" ? "var(--danger)" : "var(--ink-soft)"
+                  }}
+                >
+                  {selectedVisualJob.status === "error"
+                    ? t("library.visualJobFailed", {
+                        name: selectedVisualJob.characterName,
+                        error: selectedVisualJob.error ?? t("common.unknownError")
+                      })
+                    : selectedVisualJob.kind === "sprite"
+                      ? t("library.visualJobDoneSprite", {
+                          name: selectedVisualJob.characterName
+                        })
+                      : t("library.visualJobDoneAppearance", {
+                          name: selectedVisualJob.characterName
+                        })}
+                </div>
+              ) : null}
+
               <div className="row gap-2 row--wrap">
                 <button
                   className="btn btn--magenta"
@@ -586,7 +648,9 @@ export function CharacterLibrary({
                 </button>
                 <button
                   className="btn btn--ghost"
-                  onClick={() => void regenerateSprite(selected.card.id)}
+                  onClick={() =>
+                    void runSpriteRegeneration(selected.card.id, selected.card.meta.name)
+                  }
                   disabled={anyBusy}
                   data-hint={
                     selected.card.meta.appearance
@@ -594,7 +658,13 @@ export function CharacterLibrary({
                       : t("library.regenerateSpriteHintSkeleton")
                   }
                 >
-                  {regenerating ? <><Spinner /> {t("library.processing")}</> : t("library.regenerateSprite")}
+                  {selectedRegenerating && selectedVisualJob?.kind === "sprite" ? (
+                    <>
+                      <Spinner /> {t("library.processing")}
+                    </>
+                  ) : (
+                    t("library.regenerateSprite")
+                  )}
                 </button>
                 <button
                   className="btn btn--ghost"
@@ -602,7 +672,13 @@ export function CharacterLibrary({
                   disabled={anyBusy}
                   data-hint={t("library.newReferenceHint")}
                 >
-                  {t("library.newReference")}
+                  {selectedRegenerating && selectedVisualJob?.kind === "appearance" ? (
+                    <>
+                      <Spinner /> {t("library.processing")}
+                    </>
+                  ) : (
+                    t("library.newReference")
+                  )}
                 </button>
                 <input
                   ref={newRefFileInput}
@@ -612,7 +688,11 @@ export function CharacterLibrary({
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f && selected) {
-                      void regenerateAppearanceWithNewImage(selected.card.id, f);
+                      void runAppearanceRegeneration(
+                        selected.card.id,
+                        selected.card.meta.name,
+                        f
+                      );
                     }
                     e.target.value = "";
                   }}
@@ -816,6 +896,25 @@ export function CharacterLibrary({
         </div>
       </div>
     </div>
+  );
+}
+
+function SearchIcon({ size = 16 }: { size?: number }): JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16l4.5 4.5" />
+    </svg>
   );
 }
 

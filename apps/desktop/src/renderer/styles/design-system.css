@@ -385,6 +385,20 @@ body {
 .input-group .input {
   padding-right: 76px;
 }
+.input-group .input--with-prefix {
+  padding-left: 38px;
+  padding-right: 13px;
+}
+.input-group__prefix {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
 .input-group__suffix {
   position: absolute;
   right: 6px;
