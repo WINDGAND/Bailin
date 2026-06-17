@@ -19,16 +19,20 @@ import {
 } from "@nuwa-pet/nuwa-prompts";
 import {
   composeAtlas,
+  decodePng,
   extractStripFrames,
   makeCanonicalBase,
   makeContactSheet,
   makePreviewStrip,
   mirrorStripHorizontally,
   prepareHatchPetRun,
+  resolveStripChromaStrategy,
   validateAtlas,
   type AtlasValidationReport,
+  type ChromaStrategy,
   type ExtractedFrame,
-  type HatchJobSpec
+  type HatchJobSpec,
+  type RowSlot
 } from "@nuwa-pet/pet-atlas-tools";
 import type { LocalVault } from "../store/local-vault.js";
 import {
@@ -142,6 +146,20 @@ export type HatchProgressEvent =
 const CHROMA_GREEN = { r: 0, g: 255, b: 0 };
 const CHROMA_WHITE = { r: 255, g: 255, b: 255 };
 const DEFAULT_CHROMA = CHROMA_GREEN; // 旧字段，保留供 verify-hatch-pet 等回归用
+
+function buildChromaRowSlot(
+  chroma: { r: number; g: number; b: number },
+  partial: Omit<RowSlot, "chromaKey" | "chromaSeedThreshold" | "chromaSpillThreshold" | "chromaGreenSpill">
+): RowSlot {
+  const isWhite = chroma.r > 200 && chroma.g > 200 && chroma.b > 200;
+  return {
+    ...partial,
+    chromaKey: chroma,
+    chromaSeedThreshold: isWhite ? 30 : 60,
+    chromaSpillThreshold: isWhite ? 40 : 75,
+    chromaGreenSpill: !isWhite
+  };
+}
 
 /** 9 行 strip 默认并发数；可通过 input.rowConcurrency 或 NUWA_PET_HATCH_ROW_CONCURRENCY 覆盖。 */
 const DEFAULT_HATCH_ROW_CONCURRENCY = 4;
@@ -347,6 +365,7 @@ export class HatchPetPipeline {
       HatchPetRowState,
       Buffer[]
     >;
+    let chromaStrategy: ChromaStrategy = useTransparent ? "green" : "white";
     for (const rowState of HATCH_PET_ROW_STATES) {
       const r = rowResults[rowState];
       if (!r.png) {
@@ -358,17 +377,15 @@ export class HatchPetPipeline {
         continue;
       }
       try {
-        const frames = extractStripFrames(
-          {
-            rowIndex: HATCH_PET_ROW_STATES.indexOf(rowState),
-            frameCount: frameCounts[rowState],
-            stripPng: r.png,
-            chromaKey: chroma,
-            // 白色 chroma 需要更高阈值才能容忍模型给的"几乎白但不完全白"的背景
-            chromaThreshold: chroma === CHROMA_WHITE ? 40 : 80
-          },
-          cell
-        );
+        const slot = buildChromaRowSlot(chroma, {
+          rowIndex: HATCH_PET_ROW_STATES.indexOf(rowState),
+          frameCount: frameCounts[rowState],
+          stripPng: r.png,
+          rowState
+        });
+        const stripProbe = decodePng(r.png);
+        chromaStrategy = resolveStripChromaStrategy(stripProbe, slot);
+        const frames = extractStripFrames(slot, cell);
         rowFramesPng[rowState] = frames.map((f: ExtractedFrame) => f.png);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -389,14 +406,17 @@ export class HatchPetPipeline {
 
     // ===== Step 5: 校验 =====
     const rowFrameCounts: Record<number, number> = {};
+    const rowStates: Record<number, string> = {};
     HATCH_PET_ROW_STATES.forEach((state, idx) => {
       rowFrameCounts[idx] = frameCounts[state];
+      rowStates[idx] = state;
     });
     const validation = validateAtlas({
       atlasPng,
       cell,
       grid,
       rowFrameCounts,
+      rowStates,
       // gpt-image 产出的 1024×1024 方图经「切槽 + fit 到 192×208」
       // 后，角色占格比例可能偏小；这属于 QA 警告，不应让整只桌宠失败。
       minOpaquePerFrame: Math.floor(cell.width * cell.height * 0.015)
@@ -447,6 +467,10 @@ export class HatchPetPipeline {
           {
             runId,
             tier,
+            chromaStrategy,
+            chromaKey: chroma,
+            chromaSeedThreshold: chroma === CHROMA_WHITE ? 30 : 60,
+            chromaSpillThreshold: chroma === CHROMA_WHITE ? 40 : 75,
             durationMs: Date.now() - start,
             totalCostUsd: totalCost,
             validation,

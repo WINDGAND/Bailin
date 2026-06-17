@@ -163,10 +163,10 @@ export function AtlasPet({
   const sheetW = cellW * atlas.grid.columns;
   const sheetH = cellH * atlas.grid.rows;
   const safeFrame = Math.min(frameIndex, Math.max(0, binding.frameCount - 1));
-  const bgX = -safeFrame * cellW * display.scale;
-  const bgY = -binding.row * cellH * display.scale;
-  const bgW = sheetW * display.scale;
-  const bgH = sheetH * display.scale;
+  const bgX = Math.round(-safeFrame * cellW * display.scale);
+  const bgY = Math.round(-binding.row * cellH * display.scale);
+  const bgW = Math.round(sheetW * display.scale);
+  const bgH = Math.round(sheetH * display.scale);
 
   return (
     <div
@@ -187,7 +187,7 @@ export function AtlasPet({
           backgroundPosition: `${bgX}px ${bgY}px`,
           backgroundSize: `${bgW}px ${bgH}px`,
           backgroundRepeat: "no-repeat",
-          imageRendering: "auto"
+          imageRendering: display.scale === Math.floor(display.scale) ? "pixelated" : "auto"
         }}
       />
     </div>

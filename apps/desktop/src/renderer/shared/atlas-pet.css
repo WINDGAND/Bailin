@@ -5,12 +5,13 @@
   pointer-events: none;
   -webkit-user-select: none;
   user-select: none;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .atlas-pet__frame {
   position: relative;
   pointer-events: none;
+  overflow: hidden;
 }
 
 /* hatch 入场动画：从下方淡入 + 轻微弹跳 */

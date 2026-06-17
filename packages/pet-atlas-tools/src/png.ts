@@ -135,43 +135,515 @@ export function resize(src: RawImage, targetW: number, targetH: number): RawImag
 }
 
 /**
+ * 把接近 chromaKey 的像素抠成透明（边界连通 flood-fill，避免误抠角色内部同色像素）。
+ */
+export interface ChromaRemovalOptions {
+  chromaKey: { r: number; g: number; b: number };
+  /** 边界播种用的严格阈值（0~441 色距）。 */
+  seedThreshold: number;
+  /** flood 扩展可略宽，默认 seedThreshold + 8。 */
+  spillThreshold?: number;
+  /** 绿幕专用：扩展阶段是否启用 greenDominant 判定。 */
+  greenSpill?: boolean;
+  /** 边缘去溢色阈值（仅作用于贴透明边的像素；默认 spill + 18）。 */
+  edgeSpillThreshold?: number;
+  /** 可清除的内部 chroma 孤岛最大像素数（默认 0 = 关闭，避免误伤白裙/高光）。 */
+  maxInteriorChromaIsland?: number;
+  /** 内部孤岛判定阈值（默认同 seedThreshold，比 spill 更严）。 */
+  interiorChromaThreshold?: number;
+}
+
+function colorDistSq(
+  r: number,
+  g: number,
+  b: number,
+  key: { r: number; g: number; b: number }
+): number {
+  const dr = r - key.r;
+  const dg = g - key.g;
+  const db = b - key.b;
+  return dr * dr + dg * dg + db * db;
+}
+
+function isNearChroma(
+  r: number,
+  g: number,
+  b: number,
+  key: { r: number; g: number; b: number },
+  thresholdSq: number
+): boolean {
+  return colorDistSq(r, g, b, key) <= thresholdSq;
+}
+
+function isGreenDominantPixel(
+  r: number,
+  g: number,
+  b: number,
+  chromaKey: { r: number; g: number; b: number }
+): boolean {
+  return (
+    chromaKey.g > 200 &&
+    chromaKey.r < 40 &&
+    chromaKey.b < 40 &&
+    g > 110 &&
+    g - r > 45 &&
+    g - b > 45
+  );
+}
+
+function isTransparentAlpha(a: number): boolean {
+  return a < 16;
+}
+
+function isChromaSeedPixel(
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  key: { r: number; g: number; b: number },
+  seedSq: number
+): boolean {
+  if (isTransparentAlpha(a)) return true;
+  return isNearChroma(r, g, b, key, seedSq);
+}
+
+function isChromaSpillPixel(
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  key: { r: number; g: number; b: number },
+  spillSq: number,
+  greenSpill: boolean
+): boolean {
+  if (isTransparentAlpha(a)) return true;
+  if (isNearChroma(r, g, b, key, spillSq)) return true;
+  if (greenSpill && isGreenDominantPixel(r, g, b, key)) return true;
+  return false;
+}
+
+/**
+ * 边界连通 chroma 抠像：仅清除与图像边缘连通的背景色像素。
+ */
+export function removeChromaBackgroundConnected(
+  img: RawImage,
+  opts: ChromaRemovalOptions
+): RawImage {
+  const out = blankImage(img.width, img.height);
+  img.data.copy(out.data);
+  const { width, height, data } = out;
+  const seedSq = opts.seedThreshold * opts.seedThreshold;
+  const spillThreshold = opts.spillThreshold ?? opts.seedThreshold + 8;
+  const spillSq = spillThreshold * spillThreshold;
+  const greenSpill = opts.greenSpill ?? false;
+  const key = opts.chromaKey;
+
+  const marked = new Uint8Array(width * height);
+  const queueX = new Int32Array(width * height);
+  const queueY = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+
+  const tryEnqueue = (x: number, y: number, asSeed: boolean): void => {
+    const idx = y * width + x;
+    if (marked[idx]) return;
+    const i = idx * 4;
+    const r = data[i] ?? 0;
+    const g = data[i + 1] ?? 0;
+    const b = data[i + 2] ?? 0;
+    const a = data[i + 3] ?? 0;
+    const ok = asSeed
+      ? isChromaSeedPixel(r, g, b, a, key, seedSq)
+      : isChromaSpillPixel(r, g, b, a, key, spillSq, greenSpill);
+    if (!ok) return;
+    marked[idx] = 1;
+    queueX[tail] = x;
+    queueY[tail] = y;
+    tail += 1;
+  };
+
+  for (let x = 0; x < width; x += 1) {
+    tryEnqueue(x, 0, true);
+    tryEnqueue(x, height - 1, true);
+  }
+  for (let y = 0; y < height; y += 1) {
+    tryEnqueue(0, y, true);
+    tryEnqueue(width - 1, y, true);
+  }
+
+  while (head < tail) {
+    const x = queueX[head]!;
+    const y = queueY[head]!;
+    head += 1;
+    if (x > 0) tryEnqueue(x - 1, y, false);
+    if (x + 1 < width) tryEnqueue(x + 1, y, false);
+    if (y > 0) tryEnqueue(x, y - 1, false);
+    if (y + 1 < height) tryEnqueue(x, y + 1, false);
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!marked[y * width + x]) continue;
+      const i = (y * width + x) * 4;
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+      data[i + 3] = 0;
+    }
+  }
+  return out;
+}
+
+function clearPixel(data: Buffer, i: number): void {
+  data[i] = 0;
+  data[i + 1] = 0;
+  data[i + 2] = 0;
+  data[i + 3] = 0;
+}
+
+function isChromaResiduePixel(
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  key: { r: number; g: number; b: number },
+  thresholdSq: number,
+  greenSpill: boolean
+): boolean {
+  if (isTransparentAlpha(a)) return false;
+  if (isNearChroma(r, g, b, key, thresholdSq)) return true;
+  if (greenSpill && isGreenDominantPixel(r, g, b, key)) return true;
+  return false;
+}
+
+function touchesTransparentNeighbor(
+  data: Buffer,
+  width: number,
+  height: number,
+  x: number,
+  y: number
+): boolean {
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const na = data[(ny * width + nx) * 4 + 3] ?? 0;
+      if (isTransparentAlpha(na)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 抠像后精修：仅清除贴透明边的 chroma 溢色（外圈白/绿边）。
+ * 内部 chroma 孤岛清除默认关闭（maxInteriorChromaIsland=0），防止误抠白裙/浅发。
+ */
+export function polishChromaMatte(
+  img: RawImage,
+  opts: ChromaRemovalOptions
+): RawImage {
+  const out = blankImage(img.width, img.height);
+  img.data.copy(out.data);
+  const { width, height, data } = out;
+  const spillThreshold = opts.spillThreshold ?? opts.seedThreshold + 8;
+  const edgeThreshold =
+    opts.edgeSpillThreshold ?? opts.seedThreshold + 10;
+  const islandThreshold = opts.interiorChromaThreshold ?? opts.seedThreshold;
+  const maxIsland = opts.maxInteriorChromaIsland ?? 0;
+  const edgeSq = edgeThreshold * edgeThreshold;
+  const islandSq = islandThreshold * islandThreshold;
+  const greenSpill = opts.greenSpill ?? false;
+  const key = opts.chromaKey;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
+      const r = data[i] ?? 0;
+      const g = data[i + 1] ?? 0;
+      const b = data[i + 2] ?? 0;
+      const a = data[i + 3] ?? 0;
+      if (isTransparentAlpha(a)) continue;
+      let touchesTrans = false;
+      for (const [nx, ny] of [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1]
+      ] as const) {
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        if (isTransparentAlpha(data[(ny * width + nx) * 4 + 3] ?? 0)) {
+          touchesTrans = true;
+          break;
+        }
+      }
+      if (
+        touchesTrans &&
+        isChromaResiduePixel(r, g, b, a, key, edgeSq, false)
+      ) {
+        clearPixel(data, i);
+      }
+    }
+  }
+
+  if (maxIsland <= 0) return out;
+
+  const visited = new Uint8Array(width * height);
+  const queueX = new Int32Array(width * height);
+  const queueY = new Int32Array(width * height);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const startIdx = y * width + x;
+      if (visited[startIdx]) continue;
+      const si = startIdx * 4;
+      const sa = data[si + 3] ?? 0;
+      const sr = data[si] ?? 0;
+      const sg = data[si + 1] ?? 0;
+      const sb = data[si + 2] ?? 0;
+      if (
+        isTransparentAlpha(sa) ||
+        !isChromaResiduePixel(sr, sg, sb, sa, key, islandSq, greenSpill)
+      ) {
+        continue;
+      }
+
+      let head = 0;
+      let tail = 0;
+      queueX[tail] = x;
+      queueY[tail] = y;
+      tail += 1;
+      visited[startIdx] = 1;
+
+      const component: number[] = [startIdx];
+      let touchesBorder = x === 0 || y === 0 || x === width - 1 || y === height - 1;
+
+      while (head < tail) {
+        const cx = queueX[head]!;
+        const cy = queueY[head]!;
+        head += 1;
+        for (const [nx, ny] of [
+          [cx + 1, cy],
+          [cx - 1, cy],
+          [cx, cy + 1],
+          [cx, cy - 1]
+        ] as const) {
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const idx = ny * width + nx;
+          if (visited[idx]) continue;
+          const ni = idx * 4;
+          const na = data[ni + 3] ?? 0;
+          const nr = data[ni] ?? 0;
+          const ng = data[ni + 1] ?? 0;
+          const nb = data[ni + 2] ?? 0;
+          if (
+            isTransparentAlpha(na) ||
+            !isChromaResiduePixel(nr, ng, nb, na, key, islandSq, greenSpill)
+          ) {
+            continue;
+          }
+          visited[idx] = 1;
+          component.push(idx);
+          queueX[tail] = nx;
+          queueY[tail] = ny;
+          tail += 1;
+          if (nx === 0 || ny === 0 || nx === width - 1 || ny === height - 1) {
+            touchesBorder = true;
+          }
+        }
+      }
+
+      if (!touchesBorder && component.length <= maxIsland) {
+        for (const idx of component) {
+          clearPixel(data, idx * 4);
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
+ * 检测 PNG 是否已具备有效原生透明通道（可跳过 chroma 抠像）。
+ */
+export function detectNativeTransparency(img: RawImage): boolean {
+  const { width, height, data } = img;
+  if (width < 8 || height < 8) return false;
+
+  let borderTotal = 0;
+  let borderTransparent = 0;
+  const sampleBorder = (x: number, y: number): void => {
+    borderTotal += 1;
+    const a = data[(y * width + x) * 4 + 3] ?? 0;
+    if (isTransparentAlpha(a)) borderTransparent += 1;
+  };
+  for (let x = 0; x < width; x += 1) {
+    sampleBorder(x, 0);
+    sampleBorder(x, height - 1);
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    sampleBorder(0, y);
+    sampleBorder(width - 1, y);
+  }
+  if (borderTotal === 0 || borderTransparent / borderTotal < 0.6) return false;
+
+  const cx0 = Math.floor(width * 0.25);
+  const cx1 = Math.ceil(width * 0.75);
+  const cy0 = Math.floor(height * 0.25);
+  const cy1 = Math.ceil(height * 0.75);
+  let centerOpaque = 0;
+  let centerTotal = 0;
+  for (let y = cy0; y < cy1; y += 1) {
+    for (let x = cx0; x < cx1; x += 1) {
+      centerTotal += 1;
+      const a = data[(y * width + x) * 4 + 3] ?? 0;
+      if (a >= 128) centerOpaque += 1;
+    }
+  }
+  const minCenterOpaque = Math.max(32, Math.floor(centerTotal * 0.02));
+  return centerOpaque >= minCenterOpaque;
+}
+
+export interface RepairInteriorHolesOptions {
+  /** 超过此像素数的内部洞不填充（默认无限制）。 */
+  maxHolePixels?: number;
+}
+
+/**
+ * 填充不与图像边界连通的内部透明洞。
+ */
+export function repairInteriorAlphaHoles(
+  img: RawImage,
+  opts: RepairInteriorHolesOptions = {}
+): RawImage {
+  const out = blankImage(img.width, img.height);
+  img.data.copy(out.data);
+  const { width, height, data } = out;
+  const exterior = markExteriorTransparent(data, width, height);
+
+  const holes: Array<{ x: number; y: number }> = [];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const idx = y * width + x;
+      const a = data[idx * 4 + 3] ?? 0;
+      if (isTransparentAlpha(a) && !exterior[idx]) {
+        holes.push({ x, y });
+      }
+    }
+  }
+
+  if (holes.length === 0) return out;
+  if (opts.maxHolePixels != null && holes.length > opts.maxHolePixels) return out;
+
+  for (const { x, y } of holes) {
+    const rs: number[] = [];
+    const gs: number[] = [];
+    const bs: number[] = [];
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const ni = (ny * width + nx) * 4;
+        const na = data[ni + 3] ?? 0;
+        if (na < 128) continue;
+        rs.push(data[ni] ?? 0);
+        gs.push(data[ni + 1] ?? 0);
+        bs.push(data[ni + 2] ?? 0);
+      }
+    }
+    const i = (y * width + x) * 4;
+    if (rs.length === 0) continue;
+    rs.sort((a, b) => a - b);
+    gs.sort((a, b) => a - b);
+    bs.sort((a, b) => a - b);
+    const mid = Math.floor(rs.length / 2);
+    data[i] = rs[mid] ?? 0;
+    data[i + 1] = gs[mid] ?? 0;
+    data[i + 2] = bs[mid] ?? 0;
+    data[i + 3] = 255;
+  }
+  return out;
+}
+
+/** 统计不与边界连通的透明像素数（内部洞）。 */
+export function countInteriorTransparentPixels(img: RawImage): number {
+  const { width, height, data } = img;
+  const exterior = markExteriorTransparent(data, width, height);
+  let count = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const idx = y * width + x;
+      const a = data[idx * 4 + 3] ?? 0;
+      if (isTransparentAlpha(a) && !exterior[idx]) count += 1;
+    }
+  }
+  return count;
+}
+
+function markExteriorTransparent(
+  data: Buffer,
+  width: number,
+  height: number
+): Uint8Array {
+  const exterior = new Uint8Array(width * height);
+  const queueX = new Int32Array(width * height);
+  const queueY = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+
+  const tryEnqueue = (x: number, y: number): void => {
+    const idx = y * width + x;
+    if (exterior[idx]) return;
+    const a = data[idx * 4 + 3] ?? 0;
+    if (!isTransparentAlpha(a)) return;
+    exterior[idx] = 1;
+    queueX[tail] = x;
+    queueY[tail] = y;
+    tail += 1;
+  };
+
+  for (let x = 0; x < width; x += 1) {
+    tryEnqueue(x, 0);
+    tryEnqueue(x, height - 1);
+  }
+  for (let y = 0; y < height; y += 1) {
+    tryEnqueue(0, y);
+    tryEnqueue(width - 1, y);
+  }
+
+  while (head < tail) {
+    const x = queueX[head]!;
+    const y = queueY[head]!;
+    head += 1;
+    if (x > 0) tryEnqueue(x - 1, y);
+    if (x + 1 < width) tryEnqueue(x + 1, y);
+    if (y > 0) tryEnqueue(x, y - 1);
+    if (y + 1 < height) tryEnqueue(x, y + 1);
+  }
+  return exterior;
+}
+
+/**
  * 把接近 chromaKey 的像素抠成透明。
  * @param threshold 0~441，色距阈值（√(255²×3) ≈ 441）。常用 30~80。
+ * @deprecated 请优先使用 removeChromaBackgroundConnected；此函数保留兼容旧调用。
  */
 export function removeChromaBackground(
   img: RawImage,
   chromaKey: { r: number; g: number; b: number },
   threshold = 60
 ): RawImage {
-  const out = blankImage(img.width, img.height);
-  img.data.copy(out.data);
-  const sq = threshold * threshold;
-  for (let i = 0; i < out.data.length; i += 4) {
-    const r = out.data[i] ?? 0;
-    const g = out.data[i + 1] ?? 0;
-    const b = out.data[i + 2] ?? 0;
-    const dr = r - chromaKey.r;
-    const dg = g - chromaKey.g;
-    const db = b - chromaKey.b;
-    const nearKey = dr * dr + dg * dg + db * db <= sq;
-    // gpt-image 经常会把纯绿幕画成带噪点/渐变的绿色光晕。
-    // 对绿色 chroma key 额外使用“绿色占优”判定，避免残留大块绿背景
-    // 被后续连通域当作角色组件。
-    const greenDominant =
-      chromaKey.g > 200 &&
-      chromaKey.r < 40 &&
-      chromaKey.b < 40 &&
-      g > 110 &&
-      g - r > 45 &&
-      g - b > 45;
-    if (nearKey || greenDominant) {
-      out.data[i] = 0;
-      out.data[i + 1] = 0;
-      out.data[i + 2] = 0;
-      out.data[i + 3] = 0;
-    }
-  }
-  return out;
+  const isGreenKey = chromaKey.g > 200 && chromaKey.r < 40 && chromaKey.b < 40;
+  return removeChromaBackgroundConnected(img, {
+    chromaKey,
+    seedThreshold: threshold,
+    spillThreshold: threshold,
+    greenSpill: isGreenKey
+  });
 }
 
 /**

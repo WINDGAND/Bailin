@@ -55,7 +55,13 @@ const {
   mirrorStripHorizontally,
   validateAtlas,
   makeContactSheet,
-  makeCanonicalBase
+  makeCanonicalBase,
+  applyStripChromaPipeline,
+  repairInteriorAlphaHoles,
+  detectNativeTransparency,
+  countInteriorTransparentPixels,
+  removeChromaBackgroundConnected,
+  measureFrameAnchor
 } = require(toolsPath);
 
 let allOk = true;
@@ -269,7 +275,16 @@ try {
     cell
   );
   const widths = boundaryFrames.map((f) => opaqueBounds(decodePng(f.png)).w);
-  widths.every((w) => w > 150)
+  const notHalfBody = boundaryFrames.every((f) => {
+    const img = decodePng(f.png);
+    const b = opaqueBounds(img);
+    const half = Math.floor(img.width / 2);
+    const left = countRectOpaque(img, 0, 0, half, img.height);
+    const right = countRectOpaque(img, half, 0, img.width - half, img.height);
+    const balance = Math.min(left, right) / Math.max(1, Math.max(left, right));
+    return b.w > 120 && b.h > 120 && balance > 0.35;
+  });
+  notHalfBody
     ? ok("跨 slot 边界的角色不会被切成半身")
     : fail(`跨 slot 边界角色有效宽度异常：${widths.join(", ")}`);
 } catch (e) {
@@ -411,6 +426,206 @@ canImg.width === cell.width && canImg.height === cell.height
   ? ok("makeCanonicalBase 缩放到 cell 成功")
   : fail("makeCanonicalBase 缩放错误");
 
+// ===== 5/5 连通 chroma + 内部洞修复 =====
+console.log("\n[5/5] connected chroma / interior hole repair");
+
+const whiteKey = { r: 255, g: 255, b: 255 };
+const whiteDress = blankImage(220, 220);
+fillChroma(whiteDress, whiteKey);
+drawDisc(whiteDress, 110, 110, 54, 40, 40, 48);
+drawDisc(whiteDress, 110, 110, 48, 250, 250, 250);
+const whiteProcessed = applyStripChromaPipeline(whiteDress, {
+  rowIndex: 0,
+  frameCount: 1,
+  stripPng: encodePng(whiteDress),
+  chromaKey: whiteKey,
+  chromaSeedThreshold: 30,
+  chromaSpillThreshold: 40
+});
+const whiteInnerOpaque = countDiscOpaque(whiteProcessed, 110, 110, 48);
+whiteInnerOpaque / (Math.PI * 48 * 48) > 0.95
+  ? ok(`白裙误抠防护：中心 opaque 占比 ${(whiteInnerOpaque / (Math.PI * 48 * 48) * 100).toFixed(1)}%`)
+  : fail(`白裙中心被误抠，opaque=${whiteInnerOpaque}`);
+
+const greenKey = { r: 0, g: 255, b: 0 };
+const greenOutfit = blankImage(220, 220);
+fillChroma(greenOutfit, greenKey);
+drawRect(greenOutfit, 68, 68, 84, 84, 40, 40, 48);
+fillRect(greenOutfit, 72, 72, 76, 76, 80, 160, 80);
+const greenProcessed = applyStripChromaPipeline(greenOutfit, {
+  rowIndex: 0,
+  frameCount: 1,
+  stripPng: encodePng(greenOutfit),
+  chromaKey: greenKey,
+  chromaSeedThreshold: 60,
+  chromaSpillThreshold: 75,
+  chromaGreenSpill: true
+});
+countRectOpaque(greenProcessed, 72, 72, 76, 76) > 5000
+  ? ok("绿衣块未被 greenSpill 误抠")
+  : fail("绿衣块被误抠");
+
+const borderClear = applyStripChromaPipeline(greenOutfit, {
+  rowIndex: 0,
+  frameCount: 1,
+  stripPng: encodePng(greenOutfit),
+  chromaKey: greenKey,
+  chromaSeedThreshold: 60,
+  chromaSpillThreshold: 75,
+  chromaGreenSpill: true
+});
+borderSampleTransparent(borderClear, greenKey) >= 0.95
+  ? ok("四边 chroma 背景已清除")
+  : fail("四边 chroma 背景残留");
+
+let holeImg = blankImage(120, 120);
+drawDisc(holeImg, 60, 60, 45, 180, 90, 90);
+for (let dy = -2; dy <= 2; dy += 1) {
+  for (let dx = -2; dx <= 2; dx += 1) {
+    const idx = ((60 + dy) * 120 + (60 + dx)) * 4;
+    holeImg.data[idx + 3] = 0;
+  }
+}
+countInteriorTransparentPixels(holeImg) >= 20
+  ? ok(`内部洞注入 ${countInteriorTransparentPixels(holeImg)} px`)
+  : fail("内部洞注入失败");
+const holeFixed = repairInteriorAlphaHoles(holeImg);
+countInteriorTransparentPixels(holeFixed) === 0
+  ? ok("内部透明洞已修复")
+  : fail(`修复后仍有 ${countInteriorTransparentPixels(holeFixed)} 内部洞`);
+
+const hairGap = blankImage(140, 140);
+fillChroma(hairGap, whiteKey);
+drawDisc(hairGap, 70, 70, 52, 36, 34, 42);
+fillRect(hairGap, 64, 64, 12, 12, 252, 252, 252);
+const gapProcessed = applyStripChromaPipeline(hairGap, {
+  rowIndex: 0,
+  frameCount: 1,
+  stripPng: encodePng(hairGap),
+  chromaKey: whiteKey,
+  chromaSeedThreshold: 30,
+  chromaSpillThreshold: 40
+});
+countRectOpaque(gapProcessed, 64, 64, 12, 12) >= 100
+  ? ok("白裙/发缝大面积浅色不会被内部孤岛误抠")
+  : fail(`发缝区域被过度清除：仅剩 ${countRectOpaque(gapProcessed, 64, 64, 12, 12)} opaque`);
+
+const nativeImg = blankImage(240, 240);
+drawDisc(nativeImg, 120, 120, 55, 220, 120, 80);
+detectNativeTransparency(nativeImg)
+  ? ok("原生透明 PNG 检测通过")
+  : fail("原生透明 PNG 未检测到");
+const nativeProcessed = applyStripChromaPipeline(nativeImg, {
+  rowIndex: 0,
+  frameCount: 1,
+  stripPng: encodePng(nativeImg),
+  chromaKey: greenKey,
+  chromaSeedThreshold: 60,
+  chromaSpillThreshold: 75,
+  chromaGreenSpill: true
+});
+countDiscOpaque(nativeProcessed, 120, 120, 50) > 7000
+  ? ok("原生透明图跳过 chroma 后主体保留")
+  : fail("原生透明图主体被 chroma 误伤");
+
+// ===== 6/6 行级锚点对齐 / slot bleed =====
+console.log("\n[6/6] row anchor alignment / slot bleed");
+
+const waveFrameCount = 6;
+const waveStripW = DEFAULT_ATLAS_CELL.width * waveFrameCount;
+const waveStrip = blankImage(waveStripW, DEFAULT_ATLAS_CELL.height);
+fillChroma(waveStrip, whiteKey);
+for (let i = 0; i < waveFrameCount; i += 1) {
+  const cx = i * DEFAULT_ATLAS_CELL.width + DEFAULT_ATLAS_CELL.width / 2;
+  const footY = DEFAULT_ATLAS_CELL.height - 40;
+  drawDisc(waveStrip, cx, footY - 30, 28, 50, 50, 60);
+  if (i === 2 || i === 3) {
+    drawDisc(waveStrip, cx + 35, footY - 55, 14, 50, 50, 60);
+    drawDisc(waveStrip, cx - 35, footY - 55, 14, 50, 50, 60);
+  }
+}
+const waveFrames = extractStripFrames(
+  {
+    rowIndex: 3,
+    frameCount: waveFrameCount,
+    stripPng: encodePng(waveStrip),
+    chromaKey: whiteKey,
+    chromaSeedThreshold: 30,
+    chromaSpillThreshold: 40,
+    rowState: "waving"
+  },
+  DEFAULT_ATLAS_CELL
+);
+const waveFootCenters = waveFrames
+  .map((f) => measureFrameAnchor(decodePng(f.png))?.footCenterX)
+  .filter((x) => x != null);
+const waveHeadTops = waveFrames
+  .map((f) => measureFrameAnchor(decodePng(f.png))?.headTopY)
+  .filter((y) => y != null);
+if (waveFootCenters.length >= 2) {
+  const waveFootRange = Math.max(...waveFootCenters) - Math.min(...waveFootCenters);
+  waveFootRange <= 2
+    ? ok(`挥手行 footCenter X 极差 ${waveFootRange.toFixed(1)}px`)
+    : fail(`挥手行 footCenter X 极差 ${waveFootRange.toFixed(1)}px > 2`);
+} else {
+  fail("挥手行对齐测试未得到有效帧");
+}
+if (waveHeadTops.length >= 1) {
+  const minHead = Math.min(...waveHeadTops);
+  minHead >= 10
+    ? ok(`挥手行头顶 minY=${minHead.toFixed(0)}，未被削顶`)
+    : fail(`挥手行头顶 minY=${minHead.toFixed(0)} < 10，可能被削顶`);
+} else {
+  fail("挥手行削顶测试未得到有效帧");
+}
+
+const bleedStripW = DEFAULT_ATLAS_CELL.width * 2;
+const bleedStrip = blankImage(bleedStripW, DEFAULT_ATLAS_CELL.height);
+fillChroma(bleedStrip, whiteKey);
+drawDisc(bleedStrip, DEFAULT_ATLAS_CELL.width / 2, DEFAULT_ATLAS_CELL.height - 40, 30, 40, 40, 48);
+fillRect(
+  bleedStrip,
+  DEFAULT_ATLAS_CELL.width - 1,
+  16,
+  2,
+  DEFAULT_ATLAS_CELL.height - 32,
+  255,
+  0,
+  0
+);
+drawDisc(
+  bleedStrip,
+  DEFAULT_ATLAS_CELL.width + DEFAULT_ATLAS_CELL.width / 2,
+  DEFAULT_ATLAS_CELL.height - 40,
+  30,
+  40,
+  40,
+  48
+);
+const bleedFrames = extractStripFrames(
+  {
+    rowIndex: 0,
+    frameCount: 2,
+    stripPng: encodePng(bleedStrip),
+    chromaKey: whiteKey,
+    chromaSeedThreshold: 30,
+    chromaSpillThreshold: 40,
+    rowState: "idle"
+  },
+  DEFAULT_ATLAS_CELL
+);
+const bleedFrame0 = decodePng(bleedFrames[0]?.png ?? encodePng(blankImage(1, 1)));
+const rightEdgeRed = countRedOpaque(
+  bleedFrame0,
+  DEFAULT_ATLAS_CELL.width - 4,
+  0,
+  4,
+  DEFAULT_ATLAS_CELL.height
+);
+rightEdgeRed === 0
+  ? ok("slot 切缝内缩：帧 0 右缘无邻帧污染")
+  : fail(`slot 切缝后帧 0 右缘仍有 ${rightEdgeRed} 个红色污染像素`);
+
 // ===== 写出样例资产，便于人工肉眼检查 =====
 const outDir = resolve(repoRoot, ".smoke-out", "hatch-pet");
 mkdirSync(outDir, { recursive: true });
@@ -489,4 +704,98 @@ function opaqueBounds(img) {
   }
   if (maxX < minX || maxY < minY) return { w: 0, h: 0 };
   return { w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+function fillRect(img, x0, y0, w, h, R, G, B) {
+  for (let y = y0; y < y0 + h && y < img.height; y += 1) {
+    for (let x = x0; x < x0 + w && x < img.width; x += 1) {
+      if (x < 0 || y < 0) continue;
+      const idx = (y * img.width + x) * 4;
+      img.data[idx] = R;
+      img.data[idx + 1] = G;
+      img.data[idx + 2] = B;
+      img.data[idx + 3] = 255;
+    }
+  }
+}
+
+function drawRect(img, x0, y0, w, h, R, G, B) {
+  fillRect(img, x0, y0, w, 1, R, G, B);
+  fillRect(img, x0, y0 + h - 1, w, 1, R, G, B);
+  fillRect(img, x0, y0, 1, h, R, G, B);
+  fillRect(img, x0 + w - 1, y0, 1, h, R, G, B);
+}
+
+function countDiscOpaque(img, cx, cy, r) {
+  let count = 0;
+  const r2 = r * r;
+  for (let y = Math.max(0, cy - r); y < Math.min(img.height, cy + r); y += 1) {
+    for (let x = Math.max(0, cx - r); x < Math.min(img.width, cx + r); x += 1) {
+      const dx = x - cx;
+      const dy = y - cy;
+      if (dx * dx + dy * dy > r2) continue;
+      if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) >= 128) count += 1;
+    }
+  }
+  return count;
+}
+
+function countRectOpaque(img, x0, y0, w, h) {
+  let count = 0;
+  for (let y = y0; y < y0 + h; y += 1) {
+    for (let x = x0; x < x0 + w; x += 1) {
+      if (x < 0 || y < 0 || x >= img.width || y >= img.height) continue;
+      if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) >= 128) count += 1;
+    }
+  }
+  return count;
+}
+
+function borderSampleTransparent(img, key) {
+  const { width, height, data } = img;
+  let total = 0;
+  let transparent = 0;
+  const sample = (x, y) => {
+    total += 1;
+    const a = data[(y * width + x) * 4 + 3] ?? 0;
+    if (a < 16) transparent += 1;
+  };
+  for (let x = 0; x < width; x += 4) {
+    sample(x, 0);
+    sample(x, height - 1);
+  }
+  for (let y = 0; y < height; y += 4) {
+    sample(0, y);
+    sample(width - 1, y);
+  }
+  return total === 0 ? 0 : transparent / total;
+}
+
+function opaqueCentroidX(img) {
+  let sumX = 0;
+  let count = 0;
+  for (let y = 0; y < img.height; y += 1) {
+    for (let x = 0; x < img.width; x += 1) {
+      if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) === 0) continue;
+      sumX += x;
+      count += 1;
+    }
+  }
+  return count > 0 ? sumX / count : null;
+}
+
+function countRedOpaque(img, x0, y0, w, h) {
+  let count = 0;
+  for (let y = y0; y < y0 + h; y += 1) {
+    for (let x = x0; x < x0 + w; x += 1) {
+      if (x < 0 || y < 0 || x >= img.width || y >= img.height) continue;
+      const idx = (y * img.width + x) * 4;
+      const r = img.data[idx] ?? 0;
+      const g = img.data[idx + 1] ?? 0;
+      const b = img.data[idx + 2] ?? 0;
+      const a = img.data[idx + 3] ?? 0;
+      if (a >= 128 && r > 200 && g < 80 && b < 80) count += 1;
+    }
+  }
+  return count;
 }

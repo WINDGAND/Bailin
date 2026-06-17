@@ -4,9 +4,13 @@ import {
   encodePng,
   extract,
   paste,
-  removeChromaBackground,
+  removeChromaBackgroundConnected,
+  polishChromaMatte,
+  detectNativeTransparency,
+  repairInteriorAlphaHoles,
   normalizeTransparentRgb,
   countOpaquePixels,
+  countInteriorTransparentPixels,
   resize,
   type RawImage
 } from "./png.js";
@@ -27,6 +31,17 @@ export interface GridSpec {
   rows: number;
 }
 
+/** 行级垂直锚定策略：站立类锁脚底，位移类保留纵向动效。 */
+export type RowAlignMode = "standing" | "motion";
+
+export interface RowAlignOptions {
+  alignMode?: RowAlignMode;
+  /** 脚底距 cell 底边的安全边距；默认 12。 */
+  safeMargin?: number;
+  /** cropOpaqueBounds 额外 padding；默认 8。 */
+  bboxPadding?: number;
+}
+
 export interface RowSlot {
   /** 0 起的行索引；用于决定 atlas 中 y 位置。 */
   rowIndex: number;
@@ -34,10 +49,75 @@ export interface RowSlot {
   frameCount: number;
   /** 行 strip 的 PNG buffer；尺寸应为 (cell.w × frameCount) × cell.h。 */
   stripPng: Buffer;
+  /** hatch-pet 行状态；决定 standing / motion 垂直锚定。 */
+  rowState?: string;
+  /** 等宽 slot 切缝内缩像素；默认 1，去掉邻帧边界污染。 */
+  slotInset?: number;
+  /** 脚底安全边距；默认 12。 */
+  safeMargin?: number;
   /** chroma key 颜色；不传则不做 chroma 去除。 */
   chromaKey?: { r: number; g: number; b: number };
-  /** chroma key 阈值；默认 60。 */
+  /** chroma 边界播种阈值；默认 60。 */
   chromaThreshold?: number;
+  /** chroma 边界播种阈值（优先于 chromaThreshold）。 */
+  chromaSeedThreshold?: number;
+  /** chroma flood 扩展阈值。 */
+  chromaSpillThreshold?: number;
+  /** 绿幕扩展阶段启用 greenDominant。 */
+  chromaGreenSpill?: boolean;
+  /** 为 true 时即使检测到原生透明也强制跑 chroma。 */
+  forceChroma?: boolean;
+}
+
+export type ChromaStrategy = "green" | "white" | "native-alpha";
+
+/** 根据 chroma key 推断策略标签。 */
+export function inferChromaStrategy(
+  chromaKey: { r: number; g: number; b: number }
+): "green" | "white" {
+  if (chromaKey.g > 200 && chromaKey.r < 40 && chromaKey.b < 40) return "green";
+  return "white";
+}
+
+/** strip 抠像链：连通 chroma → 内部 alpha 洞修复 → 边缘/发缝精修 → RGB 归一化。 */
+export function applyStripChromaPipeline(strip: RawImage, slot: RowSlot): RawImage {
+  let processed = strip;
+  if (slot.chromaKey) {
+    const skipChroma = slot.forceChroma !== true && detectNativeTransparency(processed);
+    if (!skipChroma) {
+      const key = slot.chromaKey;
+      const isGreenKey = inferChromaStrategy(key) === "green";
+      const seed = slot.chromaSeedThreshold ?? slot.chromaThreshold ?? 60;
+      const spill =
+        slot.chromaSpillThreshold ?? seed + (isGreenKey ? 15 : 10);
+      const edgeSpill = seed + (isGreenKey ? 10 : 8);
+      const maxIsland = 0;
+      const chromaOpts = {
+        chromaKey: key,
+        seedThreshold: seed,
+        spillThreshold: spill,
+        greenSpill: slot.chromaGreenSpill ?? isGreenKey,
+        edgeSpillThreshold: edgeSpill,
+        maxInteriorChromaIsland: maxIsland,
+        interiorChromaThreshold: seed
+      };
+      processed = removeChromaBackgroundConnected(processed, chromaOpts);
+      processed = repairInteriorAlphaHoles(processed);
+      processed = polishChromaMatte(processed, chromaOpts);
+    }
+  } else {
+    processed = repairInteriorAlphaHoles(processed);
+  }
+  return normalizeTransparentRgb(processed);
+}
+
+/** 解析 strip 实际使用的 chroma 策略（供 hatch-run 落盘）。 */
+export function resolveStripChromaStrategy(strip: RawImage, slot: RowSlot): ChromaStrategy {
+  if (!slot.chromaKey) return "native-alpha";
+  if (slot.forceChroma !== true && detectNativeTransparency(strip)) {
+    return "native-alpha";
+  }
+  return inferChromaStrategy(slot.chromaKey);
 }
 
 export interface ExtractedFrame {
@@ -60,38 +140,86 @@ export interface ExtractedFrame {
  *   2. 把透明像素的 RGB 残留清零
  *   3. 统计 opaquePixelCount，便于校验空白帧
  */
+const MOTION_ROW_STATES = new Set([
+  "running-right",
+  "running-left",
+  "jumping",
+  "running"
+]);
+
+/** 根据 hatch 行状态推断垂直锚定模式。 */
+export function resolveRowAlignMode(rowState?: string | null): RowAlignMode {
+  if (rowState && MOTION_ROW_STATES.has(rowState)) return "motion";
+  return "standing";
+}
+
+function buildRowAlignOptions(slot: RowSlot): RowAlignOptions {
+  return {
+    alignMode: resolveRowAlignMode(slot.rowState),
+    safeMargin: slot.safeMargin ?? 12,
+    bboxPadding: 8
+  };
+}
+
 export function extractStripFrames(
   slot: RowSlot,
   cell: CellSpec
 ): ExtractedFrame[] {
   let strip = decodePng(slot.stripPng);
-  if (slot.chromaKey) {
-    strip = removeChromaBackground(
-      strip,
-      slot.chromaKey,
-      slot.chromaThreshold ?? 60
-    );
-  }
-  strip = normalizeTransparentRgb(strip);
+  strip = applyStripChromaPipeline(strip, slot);
+  const alignOpts = buildRowAlignOptions(slot);
 
-  const componentFrames = extractComponentFrames(strip, slot.frameCount, cell);
+  const slotRawFrames = extractEqualSlotRawFrames(strip, slot);
+  const slotUsable =
+    slotRawFrames.length === slot.frameCount &&
+    slotRawFrames.every((f) => countOpaquePixels(f) > 24);
+  if (slotUsable) {
+    return finalizeAlignedFrames(slotRawFrames, cell, alignOpts);
+  }
+
+  const componentFrames = extractComponentFrames(
+    strip,
+    slot.frameCount,
+    cell,
+    alignOpts
+  );
   if (componentFrames) return componentFrames;
 
+  return finalizeAlignedFrames(slotRawFrames, cell, alignOpts);
+}
+
+/** 等宽 slot 切分 + 每格取主导连通块（优先路径，动画帧最稳定）。 */
+function extractEqualSlotRawFrames(
+  strip: RawImage,
+  slot: RowSlot
+): RawImage[] {
   const slotWidth = strip.width / slot.frameCount;
-  const frames: ExtractedFrame[] = [];
+  const inset = slot.slotInset ?? 2;
+  const frames: RawImage[] = [];
   for (let i = 0; i < slot.frameCount; i += 1) {
-    const left = Math.round(i * slotWidth);
-    const right = Math.round((i + 1) * slotWidth);
-    let frame = extract(strip, left, 0, right - left, strip.height);
-    frame = fitFrameToCell(frame, cell);
-    frame = normalizeTransparentRgb(frame);
-    frames.push({
-      index: i,
-      png: encodePng(frame),
-      opaquePixelCount: countOpaquePixels(frame)
-    });
+    let left = Math.round(i * slotWidth);
+    let right = Math.round((i + 1) * slotWidth);
+    if (i > 0) left += inset;
+    if (i < slot.frameCount - 1) right -= inset;
+    const width = Math.max(1, right - left);
+    let frame = extract(strip, left, 0, width, strip.height);
+    frame = keepDominantComponent(frame);
+    frames.push(frame);
   }
   return frames;
+}
+
+function finalizeAlignedFrames(
+  rawFrames: RawImage[],
+  cell: CellSpec,
+  alignOpts: RowAlignOptions
+): ExtractedFrame[] {
+  const aligned = alignRowFramesToCell(rawFrames, cell, alignOpts);
+  return aligned.map((frame, index) => ({
+    index,
+    png: encodePng(frame),
+    opaquePixelCount: countOpaquePixels(frame)
+  }));
 }
 
 /**
@@ -104,7 +232,8 @@ export function extractStripFrames(
 function extractComponentFrames(
   strip: RawImage,
   frameCount: number,
-  cell: CellSpec
+  cell: CellSpec,
+  alignOpts: RowAlignOptions
 ): ExtractedFrame[] | null {
   const ranges = findConnectedComponents(strip, {
     minOpaquePixels: Math.max(24, Math.floor(strip.width * strip.height * 0.0002)),
@@ -135,21 +264,15 @@ function extractComponentFrames(
         : pickEdgeOrCenter(ranges, center, strip);
   if (source.length < 1) return null;
 
-  const expanded = buildCandidateFrames(strip, source, frameCount, cell);
-  return expanded.map((frame, index) => {
-    return {
-      index,
-      png: encodePng(frame),
-      opaquePixelCount: countOpaquePixels(frame)
-    };
-  });
+  const rawFrames = buildCandidateFrames(strip, source, frameCount);
+  if (rawFrames.length === 0) return null;
+  return finalizeAlignedFrames(rawFrames, cell, alignOpts);
 }
 
 function buildCandidateFrames(
   strip: RawImage,
   source: OpaqueRange[],
-  frameCount: number,
-  cell: CellSpec
+  frameCount: number
 ): RawImage[] {
   const pickedComponents = source
     .slice()
@@ -157,17 +280,15 @@ function buildCandidateFrames(
     .slice(0, Math.min(frameCount, source.length))
     .sort((a, b) => a.x0 - b.x0);
 
-  const frames = pickedComponents.map((range) => {
-    let frame = extract(
+  const frames = pickedComponents.map((range) =>
+    extract(
       strip,
       range.x0,
       range.y0,
       range.x1 - range.x0 + 1,
       range.y1 - range.y0 + 1
-    );
-    frame = fitFrameToCell(frame, cell);
-    return normalizeTransparentRgb(frame);
-  });
+    )
+  );
   return resampleFrames(frames, frameCount);
 }
 
@@ -313,25 +434,165 @@ function findConnectedComponents(
 }
 
 /**
- * 把任意尺寸的 slot 等比缩放到目标 cell 中间。
+ * 行级共享锚点对齐：全行同一 scale，脚中心锁到 cell 中线，站立行脚底锁到底边安全区。
  *
- * 真实生图 API（包括 gpt-image）通常只能返回 1024×1024 等固定尺寸；
- * 即使 prompt 要求生成「水平 strip」，模型也往往把 strip 画在方图里。
- * 因此裁帧器不能假设 slot 已经是 192×208，必须容忍任意 slot 尺寸。
+ * scale 按上下双安全边距计算，避免脚底对齐时削顶；水平锚点用脚中心而非 bbox 中心，
+ * 避免挥手时手臂外伸导致 centroid 漂移。
  */
-function fitFrameToCell(frame: RawImage, cell: CellSpec): RawImage {
-  frame = keepDominantComponent(frame);
-  frame = cropOpaqueBounds(frame, 8);
-  if (frame.width === cell.width && frame.height === cell.height) {
+export function alignRowFramesToCell(
+  rawFrames: RawImage[],
+  cell: CellSpec,
+  opts?: RowAlignOptions
+): RawImage[] {
+  if (rawFrames.length === 0) return [];
+  const padding = opts?.bboxPadding ?? 8;
+  const safeMargin = opts?.safeMargin ?? 12;
+  const alignMode = opts?.alignMode ?? "standing";
+
+  const prepared = rawFrames.map((raw) => {
+    let frame = keepDominantComponent(raw);
+    frame = cropOpaqueBounds(frame, padding);
     return frame;
+  });
+
+  let maxW = 1;
+  let maxH = 1;
+  for (const frame of prepared) {
+    maxW = Math.max(maxW, frame.width);
+    maxH = Math.max(maxH, frame.height);
   }
-  const scale = Math.min(cell.width / frame.width, cell.height / frame.height);
-  const w = Math.max(1, Math.round(frame.width * scale));
-  const h = Math.max(1, Math.round(frame.height * scale));
-  const resized = resize(frame, w, h);
-  const out = blankImage(cell.width, cell.height);
-  paste(out, resized, Math.floor((cell.width - w) / 2), Math.floor((cell.height - h) / 2));
-  return out;
+
+  const innerTop = safeMargin;
+  const innerBottom = cell.height - safeMargin;
+  const innerH = Math.max(1, innerBottom - innerTop);
+  const scale = Math.min(cell.width / maxW, innerH / maxH);
+  const targetFootCenterX = cell.width / 2;
+
+  return prepared.map((frame) => {
+    const footCenterX = measureFootCenterX(frame);
+    const w = Math.max(1, Math.round(frame.width * scale));
+    const h = Math.max(1, Math.round(frame.height * scale));
+    const resized = resize(frame, w, h);
+    const scaledFootX = footCenterX * (w / Math.max(1, frame.width));
+
+    let pasteX = Math.round(targetFootCenterX - scaledFootX);
+    let pasteY =
+      alignMode === "standing"
+        ? Math.round(innerBottom - h)
+        : Math.floor((cell.height - h) / 2);
+
+    pasteX = clamp(pasteX, 0, Math.max(0, cell.width - w));
+    if (pasteY < innerTop) pasteY = innerTop;
+
+    const out = blankImage(cell.width, cell.height);
+    paste(out, resized, pasteX, pasteY);
+    return normalizeTransparentRgb(defringeVerticalCellEdges(out));
+  });
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v));
+}
+
+/** 脚底 8% 高度带内 opaque 像素的水平中心。 */
+function measureFootCenterX(frame: RawImage): number {
+  let maxY = -1;
+  for (let y = 0; y < frame.height; y += 1) {
+    for (let x = 0; x < frame.width; x += 1) {
+      if ((frame.data[(y * frame.width + x) * 4 + 3] ?? 0) === 0) continue;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxY < 0) return frame.width / 2;
+
+  const bandTop = Math.max(0, maxY - Math.max(2, Math.floor(frame.height * 0.08)));
+  let sumX = 0;
+  let count = 0;
+  for (let y = bandTop; y <= maxY; y += 1) {
+    for (let x = 0; x < frame.width; x += 1) {
+      if ((frame.data[(y * frame.width + x) * 4 + 3] ?? 0) === 0) continue;
+      sumX += x;
+      count += 1;
+    }
+  }
+  return count > 0 ? sumX / count : frame.width / 2;
+}
+
+/**
+ * 清除 cell 左右缘孤立竖条（slot 切缝残留 / atlas 邻格 bleed）。
+ * 仅当该列 opaque 像素数低于行高 12% 时清除，避免误删手臂。
+ */
+function defringeVerticalCellEdges(frame: RawImage): RawImage {
+  const { width, height, data } = frame;
+  const maxCol = Math.max(4, Math.floor(height * 0.12));
+  for (const edgeX of [0, width - 1]) {
+    let colCount = 0;
+    for (let y = 0; y < height; y += 1) {
+      if ((data[(y * width + edgeX) * 4 + 3] ?? 0) > 0) colCount += 1;
+    }
+    if (colCount > 0 && colCount <= maxCol) {
+      for (let y = 0; y < height; y += 1) {
+        const idx = (y * width + edgeX) * 4;
+        data[idx] = 0;
+        data[idx + 1] = 0;
+        data[idx + 2] = 0;
+        data[idx + 3] = 0;
+      }
+    }
+  }
+  return frame;
+}
+
+interface FrameAnchorMetrics {
+  centroidX: number;
+  footCenterX: number;
+  headTopY: number;
+  footY: number;
+  borderOpaque: number;
+}
+
+/** 测量单帧锚点指标，供 validateAtlas / 回归测试使用。 */
+export function measureFrameAnchor(frame: RawImage): FrameAnchorMetrics | null {
+  let sumX = 0;
+  let count = 0;
+  let minY = frame.height;
+  let maxY = -1;
+  for (let y = 0; y < frame.height; y += 1) {
+    for (let x = 0; x < frame.width; x += 1) {
+      const a = frame.data[(y * frame.width + x) * 4 + 3] ?? 0;
+      if (a === 0) continue;
+      sumX += x;
+      count += 1;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (count === 0) return null;
+  return {
+    centroidX: sumX / count,
+    footCenterX: measureFootCenterX(frame),
+    headTopY: minY,
+    footY: maxY,
+    borderOpaque: countBorderOpaquePixels(frame, 1)
+  };
+}
+
+function countBorderOpaquePixels(frame: RawImage, borderWidth: number): number {
+  const { width, height, data } = frame;
+  let count = 0;
+  const isOpaque = (x: number, y: number): boolean =>
+    (data[(y * width + x) * 4 + 3] ?? 0) > 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const onBorder =
+        x < borderWidth ||
+        y < borderWidth ||
+        x >= width - borderWidth ||
+        y >= height - borderWidth;
+      if (onBorder && isOpaque(x, y)) count += 1;
+    }
+  }
+  return count;
 }
 
 function keepDominantComponent(frame: RawImage): RawImage {
@@ -449,8 +710,18 @@ export interface AtlasValidationInput {
   grid: GridSpec;
   /** 每行实际使用的帧数（≤ grid.columns）。键为 rowIndex。 */
   rowFrameCounts: Record<number, number>;
+  /** 行索引 → hatch 行状态；用于站立行 foot Y 稳定性校验。 */
+  rowStates?: Record<number, string>;
   /** 最少非透明像素数（防 sprite 完全空白 / 几乎全透明）。默认 cell.w × cell.h × 0.04。 */
   minOpaquePerFrame?: number;
+  /** 单帧允许的最大内部透明洞像素数。默认 cell.w × cell.h × 0.001。 */
+  maxInteriorTransparentPixels?: number;
+  /** 行内 centroid X 极差上限；默认 2px。 */
+  maxCentroidXRange?: number;
+  /** 站立行 foot Y 极差上限；默认 2px。 */
+  maxFootYRange?: number;
+  /** 单帧外圈 1px 允许的不透明像素数；默认 12。 */
+  maxBorderOpaquePerFrame?: number;
 }
 
 export function validateAtlas(input: AtlasValidationInput): AtlasValidationReport {
@@ -467,6 +738,13 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
   }
   const minOpaque =
     input.minOpaquePerFrame ?? Math.floor(cell.width * cell.height * 0.04);
+  const maxInteriorHoles =
+    input.maxInteriorTransparentPixels ??
+    Math.max(1, Math.floor(cell.width * cell.height * 0.001));
+  const maxCentroidXRange = input.maxCentroidXRange ?? 2;
+  const maxFootYRange = input.maxFootYRange ?? 2;
+  const maxBorderOpaque =
+    input.maxBorderOpaquePerFrame ?? 12;
   const rowPixelCounts: AtlasValidationReport["rowPixelCounts"] = [];
   let trailingTransparent = true;
 
@@ -484,6 +762,10 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
       continue;
     }
     const perFrame: number[] = [];
+    const footCenterXs: number[] = [];
+    const footYs: number[] = [];
+    const headTopYs: number[] = [];
+    const safeMargin = 12;
     for (let col = 0; col < grid.columns; col += 1) {
       const frame = extract(img, col * cell.width, row * cell.height, cell.width, cell.height);
       const count = countOpaquePixels(frame);
@@ -494,10 +776,51 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
             `row ${row} frame ${col} 不透明像素 ${count} < min ${minOpaque}，可能是空白帧`
           );
         }
+        const interiorHoles = countInteriorTransparentPixels(frame);
+        if (interiorHoles > maxInteriorHoles) {
+          issues.push(
+            `row ${row} frame ${col} 内部透明洞 ${interiorHoles} > max ${maxInteriorHoles}`
+          );
+        }
+        const anchor = measureFrameAnchor(frame);
+        if (anchor) {
+          footCenterXs.push(anchor.footCenterX);
+          footYs.push(anchor.footY);
+          headTopYs.push(anchor.headTopY);
+          if (anchor.borderOpaque > maxBorderOpaque) {
+            issues.push(
+              `row ${row} frame ${col} 外圈 1px 不透明 ${anchor.borderOpaque} > max ${maxBorderOpaque}，可能有 slot bleed`
+            );
+          }
+          if (anchor.headTopY < safeMargin - 2) {
+            issues.push(
+              `row ${row} frame ${col} 头顶 Y=${anchor.headTopY} < ${safeMargin - 2}，可能被削顶`
+            );
+          }
+        }
       } else if (count > 0) {
         trailingTransparent = false;
         issues.push(
           `row ${row} col ${col}（超过 frameCount=${frameCount}）残留 ${count} 不透明像素`
+        );
+      }
+    }
+    if (footCenterXs.length >= 2) {
+      const footCxRange = Math.max(...footCenterXs) - Math.min(...footCenterXs);
+      if (footCxRange > maxCentroidXRange) {
+        issues.push(
+          `row ${row} footCenter X 极差 ${footCxRange.toFixed(1)} > max ${maxCentroidXRange}，动画可能左右漂移`
+        );
+      }
+    }
+    const rowState = input.rowStates?.[row];
+    const standingRow =
+      rowState == null || resolveRowAlignMode(rowState) === "standing";
+    if (standingRow && footYs.length >= 2) {
+      const footRange = Math.max(...footYs) - Math.min(...footYs);
+      if (footRange > maxFootYRange) {
+        issues.push(
+          `row ${row} foot Y 极差 ${footRange.toFixed(1)} > max ${maxFootYRange}，站立动画可能上下漂移`
         );
       }
     }
