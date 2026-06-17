@@ -33,8 +33,10 @@ import {
   broadcastToAllWindows,
   readImageConfigForMain,
   registerIpc,
+  SETTING_LOCALE,
   SETTING_PET_POS
 } from "./ipc/register.js";
+import { getMainTrayLabels, parseUiLocale } from "../shared/ui-labels.js";
 import { registerChatTurnHandlers } from "./ipc/chat-turn-handlers.js";
 import { registerChatSessionHandlers } from "./ipc/chat-session-handlers.js";
 import {
@@ -68,6 +70,7 @@ log.info(
 
 let tray: Tray | null = null;
 let petWin: BrowserWindow | null = null;
+let vaultRef: LocalVault | null = null;
 let chatWin: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
 let activeCharacterId: string | null = null;
@@ -215,26 +218,28 @@ function isChatVisible(): boolean {
 function rebuildTrayMenu(): void {
   if (!tray) return;
   const chatOpen = isChatVisible();
+  const labels = getMainTrayLabels(parseUiLocale(vaultRef?.getSetting(SETTING_LOCALE)));
+  tray.setToolTip(labels.tooltip);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
-        label: chatOpen ? "关闭对话" : "唤起对话",
+        label: chatOpen ? labels.summonClose : labels.summonOpen,
         click: () => summonPetBubble()
       },
       {
-        label: "显示桌宠",
+        label: labels.showPet,
         click: () => {
           const pet = ensurePetWindow();
           pet.show();
         }
       },
       {
-        label: "打开设置 / 角色仓库",
+        label: labels.openSettings,
         click: () => ensureSettingsWindow()
       },
       { type: "separator" },
       {
-        label: "退出",
+        label: labels.quit,
         click: () => {
           isQuitting = true;
           app.exit(0);
@@ -421,6 +426,7 @@ function petDragEnd(): { x: number; y: number } | null {
 
 void app.whenReady().then(() => {
   const vault = new LocalVault();
+  vaultRef = vault;
   purgeRetiredCharacters(vault);
   applyDevSetup(vault);
   const llm = new LLMAdapter(() => {
@@ -505,7 +511,8 @@ void app.whenReady().then(() => {
     petDragMove,
     petDragEnd,
     getChatWindowSize,
-    setChatWindowSize
+    setChatWindowSize,
+    onLocaleChanged: rebuildTrayMenu
   });
 
   registerChatTurnHandlers(runtime);
@@ -553,7 +560,6 @@ void app.whenReady().then(() => {
 
   const trayIcon = nativeImage.createEmpty();
   tray = new Tray(trayIcon);
-  tray.setToolTip("百灵 Bailin");
   tray.on("click", () => summonPetBubble());
   rebuildTrayMenu();
 

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { ProactiveSettings, ProactiveStatus } from "../../../shared/ipc-contract.js";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { useToast } from "../../shared/feedback.js";
+import { useI18n } from "../../shared/i18n/index.js";
 
 const DEFAULT_SETTINGS: ProactiveSettings = {
   enabled: true,
@@ -14,7 +15,23 @@ const DEFAULT_SETTINGS: ProactiveSettings = {
   screenAwareness: "off"
 };
 
+const HUSH_MINUTES = [15, 30, 60] as const;
+const MAX_PER_HOUR = [0, 1, 2] as const;
+
+const TRIGGER_REASON_KEYS: Record<string, string> = {
+  disabled: "desktop.triggerReasonDisabled",
+  "quiet-hours": "desktop.triggerReasonQuietHours",
+  hushed: "desktop.triggerReasonHushed",
+  "chat-visible": "desktop.triggerReasonChatVisible",
+  locked: "desktop.triggerReasonLocked",
+  "quota-disabled": "desktop.triggerReasonQuotaDisabled",
+  "hourly-quota": "desktop.triggerReasonHourlyQuota",
+  "no-active-character": "desktop.triggerReasonNoActiveCharacter",
+  "character-not-found": "desktop.triggerReasonCharacterNotFound"
+};
+
 export function DesktopBehaviorPanel(): JSX.Element {
+  const { t, locale } = useI18n();
   const nuwa = useNuwa();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<ProactiveSettings>(DEFAULT_SETTINGS);
@@ -39,21 +56,35 @@ export function DesktopBehaviorPanel(): JSX.Element {
       const saved = await nuwa.proactive.setSettings(next);
       setSettings(saved);
       setStatus(await nuwa.proactive.getStatus());
-      showToast({ kind: "success", text: "桌宠陪伴设置已保存" });
+      showToast({ kind: "success", text: t("desktop.toastSaved") });
     } finally {
       setSaving(false);
     }
   }
 
+  function translateTriggerReason(reason: string | undefined): string {
+    if (!reason) return t("common.unknownError");
+    const key = TRIGGER_REASON_KEYS[reason];
+    return key ? t(key) : reason;
+  }
+
+  function screenAwarenessLabel(value: ProactiveSettings["screenAwareness"]): string {
+    if (value === "signals") return t("desktop.screenLabelSignals");
+    if (value === "screenshots") return t("desktop.screenLabelScreenshots");
+    return t("desktop.screenLabelOff");
+  }
+
+  const timeLocale = locale === "zh" ? "zh-CN" : "en-US";
+
   return (
     <div className="stack" style={{ maxWidth: 760 }}>
       <div>
-        <div className="eyebrow">Desktop Companion</div>
+        <div className="eyebrow">{t("desktop.eyebrow")}</div>
         <h1 className="display display--page" style={{ margin: "6px 0 8px" }}>
-          桌宠与陪伴
+          {t("desktop.title")}
         </h1>
         <p className="body-md" style={{ maxWidth: 620 }}>
-          控制桌宠是否主动说悄悄话、多久打扰一次，以及它能否读取低敏屏幕信号。截图观察默认关闭，开启前请确认你愿意把相关上下文交给你配置的模型服务。
+          {t("desktop.subtitle")}
         </p>
       </div>
 
@@ -61,10 +92,10 @@ export function DesktopBehaviorPanel(): JSX.Element {
         <div className="row" style={{ justifyContent: "space-between", gap: 16 }}>
           <div>
             <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
-              主动陪伴
+              {t("desktop.proactiveTitle")}
             </h2>
             <p className="body-sm" style={{ margin: "6px 0 0" }}>
-              轻度模式每小时最多一句，完整聊天窗打开或安静中不会主动说话。
+              {t("desktop.proactiveHint")}
             </p>
           </div>
           <label className="row gap-2" style={{ cursor: "pointer" }}>
@@ -79,12 +110,12 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 })
               }
             />
-            <span>{settings.enabled ? "已开启" : "已关闭"}</span>
+            <span>{settings.enabled ? t("desktop.toggleOn") : t("desktop.toggleOff")}</span>
           </label>
         </div>
 
         <div className="grid-2" style={{ marginTop: 18 }}>
-          <Field label="强度">
+          <Field label={t("desktop.intensityLabel")}>
             <select
               className="input"
               value={settings.intensity}
@@ -96,12 +127,12 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 })
               }
             >
-              <option value="off">关闭</option>
-              <option value="light">轻度</option>
-              <option value="standard">标准</option>
+              <option value="off">{t("desktop.intensityOff")}</option>
+              <option value="light">{t("desktop.intensityLight")}</option>
+              <option value="standard">{t("desktop.intensityStandard")}</option>
             </select>
           </Field>
-          <Field label="每小时上限">
+          <Field label={t("desktop.maxPerHourLabel")}>
             <select
               className="input"
               value={settings.maxPerHour}
@@ -112,12 +143,14 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 })
               }
             >
-              <option value={0}>0 次</option>
-              <option value={1}>1 次</option>
-              <option value={2}>2 次</option>
+              {MAX_PER_HOUR.map((n) => (
+                <option key={n} value={n}>
+                  {t("desktop.timesPerHour", { count: n })}
+                </option>
+              ))}
             </select>
           </Field>
-          <Field label="默认安静时长">
+          <Field label={t("desktop.defaultHushLabel")}>
             <select
               className="input"
               value={settings.defaultHushMinutes}
@@ -130,12 +163,14 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 })
               }
             >
-              <option value={15}>15 分钟</option>
-              <option value={30}>30 分钟</option>
-              <option value={60}>60 分钟</option>
+              {HUSH_MINUTES.map((n) => (
+                <option key={n} value={n}>
+                  {t("desktop.minutes", { count: n })}
+                </option>
+              ))}
             </select>
           </Field>
-          <Field label="屏幕感知等级">
+          <Field label={t("desktop.screenAwarenessLabel")}>
             <select
               className="input"
               value={settings.screenAwareness}
@@ -146,9 +181,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 })
               }
             >
-              <option value="off">关闭：不观察屏幕</option>
-              <option value="signals">低敏信号：只用空闲/锁屏等状态</option>
-              <option value="screenshots">截图观察：后续能力，显式授权后启用</option>
+              <option value="off">{t("desktop.screenOptionOff")}</option>
+              <option value="signals">{t("desktop.screenOptionSignals")}</option>
+              <option value="screenshots">{t("desktop.screenOptionScreenshots")}</option>
             </select>
           </Field>
         </div>
@@ -156,7 +191,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
 
       <section className="card" style={{ padding: 18 }}>
         <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
-          勿扰时段
+          {t("desktop.quietHoursTitle")}
         </h2>
         <div className="row gap-2" style={{ marginTop: 12 }}>
           <label className="row gap-2">
@@ -167,7 +202,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 void save({ ...settings, quietHoursEnabled: e.currentTarget.checked })
               }
             />
-            <span>启用</span>
+            <span>{t("desktop.quietHoursEnable")}</span>
           </label>
           <input
             className="input"
@@ -176,7 +211,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
             onChange={(e) => void save({ ...settings, quietHoursStart: e.currentTarget.value })}
             style={{ maxWidth: 140 }}
           />
-          <span className="body-sm">到</span>
+          <span className="body-sm">{t("desktop.quietHoursTo")}</span>
           <input
             className="input"
             type="time"
@@ -189,16 +224,20 @@ export function DesktopBehaviorPanel(): JSX.Element {
 
       <section className="card" style={{ padding: 18 }}>
         <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
-          当前状态
+          {t("desktop.statusTitle")}
         </h2>
         <div className="body-md" style={{ marginTop: 10 }}>
           {status?.hushUntil && status.hushUntil > Date.now()
-            ? `已安静到 ${new Date(status.hushUntil).toLocaleTimeString()}`
-            : "当前没有安静倒计时"}
+            ? t("desktop.statusHushedUntil", {
+                time: new Date(status.hushUntil).toLocaleTimeString(timeLocale)
+              })
+            : t("desktop.statusNoHush")}
           <br />
-          本小时主动发言：{status?.utterancesThisHour ?? 0} 次
+          {t("desktop.statusUtterances", { count: status?.utterancesThisHour ?? 0 })}
           <br />
-          屏幕感知：{labelScreenAwareness(settings.screenAwareness)}
+          {t("desktop.statusScreenAwareness", {
+            label: screenAwarenessLabel(settings.screenAwareness)
+          })}
         </div>
         <div className="row gap-2" style={{ marginTop: 14 }}>
           <button
@@ -206,7 +245,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
             className="btn btn--ghost"
             onClick={() => void nuwa.pet.hush(settings.defaultHushMinutes * 60 * 1000)}
           >
-            安静 {settings.defaultHushMinutes} 分钟
+            {t("desktop.hushButton", { minutes: settings.defaultHushMinutes })}
           </button>
           <button
             type="button"
@@ -216,12 +255,16 @@ export function DesktopBehaviorPanel(): JSX.Element {
               const r = await nuwa.proactive.triggerNow("manual");
               showToast({
                 kind: r.ok ? "success" : "info",
-                text: r.ok ? "已让桌宠说一句悄悄话" : `暂时没有触发：${r.reason ?? "未知原因"}`
+                text: r.ok
+                  ? t("desktop.toastTriggered")
+                  : t("desktop.toastTriggerFailed", {
+                      reason: translateTriggerReason(r.reason)
+                    })
               });
               setStatus(await nuwa.proactive.getStatus());
             }}
           >
-            试说一句
+            {t("desktop.triggerButton")}
           </button>
         </div>
       </section>
@@ -236,10 +279,4 @@ function Field({ label, children }: { label: string; children: ReactNode }): JSX
       {children}
     </label>
   );
-}
-
-function labelScreenAwareness(value: ProactiveSettings["screenAwareness"]): string {
-  if (value === "signals") return "低敏信号";
-  if (value === "screenshots") return "截图观察";
-  return "关闭";
 }

@@ -11,6 +11,7 @@ import {
   type FormEvent
 } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "./i18n/index.js";
 
 /**
  * 通用反馈组件层：Toast / ConfirmDialog / Skeleton / StatusDot / CopyButton。
@@ -168,21 +169,22 @@ function ToastStack({
   toasts: ToastItem[];
   onDismiss: (id: number) => void;
 }): JSX.Element | null {
+  const t = useT();
   if (toasts.length === 0) return null;
   return createPortal(
-    <div className="toast-stack" role="region" aria-label="通知">
-      {toasts.map((t) => (
+    <div className="toast-stack" role="region" aria-label={t("feedback.toastRegion")}>
+      {toasts.map((toast) => (
         <div
-          key={t.id}
-          className={`toast toast--${t.kind}`}
-          role={t.kind === "error" ? "alert" : "status"}
+          key={toast.id}
+          className={`toast toast--${toast.kind}`}
+          role={toast.kind === "error" ? "alert" : "status"}
         >
-          <span style={{ flex: 1 }}>{t.text}</span>
+          <span style={{ flex: 1 }}>{toast.text}</span>
           <button
             type="button"
             className="toast__close"
-            aria-label="关闭通知"
-            onClick={() => onDismiss(t.id)}
+            aria-label={t("feedback.toastClose")}
+            onClick={() => onDismiss(toast.id)}
           >
             ×
           </button>
@@ -204,6 +206,7 @@ function ConfirmDialog({
   input: ConfirmInput;
   onClose: (ok: boolean) => void;
 }): JSX.Element {
+  const t = useT();
   const [text, setText] = useState("");
   const confirmRef = useRef<HTMLButtonElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
@@ -290,7 +293,9 @@ function ConfirmDialog({
         {input.requireText ? (
           <div style={{ marginBottom: 14 }}>
             <label className="body-sm" style={{ display: "block", marginBottom: 6 }}>
-              输入 <code style={{ fontFamily: "var(--font-mono)" }}>{input.requireText}</code> 确认
+              {t("feedback.requireTextBefore")}
+              <code style={{ fontFamily: "var(--font-mono)" }}>{input.requireText}</code>
+              {t("feedback.requireTextAfter")}
             </label>
             <input
               ref={inputRef}
@@ -312,7 +317,7 @@ function ConfirmDialog({
             ref={cancelRef}
             onClick={() => onClose(false)}
           >
-            {input.cancelLabel ?? "取消"}
+            {input.cancelLabel ?? t("feedback.cancelDefault")}
           </button>
           <button
             type="submit"
@@ -321,7 +326,7 @@ function ConfirmDialog({
             disabled={!requirementMet}
             aria-disabled={!requirementMet}
           >
-            {input.confirmLabel ?? "确认"}
+            {input.confirmLabel ?? t("feedback.confirmDefault")}
           </button>
         </div>
       </form>
@@ -389,7 +394,7 @@ export function StatusDot({
 
 export function CopyButton({
   text,
-  label = "复制",
+  label,
   className,
   small = false
 }: {
@@ -398,6 +403,8 @@ export function CopyButton({
   className?: string;
   small?: boolean;
 }): JSX.Element {
+  const t = useT();
+  const resolvedLabel = label ?? t("feedback.copy");
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | null>(null);
   const { showToast } = useToast();
@@ -414,11 +421,11 @@ export function CopyButton({
       setCopied(true);
       if (timer.current != null) window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => setCopied(false), 1200);
-      showToast({ kind: "success", text: "已复制到剪贴板" });
+      showToast({ kind: "success", text: t("feedback.toastCopied") });
     } catch {
-      showToast({ kind: "warn", text: "复制失败，请手动选中文本" });
+      showToast({ kind: "warn", text: t("feedback.toastCopyFailed") });
     }
-  }, [text, showToast]);
+  }, [text, showToast, t]);
 
   return (
     <button
@@ -427,7 +434,7 @@ export function CopyButton({
       onClick={onClick}
       aria-live="polite"
     >
-      {copied ? "已复制 ✓" : label}
+      {copied ? t("feedback.copied") : resolvedLabel}
     </button>
   );
 }
@@ -441,10 +448,11 @@ export function StreamCursor({
 }: {
   kind: "thinking" | "streaming" | "done";
 }): JSX.Element | null {
+  const t = useT();
   if (kind === "done") return null;
   if (kind === "thinking") {
     return (
-      <span className="stream-cursor stream-cursor--thinking" aria-label="正在思考">
+      <span className="stream-cursor stream-cursor--thinking" aria-label={t("feedback.thinking")}>
         <i />
         <i />
         <i />
@@ -465,13 +473,14 @@ export function Spinner({
   magenta?: boolean;
   size?: "sm" | "lg";
 }): JSX.Element {
+  const t = useT();
   return (
     <span
       className={`spinner ${magenta ? "spinner--magenta" : ""} ${
         size === "lg" ? "spinner--lg" : ""
       }`}
       role="status"
-      aria-label="加载中"
+      aria-label={t("common.loading")}
     />
   );
 }

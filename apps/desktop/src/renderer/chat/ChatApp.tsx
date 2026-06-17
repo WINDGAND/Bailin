@@ -14,9 +14,11 @@ import { useChatSession } from "../shared/use-chat-session.js";
 import { useChatScroll } from "../shared/use-chat-scroll.js";
 import { ChatResizeHandles } from "./ChatResizeHandles.js";
 import { ChatHistoryPanel } from "./ChatHistoryPanel.js";
+import { useT } from "../shared/i18n/index.js";
 
 export function ChatApp(): JSX.Element {
   const nuwa = useNuwa();
+  const t = useT();
   const { bundle } = useActiveCharacter();
   const { showToast } = useToast();
 
@@ -43,27 +45,27 @@ export function ChatApp(): JSX.Element {
     if (firstMM) {
       list.push({
         id: "mm",
-        title: `用「${firstMM.name}」看一件事`,
+        title: t("chat.suggestionMmTitle", { name: firstMM.name }),
         hint: firstMM.oneLiner.slice(0, 60),
-        prompt: `用你的「${firstMM.name}」模型，帮我看看：`
+        prompt: t("chat.suggestionMmPrompt", { name: firstMM.name })
       });
     }
     if (bundle.card.meta.quoteOneLiner) {
       list.push({
         id: "quote",
-        title: "我想多聊聊你这句话",
+        title: t("chat.suggestionQuoteTitle"),
         hint: bundle.card.meta.quoteOneLiner.slice(0, 70),
-        prompt: `你说过：「${bundle.card.meta.quoteOneLiner}」我想多聊聊这句话背后的意思。`
+        prompt: t("chat.suggestionQuotePrompt", { quote: bundle.card.meta.quoteOneLiner })
       });
     }
     list.push({
       id: "stuck",
-      title: "我现在卡在一件事上",
-      hint: "把背景一句话讲完，等你拆它",
-      prompt: "我现在卡在一件事上："
+      title: t("chat.suggestionStuckTitle"),
+      hint: t("chat.suggestionStuckHint"),
+      prompt: t("chat.suggestionStuckPrompt")
     });
     return list.slice(0, 3);
-  }, [bundle]);
+  }, [bundle, t]);
 
   // ===== 发送 =====
   const submit = useCallback(
@@ -176,7 +178,7 @@ export function ChatApp(): JSX.Element {
                 whiteSpace: "nowrap"
               }}
             >
-              {bundle?.card.meta.name ?? "未选择角色"}
+              {bundle?.card.meta.name ?? t("chat.noCharacter")}
             </div>
             <div className="mono" style={{ fontSize: 11, marginTop: 2 }}>
               {bundle?.card.meta.sourceName ?? ""}
@@ -187,17 +189,19 @@ export function ChatApp(): JSX.Element {
               className={`badge badge--${bundle.card.meta.track}`}
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
-              {bundle.card.meta.track === "companion" ? "陪伴" : "实用"}
+              {bundle.card.meta.track === "companion"
+                ? t("chat.trackCompanion")
+                : t("chat.trackUtility")}
             </span>
           ) : null}
           <button
             type="button"
             onClick={() => setHistoryOpen(true)}
             className="btn btn--icon"
-            data-hint="历史对话"
+            data-hint={t("chat.historyHint")}
             data-hint-placement="bottom"
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-            aria-label="历史对话"
+            aria-label={t("chat.historyAria")}
             disabled={!bundle}
           >
             <HistoryIcon />
@@ -206,10 +210,10 @@ export function ChatApp(): JSX.Element {
             type="button"
             onClick={() => void startNewSession()}
             className="btn btn--icon"
-            data-hint="新对话 · Ctrl+L"
+            data-hint={t("chat.newChatHint")}
             data-hint-placement="bottom"
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-            aria-label="新对话"
+            aria-label={t("chat.newChatAria")}
           >
             <PlusIcon />
           </button>
@@ -217,11 +221,11 @@ export function ChatApp(): JSX.Element {
             type="button"
             onClick={() => void nuwa.chat.hide()}
             className="btn btn--icon"
-            data-hint="关闭 · Esc"
+            data-hint={t("chat.closeHint")}
             data-hint-placement="bottom"
             data-hint-align="end"
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-            aria-label="关闭"
+            aria-label={t("chat.closeAria")}
           >
             <CloseIcon />
           </button>
@@ -232,7 +236,7 @@ export function ChatApp(): JSX.Element {
           <div ref={listRef} className="chat-panel__body">
           {chat.turns.length === 0 && !chat.pending && chat.phase === "idle" ? (
             <div className="stack fade-in-up" style={{ marginTop: 4 }}>
-              <div className="eyebrow">不知道说什么？</div>
+              <div className="eyebrow">{t("chat.suggestionsEyebrow")}</div>
               {suggestions.map((s, i) => (
                 <button
                   key={s.id}
@@ -247,44 +251,44 @@ export function ChatApp(): JSX.Element {
             </div>
           ) : null}
 
-          {chat.turns.map((t) => (
+          {chat.turns.map((turn) => (
             <ChatBubble
-              key={t.id}
-              role={t.role}
-              content={t.content}
-              createdAt={t.createdAt}
-              error={t.error}
-              onRetry={t.error ? retryLastUser : undefined}
+              key={turn.id}
+              role={turn.role}
+              content={turn.content}
+              createdAt={turn.createdAt}
+              error={turn.error}
+              onRetry={turn.error ? retryLastUser : undefined}
               onGoSettings={
-                t.error?.code === "AUTH_FAILED" || /401|auth|key/i.test(t.error?.message ?? "")
+                turn.error?.code === "AUTH_FAILED" || /401|auth|key/i.test(turn.error?.message ?? "")
                   ? () => void nuwa.pet.openSettings()
                   : undefined
               }
               onCopy={() => {
-                void navigator.clipboard.writeText(t.content).then(() => {
-                  showToast({ kind: "info", text: "已复制" });
+                void navigator.clipboard.writeText(turn.content).then(() => {
+                  showToast({ kind: "info", text: t("feedback.toastCopiedShort") });
                 });
               }}
               onDelete={() => {
-                if (t.role === "user") {
-                  void chat.deleteTurnsFrom(t.id);
+                if (turn.role === "user") {
+                  void chat.deleteTurnsFrom(turn.id);
                 } else {
-                  void chat.deleteTurn(t.id);
+                  void chat.deleteTurn(turn.id);
                 }
               }}
               onEdit={
-                t.role === "user"
+                turn.role === "user"
                   ? () => {
-                      setInput(t.content);
-                      void chat.deleteTurnsFrom(t.id);
+                      setInput(turn.content);
+                      void chat.deleteTurnsFrom(turn.id);
                       textareaRef.current?.focus();
                     }
                   : undefined
               }
               onQuote={
-                t.role === "assistant"
+                turn.role === "assistant"
                   ? () => {
-                      const quoted = t.content
+                      const quoted = turn.content
                         .split("\n")
                         .map((line) => `> ${line}`)
                         .join("\n");
@@ -294,7 +298,7 @@ export function ChatApp(): JSX.Element {
                   : undefined
               }
               onRegenerate={
-                t.role === "assistant" ? () => void chat.regenerateAssistant(t.id) : undefined
+                turn.role === "assistant" ? () => void chat.regenerateAssistant(turn.id) : undefined
               }
             />
           ))}
@@ -313,7 +317,7 @@ export function ChatApp(): JSX.Element {
               type="button"
               className="chat-scroll-down fade-in"
               onClick={scrollToLatest}
-              aria-label="回到底部"
+              aria-label={t("chat.scrollDown")}
             >
               <ChevronDownIcon />
             </button>
@@ -334,8 +338,10 @@ export function ChatApp(): JSX.Element {
             className="textarea"
             placeholder={
               streaming
-                ? "正在回答…（按 Enter 中断）"
-                : `想跟${bundle?.card.meta.name ?? "TA"}说点什么？`
+                ? t("chat.placeholderStreaming")
+                : t("chat.placeholderIdle", {
+                    name: bundle?.card.meta.name ?? t("chat.defaultName")
+                  })
             }
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -348,8 +354,8 @@ export function ChatApp(): JSX.Element {
               type="button"
               className="btn btn--danger btn--cancel"
               onClick={() => void chat.cancel()}
-              data-hint="中断 · Enter"
-              aria-label="中断"
+              data-hint={t("chat.cancelHint")}
+              aria-label={t("chat.cancelAria")}
             >
               <StopIcon />
             </button>
@@ -358,8 +364,8 @@ export function ChatApp(): JSX.Element {
               type="submit"
               className="btn btn--magenta btn--send"
               disabled={input.trim().length === 0}
-              data-hint="发送 · Enter"
-              aria-label="发送"
+              data-hint={t("chat.sendHint")}
+              aria-label={t("chat.sendAria")}
             >
               <SendIcon />
             </button>
@@ -393,9 +399,12 @@ export function ChatApp(): JSX.Element {
             fontSize: 12
           }}
         >
-          <span>· 上次出错：{chat.lastError.message}</span>
+          <span>
+            {t("chat.lastErrorPrefix")}
+            {chat.lastError.message}
+          </span>
           <button className="btn btn--ghost btn--sm" onClick={retryLastUser}>
-            重试
+            {t("chat.retry")}
           </button>
         </div>
       ) : null}

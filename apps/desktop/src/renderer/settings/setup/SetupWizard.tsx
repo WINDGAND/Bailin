@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { STARTER_BUNDLES } from "@nuwa-pet/starter-library";
 import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
 import { PROVIDER_PRESETS, type ProviderPreset } from "../provider/presets.js";
+import { useT } from "../../shared/i18n/index.js";
 
 interface SetupWizardProps {
   onDone(): void | Promise<void>;
@@ -15,16 +16,19 @@ const HAS_STARTERS = STARTER_BUNDLES.length > 0;
 const STEP_ORDER: Step[] = HAS_STARTERS
   ? ["welcome", "disclaimer", "provider", "starter"]
   : ["welcome", "disclaimer", "provider"];
-const STEP_TITLE: Record<Step, string> = {
-  welcome: "开始之前",
-  disclaimer: "数据如何处理",
-  provider: "接入你的 LLM",
-  starter: "挑一只先上桌"
+
+const STEP_KEYS: Record<Step, string> = {
+  welcome: "setup.stepWelcome",
+  disclaimer: "setup.stepDisclaimer",
+  provider: "setup.stepProvider",
+  starter: "setup.stepStarter"
 };
 
 export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
+  const t = useT();
   const [step, setStep] = useState<Step>("welcome");
   const stepIndex = STEP_ORDER.indexOf(step);
+  const stepTitle = t(STEP_KEYS[step]);
 
   function next() {
     const i = STEP_ORDER.indexOf(step);
@@ -52,20 +56,20 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
           gap: 22
         }}
       >
-        <div className="eyebrow">百灵 Bailin · Setup</div>
+        <div className="eyebrow">{t("setup.eyebrow")}</div>
         <h1 className="display display--hero">
-          把一个有立场的视角，<br />请到你的桌面上。
+          {t("setup.heroLine1")}
+          <br />
+          {t("setup.heroLine2")}
         </h1>
         <p className="body-md" style={{ maxWidth: 420 }}>
-          {HAS_STARTERS
-            ? "四步搞定：免责声明 → 数据说明 → 连上你自己的 LLM → 选一只示例角色。所有数据留在这台机器，密钥用系统 DPAPI 加密。"
-            : "三步搞定：免责声明 → 数据说明 → 连上你自己的 LLM。所有数据留在这台机器，密钥用系统 DPAPI 加密。"}
+          {HAS_STARTERS ? t("setup.introWithStarters") : t("setup.introWithoutStarters")}
         </p>
         <div className="row gap-1 body-sm">
           <span className="kbd">Ctrl</span>
           <span className="kbd">Shift</span>
           <span className="kbd">P</span>
-          <span style={{ marginLeft: 6 }}>= 任意时刻唤起当前角色</span>
+          <span style={{ marginLeft: 6 }}>{t("setup.shortcutHint")}</span>
         </div>
 
         <div style={{ marginTop: "auto" }}>
@@ -73,8 +77,10 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
             className="row row--between"
             style={{ marginBottom: 8, fontSize: 12, color: "var(--ink-faint)" }}
           >
-            <span className="mono">第 {stepIndex + 1} / {STEP_ORDER.length} 步</span>
-            <span>{STEP_TITLE[step]}</span>
+            <span className="mono">
+              {t("setup.stepCounter", { current: stepIndex + 1, total: STEP_ORDER.length })}
+            </span>
+            <span>{stepTitle}</span>
           </div>
           <div className="steps">
             {STEP_ORDER.map((s, i) => (
@@ -104,17 +110,17 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
       >
         {step === "welcome" ? (
           <SimpleStep
-            title={STEP_TITLE.welcome}
-            body={`百灵 Bailin 不会替代真实的咨询、医疗或法律意见。它给你的是一位「受公开资料启发的视角助手」，不是本人，也不是官方授权。`}
-            cta="同意，开始"
+            title={t("setup.stepWelcome")}
+            body={t("setup.welcomeBody")}
+            cta={t("setup.welcomeCta")}
             onNext={next}
           />
         ) : null}
         {step === "disclaimer" ? (
           <SimpleStep
-            title={STEP_TITLE.disclaimer}
-            body="角色卡、像素桌宠、用户画像都默认存在本机；完整对话默认不保存；可一键清空所有数据。"
-            cta="明白，下一步"
+            title={t("setup.stepDisclaimer")}
+            body={t("setup.disclaimerBody")}
+            cta={t("setup.disclaimerCta")}
             onNext={next}
             onBack={back}
           />
@@ -144,6 +150,7 @@ function SimpleStep({
   onNext: () => void;
   onBack?: () => void;
 }) {
+  const t = useT();
   return (
     <div className="card fade-in-up" style={{ padding: 26 }}>
       <div className="display display--section" style={{ marginBottom: 12 }}>
@@ -156,7 +163,7 @@ function SimpleStep({
         <div>
           {onBack ? (
             <button className="btn btn--ghost btn--sm" onClick={onBack}>
-              ← 上一步
+              {t("setup.back")}
             </button>
           ) : null}
         </div>
@@ -175,6 +182,7 @@ function ProviderStep({
   onNext: () => void;
   onBack: () => void;
 }) {
+  const t = useT();
   const nuwa = useNuwa();
   const { showToast } = useToast();
   const [kind, setKind] = useState<"openai-compatible" | "anthropic-compatible">(
@@ -205,17 +213,20 @@ function ProviderStep({
     const r = await nuwa.llm.setProvider({ kind, baseUrl, model, apiKey });
     if (!r.ok) {
       setBusy(false);
-      setStatus({ kind: "error", message: r.error ?? "保存失败" });
+      setStatus({ kind: "error", message: r.error ?? t("provider.toastSaveFailed") });
       return;
     }
     const test = await nuwa.llm.testConnection();
     setBusy(false);
     if (!test.ok) {
-      setStatus({ kind: "error", message: test.error ?? "测试失败" });
+      setStatus({ kind: "error", message: test.error ?? t("setup.testFailed") });
       return;
     }
     setStatus({ kind: "ok", latency: test.latencyMs });
-    showToast({ kind: "success", text: `连通成功（${test.latencyMs ?? "?"} ms）` });
+    showToast({
+      kind: "success",
+      text: t("provider.toastConnectOk", { latency: test.latencyMs ?? "?" })
+    });
     setTimeout(onNext, 500);
   }
 
@@ -224,17 +235,14 @@ function ProviderStep({
       className="card fade-in-up"
       style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}
     >
-      <div className="display display--section">{STEP_TITLE.provider}</div>
+      <div className="display display--section">{t("setup.stepProvider")}</div>
       <p className="body-md" style={{ marginTop: -4 }}>
-        我们不托管模型。把你自己的 Key 贴进来，所有调用都直接从这台电脑发出。
+        {t("setup.providerIntro")}
       </p>
 
       <div>
-        <label className="eyebrow">常用提供商</label>
-        <div
-          className="row gap-2 row--wrap"
-          style={{ marginTop: 6 }}
-        >
+        <label className="eyebrow">{t("provider.presetsLabel")}</label>
+        <div className="row gap-2 row--wrap" style={{ marginTop: 6 }}>
           {PROVIDER_PRESETS.map((p) => (
             <button
               key={p.id}
@@ -243,7 +251,7 @@ function ProviderStep({
                 baseUrl === p.baseUrl && model === p.model ? "btn--magenta" : ""
               }`}
               onClick={() => applyPreset(p)}
-              data-hint={p.note ?? ""}
+              data-hint={t(`provider.presetNotes.${p.id}`)}
             >
               {p.label}
             </button>
@@ -252,20 +260,18 @@ function ProviderStep({
       </div>
 
       <div>
-        <label className="eyebrow">协议</label>
+        <label className="eyebrow">{t("provider.protocolLabel")}</label>
         <select
           className="select"
           value={kind}
           onChange={(e) => setKind(e.target.value as typeof kind)}
         >
-          <option value="openai-compatible">
-            OpenAI 兼容（含 DeepSeek / Moonshot / SiliconFlow ...）
-          </option>
-          <option value="anthropic-compatible">Anthropic 兼容（Claude 系列）</option>
+          <option value="openai-compatible">{t("setup.protocolOpenAILong")}</option>
+          <option value="anthropic-compatible">{t("setup.protocolAnthropicLong")}</option>
         </select>
       </div>
       <div>
-        <label className="eyebrow">Base URL</label>
+        <label className="eyebrow">{t("provider.baseUrlLabel")}</label>
         <input
           className="input"
           value={baseUrl}
@@ -273,7 +279,7 @@ function ProviderStep({
         />
       </div>
       <div>
-        <label className="eyebrow">模型</label>
+        <label className="eyebrow">{t("setup.modelLabel")}</label>
         <input
           className="input"
           value={model}
@@ -281,7 +287,7 @@ function ProviderStep({
         />
       </div>
       <div>
-        <label className="eyebrow">API Key</label>
+        <label className="eyebrow">{t("provider.apiKeyLabel")}</label>
         <div className="input-group">
           <input
             className="input"
@@ -297,10 +303,10 @@ function ProviderStep({
               type="button"
               className="btn btn--ghost btn--sm"
               onClick={() => setShowKey((v) => !v)}
-              data-hint={showKey ? "隐藏" : "显示"}
-              aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
+              data-hint={showKey ? t("provider.hideKey") : t("provider.showKey")}
+              aria-label={showKey ? t("provider.hideKeyAria") : t("provider.showKeyAria")}
             >
-              {showKey ? "隐藏" : "显示"}
+              {showKey ? t("provider.hideKey") : t("provider.showKey")}
             </button>
           </div>
         </div>
@@ -311,11 +317,14 @@ function ProviderStep({
           {status.kind === "running" ? (
             <>
               <Spinner magenta />
-              <span className="body-sm">正在 ping {baseUrl}...</span>
+              <span className="body-sm">{t("setup.pinging", { url: baseUrl })}</span>
             </>
           ) : null}
           {status.kind === "ok" ? (
-            <StatusDot kind="ok" label={`连通成功 · ${status.latency ?? "?"} ms`} />
+            <StatusDot
+              kind="ok"
+              label={t("setup.statusOk", { latency: status.latency ?? "?" })}
+            />
           ) : null}
           {status.kind === "error" ? (
             <StatusDot kind="error" label={status.message} />
@@ -325,15 +334,15 @@ function ProviderStep({
 
       <div className="row row--between gap-2" style={{ marginTop: 6 }}>
         <button className="btn btn--ghost btn--sm" onClick={onBack}>
-          ← 上一步
+          {t("setup.back")}
         </button>
         <button
           className="btn btn--magenta"
           onClick={() => void save()}
           disabled={busy || !apiKey}
-          data-hint={!apiKey ? "先填 API Key" : ""}
+          data-hint={!apiKey ? t("provider.fillKeyFirst") : ""}
         >
-          {busy ? "测试中…" : "保存并测试连通"}
+          {busy ? t("setup.saveTesting") : t("setup.saveAndTest")}
         </button>
       </div>
     </div>
@@ -347,6 +356,7 @@ function StarterStep({
   onDone(): void | Promise<void>;
   onBack: () => void;
 }) {
+  const t = useT();
   const nuwa = useNuwa();
   const { showToast } = useToast();
   const [importing, setImporting] = useState<string | null>(null);
@@ -355,10 +365,13 @@ function StarterStep({
     setImporting(id);
     const r = await nuwa.characters.importStarter(id);
     if (r.ok) {
-      showToast({ kind: "success", text: "角色已上桌" });
+      showToast({ kind: "success", text: t("setup.toastCharacterReady") });
       await onDone();
     } else {
-      showToast({ kind: "error", text: r.error ?? "导入失败" });
+      showToast({
+        kind: "error",
+        text: r.error ?? t("setup.toastImportFailed")
+      });
     }
     setImporting(null);
   }
@@ -366,9 +379,9 @@ function StarterStep({
   return (
     <div className="card fade-in-up" style={{ padding: 24 }}>
       <div className="display display--section" style={{ marginBottom: 4 }}>
-        {STEP_TITLE.starter}
+        {t("setup.stepStarter")}
       </div>
-      <p className="body-md">如果你不知道先造谁，下面是我们内置的 6 只。</p>
+      <p className="body-md">{t("setup.starterIntro")}</p>
       <div
         style={{
           display: "grid",
@@ -416,7 +429,9 @@ function StarterStep({
                   {bundle.card.meta.name.replace(/ · 视角助手| · 灵感陪伴/, "")}
                 </span>
                 <span className={`badge badge--${bundle.card.meta.track}`}>
-                  {bundle.card.meta.track === "utility" ? "实用" : "陪伴"}
+                  {bundle.card.meta.track === "utility"
+                    ? t("setup.trackUtilityShort")
+                    : t("setup.trackCompanionShort")}
                 </span>
               </div>
               <p
@@ -434,7 +449,7 @@ function StarterStep({
               </p>
               {importing === bundle.card.id ? (
                 <span className="body-sm" style={{ color: "var(--magenta)" }}>
-                  导入中…
+                  {t("setup.starterImporting")}
                 </span>
               ) : null}
             </div>
@@ -443,10 +458,10 @@ function StarterStep({
       </div>
       <div className="row row--between gap-2" style={{ marginTop: 16 }}>
         <button className="btn btn--ghost btn--sm" onClick={onBack}>
-          ← 上一步
+          {t("setup.back")}
         </button>
         <button className="btn btn--ghost" onClick={() => void onDone()}>
-          跳过，自己造 →
+          {t("setup.starterSkip")}
         </button>
       </div>
     </div>

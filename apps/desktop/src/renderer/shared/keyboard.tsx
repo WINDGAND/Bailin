@@ -9,6 +9,7 @@ import {
   type ReactNode
 } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "./i18n/index.js";
 
 /**
  * 全局快捷键作用域 + 帮助面板。
@@ -206,23 +207,30 @@ function HelpOverlay({
   shortcuts: RegisteredShortcut[];
   onClose: () => void;
 }): JSX.Element {
+  const t = useT();
   const grouped = useMemo(() => {
     const map = new Map<string, RegisteredShortcut[]>();
     for (const s of shortcuts) {
-      const k = s.scope ?? "全局";
+      const rawScope = s.scope ?? "global";
+      const k =
+        rawScope === "Settings"
+          ? t("keyboard.scopeSettings")
+          : rawScope === "global" || rawScope === "全局"
+            ? t("keyboard.scopeGlobal")
+            : rawScope;
       const arr = map.get(k) ?? [];
       arr.push(s);
       map.set(k, arr);
     }
     return Array.from(map.entries());
-  }, [shortcuts]);
+  }, [shortcuts, t]);
 
   return createPortal(
     <div
       className="modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="快捷键"
+      aria-label={t("keyboard.dialogAria")}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -234,20 +242,17 @@ function HelpOverlay({
             type="button"
             className="btn btn--icon"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("keyboard.close")}
             data-hint="Esc"
           >
             ×
           </button>
         </div>
-        <div
-          className="display display--section"
-          style={{ marginBottom: 14 }}
-        >
-          快捷键
+        <div className="display display--section" style={{ marginBottom: 14 }}>
+          {t("keyboard.title")}
         </div>
         {grouped.length === 0 ? (
-          <p className="body-md">当前页面还没注册任何快捷键。</p>
+          <p className="body-md">{t("keyboard.empty")}</p>
         ) : (
           grouped.map(([scope, list]) => (
             <div key={scope} style={{ marginBottom: 12 }}>
@@ -275,11 +280,8 @@ function HelpOverlay({
             </div>
           ))
         )}
-        <p
-          className="body-sm"
-          style={{ marginTop: 8, color: "var(--ink-faint)" }}
-        >
-          再按 <span className="kbd">?</span> 收起。
+        <p className="body-sm" style={{ marginTop: 8, color: "var(--ink-faint)" }}>
+          {t("keyboard.dismissHint", { key: "?" })}
         </p>
       </div>
     </div>,

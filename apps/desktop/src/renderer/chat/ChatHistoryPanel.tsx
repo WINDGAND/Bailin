@@ -3,6 +3,7 @@ import type { ChatSessionSummary } from "../../shared/ipc-contract.js";
 import { formatSessionListTime } from "../shared/format-chat-time.js";
 import { useConfirm } from "../shared/feedback.js";
 import { useNuwa } from "../shared/use-nuwa.js";
+import { useT, useI18n } from "../shared/i18n/index.js";
 
 export interface ChatHistoryPanelProps {
   open: boolean;
@@ -26,6 +27,8 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
     onInfo,
     onError
   } = props;
+  const t = useT();
+  const { locale } = useI18n();
   const nuwa = useNuwa();
   const confirm = useConfirm();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -42,11 +45,11 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
       const list = await nuwa.chat.listSessions(characterId);
       setSessions(list);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "加载历史失败");
+      onError(e instanceof Error ? e.message : t("chat.historyToastLoadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [characterId, nuwa, onError]);
+  }, [characterId, nuwa, onError, t]);
 
   useEffect(() => {
     if (!open) return;
@@ -106,38 +109,40 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
     async (sessionId: string) => {
       const title = renameValue.trim();
       if (!title) {
-        onError("标题不能为空");
+        onError(t("chat.historyToastTitleEmpty"));
         return;
       }
       try {
         const res = await nuwa.chat.renameSession({ characterId, sessionId, title });
         if (!res.ok) {
-          onError("重命名失败");
+          onError(t("chat.historyToastRenameFailed"));
           return;
         }
         setRenamingId(null);
         setMenuSessionId(null);
-        onInfo("已重命名");
+        onInfo(t("chat.historyToastRenamed"));
         await loadSessions();
       } catch (e) {
-        onError(e instanceof Error ? e.message : "重命名失败");
+        onError(e instanceof Error ? e.message : t("chat.historyToastRenameFailed"));
       }
     },
-    [characterId, nuwa, renameValue, loadSessions, onInfo, onError]
+    [characterId, nuwa, renameValue, loadSessions, onInfo, onError, t]
   );
 
   const handleDelete = useCallback(
     async (session: ChatSessionSummary) => {
       const ok = await confirm({
-        title: `删除「${session.title}」？`,
+        title: t("chat.historyDeleteTitle", { title: session.title }),
         body: (
           <span>
-            该对话的所有消息将被永久删除。
-            <p style={{ marginTop: 8, color: "var(--ink-soft)" }}>此操作不可恢复。</p>
+            {t("chat.historyDeleteBody")}
+            <p style={{ marginTop: 8, color: "var(--ink-soft)" }}>
+              {t("chat.historyDeleteIrreversible")}
+            </p>
           </span>
         ),
-        confirmLabel: "确认删除",
-        cancelLabel: "再想想",
+        confirmLabel: t("common.confirmDelete"),
+        cancelLabel: t("common.thinkAgain"),
         danger: true
       });
       if (!ok) return;
@@ -147,33 +152,38 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
           sessionId: session.id
         });
         if (!res.ok) {
-          onError("删除失败");
+          onError(t("chat.historyToastDeleteFailed"));
           return;
         }
         setMenuSessionId(null);
-        onInfo("已删除");
+        onInfo(t("chat.historyToastDeleted"));
         if (session.id === activeSessionId) {
           const active = await nuwa.chat.getActiveSession(characterId);
           onSwitch(active.sessionId);
         }
         await loadSessions();
       } catch (e) {
-        onError(e instanceof Error ? e.message : "删除失败");
+        onError(e instanceof Error ? e.message : t("chat.historyToastDeleteFailed"));
       }
     },
-    [characterId, nuwa, activeSessionId, onSwitch, loadSessions, onInfo, onError, confirm]
+    [characterId, nuwa, activeSessionId, onSwitch, loadSessions, onInfo, onError, confirm, t]
   );
 
   if (!open) return null;
 
   return (
     <div className="chat-history">
-      <button type="button" className="chat-history__backdrop" onClick={onClose} aria-label="关闭历史" />
+      <button
+        type="button"
+        className="chat-history__backdrop"
+        onClick={onClose}
+        aria-label={t("chat.historyCloseBackdrop")}
+      />
       <div
         ref={panelRef}
         className="chat-history__panel fade-in-up"
         role="dialog"
-        aria-label="历史对话"
+        aria-label={t("chat.historyPanelAria")}
         style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
       >
         <button
@@ -185,15 +195,15 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
           }}
         >
           <NewChatIcon />
-          新建对话
+          {t("chat.historyNewChat")}
         </button>
 
         <div className="chat-history__list">
           {loading && sessions.length === 0 ? (
-            <div className="chat-history__empty">加载中…</div>
+            <div className="chat-history__empty">{t("chat.historyLoading")}</div>
           ) : null}
           {!loading && sessions.length === 0 ? (
-            <div className="chat-history__empty">还没有历史对话</div>
+            <div className="chat-history__empty">{t("chat.historyEmpty")}</div>
           ) : null}
           {sessions.map((session) => {
             const active = session.id === activeSessionId;
@@ -220,17 +230,17 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
                       onMouseDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                       maxLength={80}
-                      aria-label="对话标题"
+                      aria-label={t("chat.historyTitleAria")}
                     />
                     <button type="submit" className="btn btn--sm">
-                      保存
+                      {t("chat.historySave")}
                     </button>
                     <button
                       type="button"
                       className="btn btn--sm btn--ghost"
                       onClick={() => setRenamingId(null)}
                     >
-                      取消
+                      {t("chat.historyCancel")}
                     </button>
                   </form>
                 ) : (
@@ -245,14 +255,15 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
                     >
                       <span className="chat-history__item-title">{session.title}</span>
                       <span className="chat-history__item-meta">
-                        {session.messageCount} 条 · {formatSessionListTime(session.updatedAt)}
+                        {t("chat.historyMessageCount", { count: session.messageCount })} ·{" "}
+                        {formatSessionListTime(session.updatedAt, locale)}
                       </span>
                     </button>
                     <div className="chat-history__item-actions">
                       <button
                         type="button"
                         className="btn btn--icon btn--ghost chat-history__menu-btn"
-                        aria-label="更多操作"
+                        aria-label={t("chat.historyMoreActions")}
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuSessionId((cur) => (cur === session.id ? null : session.id));
@@ -272,7 +283,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
                             }}
                           >
                             <RenameIcon />
-                            重命名
+                            {t("chat.historyRename")}
                           </button>
                           <button
                             type="button"
@@ -280,7 +291,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
                             onClick={() => void handleDelete(session)}
                           >
                             <DeleteIcon />
-                            删除
+                            {t("chat.historyDelete")}
                           </button>
                         </div>
                       ) : null}

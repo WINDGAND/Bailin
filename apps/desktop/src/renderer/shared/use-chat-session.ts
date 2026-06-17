@@ -3,6 +3,7 @@ import { ulid } from "ulid";
 import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import type { ChatTurn } from "../../shared/ipc-contract.js";
 import { useNuwa } from "./use-nuwa.js";
+import { useT } from "./i18n/index.js";
 
 export interface UiTurn {
   id: string;
@@ -43,6 +44,7 @@ export function useChatSession(
   }
 ): ChatSessionState {
   const nuwa = useNuwa();
+  const t = useT();
   const [sessionId, setSessionId] = useState("");
   const [turns, setTurns] = useState<UiTurn[]>([]);
   const [pending, setPending] = useState("");
@@ -166,11 +168,11 @@ export function useChatSession(
         pendingAssistantTurnIdRef.current = res.assistantTurnId;
       } catch (e) {
         setPhase("idle");
-        const message = e instanceof Error ? e.message : "发送失败";
+        const message = e instanceof Error ? e.message : t("chat.sessionSendFailed");
         options.onError?.(message);
       }
     },
-    [bundle, sessionId, nuwa, options.surface, options.onError]
+    [bundle, sessionId, nuwa, options.surface, options.onError, t]
   );
 
   const submit = useCallback(async (text: string) => sendInternal(text), [sendInternal]);
@@ -191,16 +193,16 @@ export function useChatSession(
       return "";
     });
     setPhase("idle");
-    options.onInfo?.("已中断这次回答");
-  }, [nuwa, options.onInfo]);
+    options.onInfo?.(t("chat.sessionCancelled"));
+  }, [nuwa, options.onInfo, t]);
 
   const startNewSession = useCallback(async () => {
     if (!bundle) return;
     if (inFlightRef.current) await cancel();
     const r = await nuwa.chat.newSession(bundle.card.id);
     await loadSession(r.sessionId);
-    options.onInfo?.("新对话已开始");
-  }, [bundle, nuwa, cancel, loadSession, options.onInfo]);
+    options.onInfo?.(t("chat.sessionNewStarted"));
+  }, [bundle, nuwa, cancel, loadSession, options.onInfo, t]);
 
   const switchSession = useCallback(
     async (targetSessionId: string) => {
@@ -211,12 +213,12 @@ export function useChatSession(
         sessionId: targetSessionId
       });
       if (!res.ok) {
-        options.onError?.("切换对话失败");
+        options.onError?.(t("chat.sessionSwitchFailed"));
         return;
       }
       await loadSession(targetSessionId);
     },
-    [bundle, sessionId, nuwa, cancel, loadSession, options.onError]
+    [bundle, sessionId, nuwa, cancel, loadSession, options.onError, t]
   );
 
   const retryLastUser = useCallback(() => {
@@ -242,16 +244,16 @@ export function useChatSession(
           turnId
         });
         if (!res.ok) {
-          options.onError?.("删除失败：找不到该消息记录");
+          options.onError?.(t("chat.sessionDeleteNotFound"));
           return;
         }
         setTurns((prev) => prev.filter((t) => t.id !== turnId));
-        options.onInfo?.("已删除");
+        options.onInfo?.(t("chat.sessionDeleted"));
       } catch (e) {
-        options.onError?.(e instanceof Error ? e.message : "删除失败");
+        options.onError?.(e instanceof Error ? e.message : t("chat.sessionDeleteFailed"));
       }
     },
-    [bundle, sessionId, nuwa, options.onInfo, options.onError]
+    [bundle, sessionId, nuwa, options.onInfo, options.onError, t]
   );
 
   const deleteTurnsFrom = useCallback(
@@ -264,7 +266,7 @@ export function useChatSession(
           turnId
         });
         if (!res.ok) {
-          options.onError?.("删除失败：找不到该消息记录");
+          options.onError?.(t("chat.sessionDeleteNotFound"));
           return;
         }
         setTurns((prev) => {
@@ -272,12 +274,12 @@ export function useChatSession(
           if (idx < 0) return prev;
           return prev.slice(0, idx);
         });
-        options.onInfo?.("已删除");
+        options.onInfo?.(t("chat.sessionDeleted"));
       } catch (e) {
-        options.onError?.(e instanceof Error ? e.message : "删除失败");
+        options.onError?.(e instanceof Error ? e.message : t("chat.sessionDeleteFailed"));
       }
     },
-    [bundle, sessionId, nuwa, options.onInfo, options.onError]
+    [bundle, sessionId, nuwa, options.onInfo, options.onError, t]
   );
 
   const regenerateAssistant = useCallback(
@@ -304,17 +306,17 @@ export function useChatSession(
           turnId: assistantTurnId
         });
         if (!res.ok) {
-          options.onError?.("重新生成失败：找不到该回复记录，请重启应用后再试");
+          options.onError?.(t("chat.sessionRegenerateNotFound"));
           return;
         }
         setTurns((prev) => prev.filter((t) => t.id !== assistantTurnId));
         await sendInternal(userContent, { skipUserAppend: true });
-        options.onInfo?.("正在重新生成…");
+        options.onInfo?.(t("chat.sessionRegenerating"));
       } catch (e) {
-        options.onError?.(e instanceof Error ? e.message : "重新生成失败");
+        options.onError?.(e instanceof Error ? e.message : t("chat.sessionRegenerateFailed"));
       }
     },
-    [bundle, sessionId, turns, nuwa, cancel, sendInternal, options.onInfo, options.onError]
+    [bundle, sessionId, turns, nuwa, cancel, sendInternal, options.onInfo, options.onError, t]
   );
 
   return {

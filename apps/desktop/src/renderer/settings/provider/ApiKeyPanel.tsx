@@ -12,6 +12,7 @@ import {
   VISION_MODEL_PRESETS,
   type ProviderPreset
 } from "./presets.js";
+import { useT } from "../../shared/i18n/index.js";
 
 const DEFAULT_VISION_MODEL = "bytedance/doubao-seed-2.0-lite-260428";
 
@@ -38,10 +39,11 @@ type VisionProbe =
   | { state: "done"; ok: boolean; latencyMs?: number; reason?: string };
 
 const IMAGE_TIERS: ImageTierName[] = ["economy", "standard", "premium"];
-const TIER_LABEL: Record<ImageTierName, string> = {
-  economy: "经济",
-  standard: "标准",
-  premium: "精品"
+
+const TIER_KEYS: Record<ImageTierName, string> = {
+  economy: "provider.tierEconomy",
+  standard: "provider.tierStandard",
+  premium: "provider.tierPremium"
 };
 
 const DEFAULT_IMAGE_CONFIG: ImageGenerationConfigDTO = {
@@ -69,7 +71,18 @@ const DEFAULT_IMAGE_CONFIG: ImageGenerationConfigDTO = {
   }
 };
 
+function tierLabel(tier: ImageTierName, t: (key: string) => string): string {
+  return t(TIER_KEYS[tier]);
+}
+
+function visionPresetLabel(id: string, fallback: string, t: (key: string) => string): string {
+  const key = `provider.visionLabels.${id}`;
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
+
 export function ApiKeyPanel(): JSX.Element {
+  const t = useT();
   const nuwa = useNuwa();
   const confirm = useConfirm();
   const { showToast } = useToast();
@@ -204,14 +217,14 @@ export function ApiKeyPanel(): JSX.Element {
         reason: r.reason
       });
       if (r.ok && r.realWebSearch) {
-        showToast({ kind: "success", text: `真联网验证通过 · ${r.citations} 个 URL` });
-      } else if (r.ok) {
         showToast({
-          kind: "warn",
-          text: "联网请求有回复，但未拿到网页来源，深度调研可能不准"
+          kind: "success",
+          text: t("provider.toastWebSearchOk", { count: r.citations })
         });
+      } else if (r.ok) {
+        showToast({ kind: "warn", text: t("provider.toastWebSearchPartial") });
       } else {
-        showToast({ kind: "error", text: r.reason ?? "实测失败" });
+        showToast({ kind: "error", text: r.reason ?? t("provider.toastProbeFailed") });
       }
     } catch (e) {
       setProbe({
@@ -219,9 +232,14 @@ export function ApiKeyPanel(): JSX.Element {
         ok: false,
         realWebSearch: false,
         citations: 0,
-        reason: e instanceof Error ? e.message : "未知错误"
+        reason: e instanceof Error ? e.message : t("common.unknownError")
       });
-      showToast({ kind: "error", text: `实测失败：${e instanceof Error ? e.message : "未知错误"}` });
+      showToast({
+        kind: "error",
+        text: t("provider.toastProbeFailedDetail", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
+      });
     }
   }
 
@@ -236,17 +254,28 @@ export function ApiKeyPanel(): JSX.Element {
         reason: r.reason
       });
       if (r.ok) {
-        showToast({ kind: "success", text: `视觉验证通过 · ${r.latencyMs ?? "?"} ms` });
+        showToast({
+          kind: "success",
+          text: t("provider.toastVisionOk", { latency: r.latencyMs ?? "?" })
+        });
       } else {
-        showToast({ kind: "warn", text: r.reason ?? "视觉模型拒绝多模态请求" });
+        showToast({
+          kind: "warn",
+          text: r.reason ?? t("provider.toastVisionRejected")
+        });
       }
     } catch (e) {
       setVisionProbe({
         state: "done",
         ok: false,
-        reason: e instanceof Error ? e.message : "未知错误"
+        reason: e instanceof Error ? e.message : t("common.unknownError")
       });
-      showToast({ kind: "error", text: `实测失败：${e instanceof Error ? e.message : "未知错误"}` });
+      showToast({
+        kind: "error",
+        text: t("provider.toastProbeFailedDetail", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
+      });
     }
   }
 
@@ -263,17 +292,22 @@ export function ApiKeyPanel(): JSX.Element {
         apiKey
       });
       if (!r.ok) {
-        setStatus({ kind: "error", message: r.error ?? "保存失败" });
-        showToast({ kind: "error", text: r.error ?? "保存失败" });
+        const err = r.error ?? t("provider.toastSaveFailed");
+        setStatus({ kind: "error", message: err });
+        showToast({ kind: "error", text: err });
         return;
       }
-      const t = await nuwa.llm.testConnection();
-      if (t.ok) {
-        setStatus({ kind: "ok", latency: t.latencyMs });
-        showToast({ kind: "success", text: `连通成功（${t.latencyMs ?? "?"} ms）` });
+      const testResult = await nuwa.llm.testConnection();
+      if (testResult.ok) {
+        setStatus({ kind: "ok", latency: testResult.latencyMs });
+        showToast({
+          kind: "success",
+          text: t("provider.toastConnectOk", { latency: testResult.latencyMs ?? "?" })
+        });
       } else {
-        setStatus({ kind: "error", message: t.error ?? "测试失败" });
-        showToast({ kind: "error", text: `测试失败：${t.error ?? ""}` });
+        const err = testResult.error ?? t("provider.toastImageTestFailed");
+        setStatus({ kind: "error", message: err });
+        showToast({ kind: "error", text: t("provider.toastTestFailed", { error: err }) });
       }
       setBaseline({
         kind,
@@ -308,8 +342,9 @@ export function ApiKeyPanel(): JSX.Element {
       };
       const r = await nuwa.imageGen.setConfig(payload);
       if (!r.ok) {
-        setImageStatus({ kind: "error", reason: r.error ?? "保存失败" });
-        showToast({ kind: "error", text: r.error ?? "保存失败" });
+        const err = r.error ?? t("provider.toastSaveFailed");
+        setImageStatus({ kind: "error", reason: err });
+        showToast({ kind: "error", text: err });
         return;
       }
       const cap = await nuwa.imageGen.detectCapability();
@@ -325,8 +360,9 @@ export function ApiKeyPanel(): JSX.Element {
     try {
       const r = await nuwa.imageGen.test(tier);
       if (!r.ok) {
-        setImageStatus({ kind: "error", reason: r.error ?? "测试失败" });
-        showToast({ kind: "error", text: r.error ?? "测试失败" });
+        const err = r.error ?? t("provider.toastImageTestFailed");
+        setImageStatus({ kind: "error", reason: err });
+        showToast({ kind: "error", text: err });
         return;
       }
       setImageStatus({
@@ -338,7 +374,10 @@ export function ApiKeyPanel(): JSX.Element {
       });
       showToast({
         kind: "success",
-        text: `${TIER_LABEL[tier]}档生图测试成功 · ${r.latencyMs ?? "?"} ms`
+        text: t("provider.toastImageTierOk", {
+          tier: tierLabel(tier, t),
+          latency: r.latencyMs ?? "?"
+        })
       });
     } finally {
       setImageBusy(null);
@@ -357,9 +396,10 @@ export function ApiKeyPanel(): JSX.Element {
 
   async function clear(): Promise<void> {
     const ok = await confirm({
-      title: "清除当前 API Key 配置？",
-      body: "已有角色不会被删除；只是不再有可用的模型与 Key。",
-      confirmLabel: "清除",
+      title: t("provider.clearKeyTitle"),
+      body: t("provider.clearKeyBody"),
+      confirmLabel: t("provider.clearKeyConfirm"),
+      cancelLabel: t("common.thinkAgain"),
       danger: true
     });
     if (!ok) return;
@@ -372,17 +412,23 @@ export function ApiKeyPanel(): JSX.Element {
       setProbe(null);
       setVisionProbe(null);
       setBaseline(null);
-      showToast({ kind: "info", text: "Key 已清除" });
+      showToast({ kind: "info", text: t("provider.toastKeyCleared") });
     } catch (e) {
-      showToast({ kind: "error", text: `清除失败：${e instanceof Error ? e.message : "未知错误"}` });
+      showToast({
+        kind: "error",
+        text: t("provider.toastClearFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
+      });
     }
   }
 
   async function clearImageKey(): Promise<void> {
     const ok = await confirm({
-      title: "清除独立的生图 Key？",
-      body: "清除后会回退到使用 LLM Provider 自动生图。",
-      confirmLabel: "清除",
+      title: t("provider.clearImageKeyTitle"),
+      body: t("provider.clearImageKeyBody"),
+      confirmLabel: t("provider.clearKeyConfirm"),
+      cancelLabel: t("common.thinkAgain"),
       danger: true
     });
     if (!ok) return;
@@ -390,36 +436,37 @@ export function ApiKeyPanel(): JSX.Element {
       await nuwa.imageGen.clearKey();
       setImageApiKeyDraft("");
       setImageStatus(null);
-      showToast({ kind: "info", text: "独立生图 Key 已清除" });
+      showToast({ kind: "info", text: t("provider.toastImageKeyCleared") });
     } catch (e) {
-      showToast({ kind: "error", text: `清除失败：${e instanceof Error ? e.message : "未知错误"}` });
+      showToast({
+        kind: "error",
+        text: t("provider.toastClearFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
+      });
     }
   }
 
   return (
     <div>
       <div style={{ marginBottom: 26 }}>
-        <div className="eyebrow">Provider</div>
-        <div className="display display--page">模型与 API Key</div>
-        <p className="apple-page-subtitle">
-          连接你的模型供应商，并确认联网与视觉能力。通过后就可以放心使用完整版造人。
-        </p>
+        <div className="eyebrow">{t("provider.eyebrow")}</div>
+        <div className="display display--page">{t("provider.title")}</div>
+        <p className="apple-page-subtitle">{t("provider.subtitle")}</p>
       </div>
 
       <div style={{ maxWidth: 760 }}>
         <div className="bl-card__head">
           <div>
-            <div className="bl-card__title">对话模型</div>
-            <p className="bl-card__lede">
-              所有调用从这台电脑直接发出。Key 用 DPAPI 加密落盘。
-            </p>
+            <div className="bl-card__title">{t("provider.chatModelTitle")}</div>
+            <p className="bl-card__lede">{t("provider.chatModelLede")}</p>
           </div>
         </div>
 
         <div style={{ marginBottom: 18 }}>
-          <span className="bl-field-label bl-field-label--with-hint">常用提供商</span>
+          <span className="bl-field-label bl-field-label--with-hint">{t("provider.presetsLabel")}</span>
           <p className="bl-field-hint" style={{ marginTop: 0, marginBottom: 8 }}>
-            点一下自动填充协议、Base URL、模型，再贴 Key 即可。
+            {t("provider.presetsHint")}
           </p>
           <div className="segmented" style={{ width: "100%", overflowX: "auto" }}>
             {PROVIDER_PRESETS.map((p) => (
@@ -428,7 +475,7 @@ export function ApiKeyPanel(): JSX.Element {
                 type="button"
                 className={activePresetId === p.id ? "segmented__item is-active" : "segmented__item"}
                 onClick={() => applyPreset(p)}
-                data-hint={p.note ?? ""}
+                data-hint={t(`provider.presetNotes.${p.id}`)}
               >
                 {p.label}
               </button>
@@ -438,19 +485,23 @@ export function ApiKeyPanel(): JSX.Element {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <label className="bl-field-label" htmlFor="provider-kind">协议</label>
+            <label className="bl-field-label" htmlFor="provider-kind">
+              {t("provider.protocolLabel")}
+            </label>
             <select
               id="provider-kind"
               className="select"
               value={kind}
               onChange={(e) => setKind(e.target.value as Kind)}
             >
-              <option value="openai-compatible">OpenAI 兼容</option>
-              <option value="anthropic-compatible">Anthropic 兼容</option>
+              <option value="openai-compatible">{t("provider.protocolOpenAI")}</option>
+              <option value="anthropic-compatible">{t("provider.protocolAnthropic")}</option>
             </select>
           </div>
           <div>
-            <label className="bl-field-label" htmlFor="provider-base">Base URL</label>
+            <label className="bl-field-label" htmlFor="provider-base">
+              {t("provider.baseUrlLabel")}
+            </label>
             <input
               id="provider-base"
               className="input"
@@ -460,21 +511,23 @@ export function ApiKeyPanel(): JSX.Element {
             />
           </div>
           <div>
-            <label className="bl-field-label" htmlFor="provider-model">主模型</label>
+            <label className="bl-field-label" htmlFor="provider-model">
+              {t("provider.mainModelLabel")}
+            </label>
             <input
               id="provider-model"
               className="input"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="gpt-4o-mini / deepseek-v4-flash / claude-3-5-sonnet ..."
+              placeholder={t("provider.mainModelPlaceholder")}
             />
           </div>
           <div>
             <label className="bl-field-label bl-field-label--with-hint" htmlFor="provider-vision">
-              参考图读图模型
+              {t("provider.visionModelLabel")}
             </label>
             <p className="bl-field-hint" style={{ marginTop: 0, marginBottom: 8 }}>
-              上传参考图时使用，与主模型分离。
+              {t("provider.visionModelHint")}
             </p>
             <input
               id="provider-vision"
@@ -491,15 +544,17 @@ export function ApiKeyPanel(): JSX.Element {
                   type="button"
                   className={visionModel.trim() === vp.model ? "bl-chip is-active" : "bl-chip"}
                   onClick={() => setVisionModel(vp.model)}
-                  data-hint={vp.hint}
+                  data-hint={t(`provider.visionHints.${vp.id}`)}
                 >
-                  {vp.label}
+                  {visionPresetLabel(vp.id, vp.label, t)}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <label className="bl-field-label" htmlFor="provider-key">API Key</label>
+            <label className="bl-field-label" htmlFor="provider-key">
+              {t("provider.apiKeyLabel")}
+            </label>
             <div className="input-group">
               <input
                 id="provider-key"
@@ -516,27 +571,25 @@ export function ApiKeyPanel(): JSX.Element {
                   type="button"
                   className="btn btn--ghost btn--sm"
                   onClick={() => setShowKey((v) => !v)}
-                  aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
+                  aria-label={showKey ? t("provider.hideKeyAria") : t("provider.showKeyAria")}
                 >
-                  {showKey ? "隐藏" : "显示"}
+                  {showKey ? t("provider.hideKey") : t("provider.showKey")}
                 </button>
               </div>
             </div>
-            <p className="bl-field-hint">保存后只通过系统 DPAPI 解密读取一次，永远不会上传。</p>
+            <p className="bl-field-hint">{t("provider.apiKeyHint")}</p>
           </div>
         </div>
 
         <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 8 }}>
-          <span className="bl-field-label">连接状态</span>
+          <span className="bl-field-label">{t("provider.connStatusLabel")}</span>
           <ConnStrip status={status} apiKey={apiKey} keyMasked={keyMasked} />
           <NetStrip
             caps={caps}
             probe={probe}
             disabled={!apiKey || isAnthropic}
             disabledHint={
-              isAnthropic
-                ? "Anthropic 协议的联网由 server tool 隐式触发，无需实测"
-                : "先填 API Key"
+              isAnthropic ? t("provider.anthropicNetHint") : t("provider.fillKeyFirst")
             }
             onProbe={() => void runProbe()}
           />
@@ -550,10 +603,8 @@ export function ApiKeyPanel(): JSX.Element {
           {readyForDeep ? (
             <div className="bl-status-strip is-ok">
               <div className="bl-status-strip__body">
-                <div className="bl-status-strip__title">已准备好进行完整版造人</div>
-                <div className="bl-status-strip__detail">
-                  联网调研和参考图读图都已实测通过。
-                </div>
+                <div className="bl-status-strip__title">{t("provider.readyForDeepTitle")}</div>
+                <div className="bl-status-strip__detail">{t("provider.readyForDeepDetail")}</div>
               </div>
             </div>
           ) : null}
@@ -567,19 +618,19 @@ export function ApiKeyPanel(): JSX.Element {
               onClick={() => void clear()}
               disabled={busy || !apiKey}
             >
-              清除配置
+              {t("provider.clearConfig")}
             </button>
           </div>
           <div className="bl-action-bar__right">
-            {dirty ? <span className="bl-dirty-dot">未保存</span> : null}
+            {dirty ? <span className="bl-dirty-dot">{t("provider.unsaved")}</span> : null}
             <button
               type="button"
               className="btn btn--magenta"
               onClick={() => void save()}
               disabled={busy || !apiKey}
-              data-hint={!apiKey ? "先填 API Key" : ""}
+              data-hint={!apiKey ? t("provider.fillKeyFirst") : ""}
             >
-              {busy ? "测试中…" : "保存并测试"}
+              {busy ? t("provider.saveTesting") : t("provider.saveAndTest")}
             </button>
           </div>
         </div>
@@ -599,15 +650,15 @@ export function ApiKeyPanel(): JSX.Element {
           }}
         >
           <div>
-            <div className="bl-card__title">桌宠生图（高级）</div>
+            <div className="bl-card__title">{t("provider.imageGenTitle")}</div>
             <p className="bl-card__lede" style={{ marginTop: 4 }}>
               {imageConfig.useLLMProvider
-                ? "正在复用上面的对话模型生图。点开可独立配置三档质量。"
-                : "正在使用独立 Image Provider。"}
+                ? t("provider.imageGenLedeReuse")
+                : t("provider.imageGenLedeIndependent")}
             </p>
           </div>
           <span className="body-sm" style={{ color: "var(--ink-faint)", fontFamily: "var(--font-mono)" }}>
-            展开
+            {t("provider.expand")}
           </span>
         </summary>
         <div style={{ padding: "0 24px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -620,17 +671,19 @@ export function ApiKeyPanel(): JSX.Element {
               }
             />
             <span className="bl-field-label" style={{ marginBottom: 0 }}>
-              复用对话模型 Provider
+              {t("provider.reuseLLMProvider")}
             </span>
             <span className="body-sm" style={{ color: "var(--ink-faint)" }}>
-              （推荐；标准/精品档默认 gpt-image-2）
+              {t("provider.reuseLLMHint")}
             </span>
           </label>
 
           {!imageConfig.useLLMProvider ? (
             <>
               <div>
-                <label className="bl-field-label" htmlFor="image-base-url">Image Base URL</label>
+                <label className="bl-field-label" htmlFor="image-base-url">
+                  {t("provider.imageBaseUrlLabel")}
+                </label>
                 <input
                   id="image-base-url"
                   className="input"
@@ -640,14 +693,16 @@ export function ApiKeyPanel(): JSX.Element {
                 />
               </div>
               <div>
-                <label className="bl-field-label" htmlFor="image-api-key">Image API Key</label>
+                <label className="bl-field-label" htmlFor="image-api-key">
+                  {t("provider.imageApiKeyLabel")}
+                </label>
                 <input
                   id="image-api-key"
                   className="input"
                   type="password"
                   value={imageApiKeyDraft}
                   onChange={(e) => setImageApiKeyDraft(e.target.value)}
-                  placeholder="留空则沿用已保存 key"
+                  placeholder={t("provider.imageApiKeyPlaceholder")}
                   autoComplete="off"
                 />
               </div>
@@ -655,7 +710,7 @@ export function ApiKeyPanel(): JSX.Element {
           ) : null}
 
           <div>
-            <span className="bl-field-label">默认档位</span>
+            <span className="bl-field-label">{t("provider.defaultTierLabel")}</span>
             <div className="segmented" style={{ marginTop: 6 }}>
               {IMAGE_TIERS.map((tier) => (
                 <button
@@ -664,7 +719,7 @@ export function ApiKeyPanel(): JSX.Element {
                   className={imageConfig.defaultTier === tier ? "segmented__item is-active" : "segmented__item"}
                   onClick={() => setImageConfig((prev) => ({ ...prev, defaultTier: tier }))}
                 >
-                  {TIER_LABEL[tier]}
+                  {tierLabel(tier, t)}
                 </button>
               ))}
             </div>
@@ -676,14 +731,16 @@ export function ApiKeyPanel(): JSX.Element {
               return (
                 <div className="tier-row" key={tier}>
                   <div className="tier-row__label">
-                    <strong>{TIER_LABEL[tier]}</strong>
-                    <span>${(cfg.estimatedCostUsd ?? 0).toFixed(3)} / 张</span>
+                    <strong>{tierLabel(tier, t)}</strong>
+                    <span>
+                      ${(cfg.estimatedCostUsd ?? 0).toFixed(3)} {t("provider.perImage")}
+                    </span>
                   </div>
                   <input
                     className="input input--inline"
                     value={cfg.model}
                     onChange={(e) => updateImageTier(tier, { model: e.target.value })}
-                    placeholder="模型名"
+                    placeholder={t("provider.modelNamePlaceholder")}
                   />
                   <select
                     className="select select--inline"
@@ -731,7 +788,7 @@ export function ApiKeyPanel(): JSX.Element {
                     onClick={() => void testImageTier(tier)}
                     disabled={imageBusy != null}
                   >
-                    {imageBusy === tier ? "测试中…" : "测试"}
+                    {imageBusy === tier ? t("provider.testing") : t("provider.test")}
                   </button>
                 </div>
               );
@@ -743,7 +800,12 @@ export function ApiKeyPanel(): JSX.Element {
               <div className="bl-status-strip__body">
                 <div className="bl-status-strip__detail">
                   {imageStatus.kind === "test"
-                    ? `${TIER_LABEL[imageStatus.tier]}档测试成功：${imageStatus.model ?? "unknown"} · ${imageStatus.latencyMs ?? "?"} ms · $${(imageStatus.cost ?? 0).toFixed(3)}`
+                    ? t("provider.imageTestSuccess", {
+                        tier: tierLabel(imageStatus.tier, t),
+                        model: imageStatus.model ?? "unknown",
+                        latency: imageStatus.latencyMs ?? "?",
+                        cost: (imageStatus.cost ?? 0).toFixed(3)
+                      })
                     : imageStatus.reason}
                 </div>
               </div>
@@ -758,7 +820,7 @@ export function ApiKeyPanel(): JSX.Element {
                 onClick={() => void clearImageKey()}
                 disabled={imageConfig.useLLMProvider || imageBusy != null}
               >
-                清除独立 Image Key
+                {t("provider.clearImageKey")}
               </button>
             </div>
             <div className="bl-action-bar__right">
@@ -768,7 +830,7 @@ export function ApiKeyPanel(): JSX.Element {
                 onClick={() => void saveImageConfig()}
                 disabled={imageBusy != null}
               >
-                {imageBusy === "save" ? "保存中…" : "保存生图配置"}
+                {imageBusy === "save" ? t("provider.savingImageConfig") : t("provider.saveImageConfig")}
               </button>
             </div>
           </div>
@@ -787,11 +849,12 @@ function ConnStrip({
   apiKey: string;
   keyMasked: string;
 }): JSX.Element {
+  const t = useT();
   if (status.kind === "running") {
     return (
       <div className="bl-status-strip is-running">
         <div className="bl-status-strip__body">
-          <div className="bl-status-strip__title">正在测试连通…</div>
+          <div className="bl-status-strip__title">{t("provider.connTesting")}</div>
         </div>
         <div className="bl-status-strip__action"><Spinner magenta /></div>
       </div>
@@ -801,7 +864,7 @@ function ConnStrip({
     return (
       <div className="bl-status-strip is-ok">
         <div className="bl-status-strip__body">
-          <div className="bl-status-strip__title">连通成功</div>
+          <div className="bl-status-strip__title">{t("provider.connOk")}</div>
           <div className="bl-status-strip__detail"><strong>{status.latency ?? "?"} ms</strong></div>
         </div>
       </div>
@@ -811,7 +874,7 @@ function ConnStrip({
     return (
       <div className="bl-status-strip is-error">
         <div className="bl-status-strip__body">
-          <div className="bl-status-strip__title">连接失败</div>
+          <div className="bl-status-strip__title">{t("provider.connFailed")}</div>
           <div className="bl-status-strip__detail">{status.message}</div>
         </div>
       </div>
@@ -820,9 +883,13 @@ function ConnStrip({
   return (
     <div className={apiKey ? "bl-status-strip" : "bl-status-strip is-warn"}>
       <div className="bl-status-strip__body">
-        <div className="bl-status-strip__title">{apiKey ? "已配置" : "未配置"}</div>
+        <div className="bl-status-strip__title">
+          {apiKey ? t("provider.connConfigured") : t("provider.connNotConfigured")}
+        </div>
         <div className="bl-status-strip__detail">
-          {apiKey ? `Key: ${keyMasked} · 点「保存并测试」验证` : "在上方贴 Key 后点保存并测试"}
+          {apiKey
+            ? t("provider.connConfiguredDetail", { masked: keyMasked })
+            : t("provider.connNotConfiguredDetail")}
         </div>
       </div>
     </div>
@@ -842,12 +909,13 @@ function NetStrip({
   disabledHint: string;
   onProbe: () => void;
 }): JSX.Element {
+  const t = useT();
   if (probe?.state === "running") {
     return (
       <div className="bl-status-strip is-running">
         <div className="bl-status-strip__body">
-          <div className="bl-status-strip__title">正在测试联网真实性…</div>
-          <div className="bl-status-strip__detail">发一个 search ping 检查代理</div>
+          <div className="bl-status-strip__title">{t("provider.netTestingTitle")}</div>
+          <div className="bl-status-strip__detail">{t("provider.netTestingDetail")}</div>
         </div>
         <div className="bl-status-strip__action"><Spinner magenta /></div>
       </div>
@@ -859,19 +927,26 @@ function NetStrip({
       <div className={ok ? "bl-status-strip is-ok" : probe.ok ? "bl-status-strip is-warn" : "bl-status-strip is-error"}>
         <div className="bl-status-strip__body">
           <div className="bl-status-strip__title">
-            {ok ? "真联网 · 验证通过" : probe.ok ? "联网响应有，但拿不到网页来源" : "实测失败"}
+            {ok
+              ? t("provider.netOkTitle")
+              : probe.ok
+                ? t("provider.netPartialTitle")
+                : t("provider.netFailedTitle")}
           </div>
           <div className="bl-status-strip__detail">
             {ok
-              ? `${probe.citations} 个 URL · ${probe.latencyMs ?? "?"} ms`
+              ? t("provider.netOkDetail", {
+                  count: probe.citations,
+                  latency: probe.latencyMs ?? "?"
+                })
               : probe.ok
-                ? "中转代理可能吞掉了联网。深度造人会回退到训练知识，结果可能不准。"
-                : probe.reason ?? "未知错误"}
+                ? t("provider.netPartialDetail")
+                : probe.reason ?? t("common.unknownError")}
           </div>
         </div>
         <div className="bl-status-strip__action">
           <button type="button" className="btn btn--ghost btn--sm" onClick={onProbe} disabled={disabled}>
-            重测
+            {t("provider.retest")}
           </button>
         </div>
       </div>
@@ -882,13 +957,17 @@ function NetStrip({
     <div className={isOk ? "bl-status-strip" : "bl-status-strip is-warn"}>
       <div className="bl-status-strip__body">
         <div className="bl-status-strip__title">
-          {caps == null ? "联网能力未知" : isOk ? "联网能力 · 声明支持" : "联网能力 · 不支持"}
+          {caps == null
+            ? t("provider.netUnknownTitle")
+            : isOk
+              ? t("provider.netSupportedTitle")
+              : t("provider.netUnsupportedTitle")}
         </div>
         <div className="bl-status-strip__detail">
           {caps == null
-            ? "保存配置后会自动探测"
+            ? t("provider.netUnknownDetail")
             : isOk
-              ? "建议实测一次，确认能拿到网页来源"
+              ? t("provider.netSupportedDetail")
               : caps.reason}
         </div>
       </div>
@@ -900,7 +979,7 @@ function NetStrip({
           disabled={disabled}
           data-hint={disabled ? disabledHint : ""}
         >
-          实测联网
+          {t("provider.probeWeb")}
         </button>
       </div>
     </div>
@@ -920,12 +999,16 @@ function VisionStrip({
   disabled: boolean;
   onProbe: () => void;
 }): JSX.Element {
+  const t = useT();
+  const modelShort = visionModel.split("/").pop() ?? visionModel;
   if (visionProbe?.state === "running") {
     return (
       <div className="bl-status-strip is-running">
         <div className="bl-status-strip__body">
-          <div className="bl-status-strip__title">正在测试视觉能力…</div>
-          <div className="bl-status-strip__detail">发一张 1×1 PNG 给 <strong>{visionModel}</strong></div>
+          <div className="bl-status-strip__title">{t("provider.visionTestingTitle")}</div>
+          <div className="bl-status-strip__detail">
+            {t("provider.visionTestingDetail", { model: visionModel })}
+          </div>
         </div>
         <div className="bl-status-strip__action"><Spinner magenta /></div>
       </div>
@@ -936,17 +1019,17 @@ function VisionStrip({
       <div className={visionProbe.ok ? "bl-status-strip is-ok" : "bl-status-strip is-warn"}>
         <div className="bl-status-strip__body">
           <div className="bl-status-strip__title">
-            {visionProbe.ok ? "视觉验证通过" : "视觉模型拒绝多模态请求"}
+            {visionProbe.ok ? t("provider.visionOkTitle") : t("provider.visionRejectedTitle")}
           </div>
           <div className="bl-status-strip__detail">
             {visionProbe.ok
-              ? `模型可读图 · ${visionProbe.latencyMs ?? "?"} ms`
-              : visionProbe.reason ?? "上传的参考图会被忽略；造人时只用文字描述。"}
+              ? t("provider.visionOkDetail", { latency: visionProbe.latencyMs ?? "?" })
+              : visionProbe.reason ?? t("provider.visionRejectedDetail")}
           </div>
         </div>
         <div className="bl-status-strip__action">
           <button type="button" className="btn btn--ghost btn--sm" onClick={onProbe} disabled={disabled}>
-            重测
+            {t("provider.retest")}
           </button>
         </div>
       </div>
@@ -957,13 +1040,17 @@ function VisionStrip({
     <div className={isOk ? "bl-status-strip" : "bl-status-strip is-warn"}>
       <div className="bl-status-strip__body">
         <div className="bl-status-strip__title">
-          {vision == null ? "视觉能力未知" : isOk ? "视觉能力 · 声明支持" : "视觉能力 · 不支持"}
+          {vision == null
+            ? t("provider.visionUnknownTitle")
+            : isOk
+              ? t("provider.visionSupportedTitle")
+              : t("provider.visionUnsupportedTitle")}
         </div>
         <div className="bl-status-strip__detail">
           {vision == null
-            ? "保存配置后会自动探测"
+            ? t("provider.visionUnknownDetail")
             : isOk
-              ? `静态白名单已识别。建议实测一次，确认 ${visionModel.split("/").pop()} 真的可读图`
+              ? t("provider.visionSupportedDetail", { model: modelShort })
               : vision.reason}
         </div>
       </div>
@@ -973,9 +1060,9 @@ function VisionStrip({
           className="btn btn--ghost btn--sm"
           onClick={onProbe}
           disabled={disabled}
-          data-hint={disabled ? "先填 API Key" : ""}
+          data-hint={disabled ? t("provider.fillKeyFirst") : ""}
         >
-          实测视觉
+          {t("provider.probeVision")}
         </button>
       </div>
     </div>

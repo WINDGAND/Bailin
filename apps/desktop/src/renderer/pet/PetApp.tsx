@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SpriteEvent } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
+import { useT } from "../shared/i18n/index.js";
 
 interface Starter {
   id: string;
@@ -25,6 +26,7 @@ const HATCH_SS_KEY_PREFIX = "nuwa.hatched.";
 const PET_SLOT_WIDTH = 240;
 
 export function PetApp(): JSX.Element {
+  const t = useT();
   const { bundle } = useActiveCharacter();
   const nuwa = useNuwa();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -235,7 +237,7 @@ export function PetApp(): JSX.Element {
           onPointerUp={onPetPointerUp}
           onPointerCancel={onPetPointerUp}
           onContextMenu={(e) => void onPetContextMenu(e)}
-          title="左键点击唤起 · 拖动移动 · 右键菜单"
+          title={t("pet.dragHint")}
         >
           <PetRenderer
             key={`sprite-${hatchKey}-${bundle.card.id}`}
@@ -289,6 +291,7 @@ export function PetApp(): JSX.Element {
 // =============================================================
 
 function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element {
+  const t = useT();
   return (
     <div
       style={{
@@ -321,7 +324,7 @@ function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element
           cursor: "pointer",
           boxShadow: "0 18px 36px -16px rgba(0,0,0,0.5)"
         }}
-        title="还没有角色，点这里挑一只"
+        title={t("pet.emptyTitle")}
       >
         {/* 像素剪影：一只 chibi 形状 */}
         <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">
@@ -330,7 +333,7 @@ function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element
           <rect x="8" y="17" width="3" height="4" fill="rgba(245,239,226,0.3)" />
           <rect x="13" y="17" width="3" height="4" fill="rgba(245,239,226,0.3)" />
         </svg>
-        <span style={{ fontWeight: 500 }}>桌面还空着 · 点这里挑一只</span>
+        <span style={{ fontWeight: 500 }}>{t("pet.emptyBody")}</span>
       </button>
     </div>
   );
@@ -356,6 +359,7 @@ interface MenuProps {
 }
 
 function PetContextMenu(props: MenuProps): JSX.Element {
+  const t = useT();
   const {
     chatOpen,
     characters,
@@ -386,14 +390,18 @@ function PetContextMenu(props: MenuProps): JSX.Element {
       className="pet-menu-panel fade-in-up"
     >
       <MenuItem
-        label={chatOpen ? "关闭对话" : "唤起对话"}
-        hint="Ctrl+Shift+P"
+        label={chatOpen ? t("pet.menuCloseChat") : t("pet.menuOpenChat")}
+        hint={t("pet.summonShortcut")}
         onClick={onSummon}
         delay={0}
       />
-      <MenuItem label="安静 30 分钟" onClick={onHush} delay={20} />
       <MenuItem
-        label="切换角色"
+        label={t("pet.menuHush", { minutes: 30 })}
+        onClick={onHush}
+        delay={20}
+      />
+      <MenuItem
+        label={t("pet.menuSwitchCharacter")}
         hasSubmenu
         onClick={() => onSubmenu(submenu === "switch" ? null : "switch")}
         delay={30}
@@ -410,13 +418,17 @@ function PetContextMenu(props: MenuProps): JSX.Element {
           }}
         >
           {characters.length === 0 ? (
-            <div style={{ padding: "8px 14px", color: "var(--ink-faint)" }}>仓库为空</div>
+            <div style={{ padding: "8px 14px", color: "var(--ink-faint)" }}>
+              {t("pet.menuLibraryEmpty")}
+            </div>
           ) : (
             characters.map((c, i) => (
               <MenuItem
                 key={c.id}
                 label={`${c.isActive ? "● " : "  "}${c.name}`}
-                sub={c.track === "utility" ? "实用" : "陪伴"}
+                sub={
+                  c.track === "utility" ? t("chat.trackUtility") : t("chat.trackCompanion")
+                }
                 onClick={() => onActivate(c.id)}
                 delay={i * 24}
               />
@@ -434,13 +446,15 @@ function PetContextMenu(props: MenuProps): JSX.Element {
                   textTransform: "uppercase"
                 }}
               >
-                内置示例
+                {t("pet.menuBuiltInStarters")}
               </div>
               {starters.map((s, i) => (
                 <MenuItem
                   key={s.id}
                   label={`+ ${s.name}`}
-                  sub={s.track === "utility" ? "实用" : "陪伴"}
+                  sub={
+                    s.track === "utility" ? t("chat.trackUtility") : t("chat.trackCompanion")
+                  }
                   onClick={() => onImportStarter(s.id)}
                   delay={(characters.length + i) * 24}
                 />
@@ -449,8 +463,8 @@ function PetContextMenu(props: MenuProps): JSX.Element {
           ) : null}
         </div>
       ) : null}
-      <MenuItem label="打开设置 / 角色仓库" onClick={onOpenSettings} delay={60} />
-      <MenuItem label="隐藏到托盘" onClick={onHide} delay={90} />
+      <MenuItem label={t("pet.menuOpenSettings")} onClick={onOpenSettings} delay={60} />
+      <MenuItem label={t("pet.menuHideToTray")} onClick={onHide} delay={90} />
     </div>
   );
 }

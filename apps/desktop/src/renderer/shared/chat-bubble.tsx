@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { StreamCursor } from "./feedback.js";
 import { formatChatTime } from "./format-chat-time.js";
 import { ChatMarkdown } from "./chat-markdown.js";
+import { useT, useI18n } from "./i18n/index.js";
 import type { StreamPhase } from "./use-chat-session.js";
 
 export interface ChatBubbleProps {
@@ -22,6 +23,8 @@ export interface ChatBubbleProps {
 }
 
 export function ChatBubble(props: ChatBubbleProps): JSX.Element {
+  const t = useT();
+  const { locale } = useI18n();
   const {
     role,
     content,
@@ -66,7 +69,7 @@ export function ChatBubble(props: ChatBubbleProps): JSX.Element {
         }}
       >
         <div className="eyebrow" style={{ color: "var(--magenta)", marginBottom: 4 }}>
-          出错了
+          {t("chat.bubbleErrorTitle")}
         </div>
         <div className="body-md" style={{ color: "var(--ink-soft)", marginBottom: 8 }}>
           {error.message}
@@ -74,12 +77,12 @@ export function ChatBubble(props: ChatBubbleProps): JSX.Element {
         <div className="row gap-2">
           {onRetry ? (
             <button type="button" className="btn btn--magenta btn--sm" onClick={onRetry}>
-              重试
+              {t("chat.retry")}
             </button>
           ) : null}
           {onGoSettings ? (
             <button type="button" className="btn btn--ghost btn--sm" onClick={onGoSettings}>
-              去设置改 Key
+              {t("chat.goSettingsKey")}
             </button>
           ) : null}
         </div>
@@ -92,16 +95,16 @@ export function ChatBubble(props: ChatBubbleProps): JSX.Element {
   const hasMetaBar = interactive && streamingKind == null && content.length > 0;
 
   const userActions = [
-    { key: "delete", label: "删除", icon: <IconTrash />, onClick: onDelete },
-    { key: "edit", label: "修改", icon: <IconEdit />, onClick: onEdit },
-    { key: "copy", label: "复制", icon: <IconCopy />, onClick: () => void copyToClipboard() }
+    { key: "delete", label: t("chat.actionDelete"), icon: <IconTrash />, onClick: onDelete },
+    { key: "edit", label: t("chat.actionEdit"), icon: <IconEdit />, onClick: onEdit },
+    { key: "copy", label: t("chat.actionCopy"), icon: <IconCopy />, onClick: () => void copyToClipboard() }
   ];
 
   const assistantActions = [
-    { key: "copy", label: "复制", icon: <IconCopy />, onClick: () => void copyToClipboard() },
-    { key: "quote", label: "引用", icon: <IconQuote />, onClick: onQuote },
-    { key: "regen", label: "重新生成", icon: <IconRegenerate />, onClick: onRegenerate },
-    { key: "delete", label: "删除", icon: <IconTrash />, onClick: onDelete }
+    { key: "copy", label: t("chat.actionCopy"), icon: <IconCopy />, onClick: () => void copyToClipboard() },
+    { key: "quote", label: t("chat.actionQuote"), icon: <IconQuote />, onClick: onQuote },
+    { key: "regen", label: t("chat.actionRegenerate"), icon: <IconRegenerate />, onClick: onRegenerate },
+    { key: "delete", label: t("chat.actionDelete"), icon: <IconTrash />, onClick: onDelete }
   ];
 
   const actions = (isUser ? userActions : assistantActions).filter((a) => a.onClick);
@@ -118,7 +121,7 @@ export function ChatBubble(props: ChatBubbleProps): JSX.Element {
             className={`chat-row__time chat-row__meta ${isUser ? "chat-row__time--user" : "chat-row__time--assistant"}`}
             aria-hidden={createdAt == null}
           >
-            {createdAt != null ? formatChatTime(createdAt) : "\u00a0"}
+            {createdAt != null ? formatChatTime(createdAt, locale) : "\u00a0"}
           </div>
         ) : null}
 
