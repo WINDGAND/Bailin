@@ -453,6 +453,11 @@ export const en: TranslationTree = {
     title: "Desktop companion",
     subtitle:
       "Control whether your pet speaks up on its own, how often it checks in, and whether it can read low-sensitivity screen signals. Screenshot observation is off by default—only enable it if you're comfortable sending that context to your configured model service.",
+    petSizeTitle: "Pet size",
+    petSizeHint: "Drag the slider to resize your desktop pet. The window and sprite scale together.",
+    petSizeLabel: "Display scale",
+    petSizePercent: "{{percent}}%",
+    petSizePreviewEmpty: "No active character",
     proactiveTitle: "Proactive companionship",
     proactiveHint:
       "Light mode allows at most one line per hour. No proactive messages while the full chat window is open or during quiet time.",

@@ -157,6 +157,11 @@ const api = {
       const listener = (_e: unknown, p: unknown) => handler(p);
       ipcRenderer.on(IPC.EventNavigateSettings, listener);
       return () => ipcRenderer.removeListener(IPC.EventNavigateSettings, listener);
+    },
+    proactiveSettingsChanged(handler: (settings: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventProactiveSettingsChanged, listener);
+      return () => ipcRenderer.removeListener(IPC.EventProactiveSettingsChanged, listener);
     }
   }
 };

@@ -64,6 +64,7 @@ export interface IpcDeps {
   getChatWindowSize: () => { width: number; height: number };
   setChatWindowSize: (width: number, height: number) => { width: number; height: number };
   onLocaleChanged?: () => void;
+  applyPetDisplayScale: (scale?: number) => void;
 }
 
 const SETTING_FIRST_RUN_DONE = "first_run_done";
@@ -744,9 +745,12 @@ export function registerIpc(deps: IpcDeps): void {
 
   // ===== Proactive companion =====
   ipcMain.handle(IPC.ProactiveGetSettings, () => proactive.getSettings());
-  ipcMain.handle(IPC.ProactiveSetSettings, (_e, input: ProactiveSettings) =>
-    proactive.setSettings(input)
-  );
+  ipcMain.handle(IPC.ProactiveSetSettings, (_e, input: ProactiveSettings) => {
+    const saved = proactive.setSettings(input);
+    deps.applyPetDisplayScale(saved.petDisplayScale);
+    deps.broadcast(IPC.EventProactiveSettingsChanged, saved);
+    return saved;
+  });
   ipcMain.handle(IPC.ProactiveGetStatus, () => proactive.getStatus());
   ipcMain.handle(IPC.ProactiveTriggerNow, (_e, reason?: string) =>
     proactive.triggerNow(reason as AmbientSignal["kind"] | undefined)

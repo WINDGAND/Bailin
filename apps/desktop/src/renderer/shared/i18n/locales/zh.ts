@@ -451,6 +451,11 @@ export const zh = {
     title: "桌宠与陪伴",
     subtitle:
       "控制桌宠是否主动说悄悄话、多久打扰一次，以及它能否读取低敏屏幕信号。截图观察默认关闭，开启前请确认你愿意把相关上下文交给你配置的模型服务。",
+    petSizeTitle: "桌宠大小",
+    petSizeHint: "拖动滑块调节桌面上的桌宠显示尺寸；窗口与精灵会同步缩放。",
+    petSizeLabel: "显示比例",
+    petSizePercent: "{{percent}}%",
+    petSizePreviewEmpty: "暂无活跃角色",
     proactiveTitle: "主动陪伴",
     proactiveHint: "轻度模式每小时最多一句，完整聊天窗打开或安静中不会主动说话。",
     toggleOn: "已开启",

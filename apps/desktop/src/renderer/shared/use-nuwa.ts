@@ -138,6 +138,7 @@ interface NuwaWindow {
       themeChanged(h: (theme: import("../../shared/ipc-contract.js").ThemePreference) => void): () => void;
       profileUpdated(h: (evt: import("../../shared/ipc-contract.js").ProfileUpdatedEvent) => void): () => void;
       navigateSettings(h: (evt: import("../../shared/ipc-contract.js").NavigateSettingsEvent) => void): () => void;
+      proactiveSettingsChanged(h: (settings: ProactiveSettings) => void): () => void;
     };
   };
 }
@@ -365,7 +366,8 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
         };
       },
       profileUpdated: noopOff,
-      navigateSettings: noopOff
+      navigateSettings: noopOff,
+      proactiveSettingsChanged: noopOff
     }
   };
 }

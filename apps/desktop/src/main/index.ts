@@ -43,10 +43,11 @@ import { registerChatSessionHandlers } from "./ipc/chat-session-handlers.js";
 import {
   computePetMenuWindowBounds,
   createPetWindow,
-  PET_WINDOW_SIZE,
   resolvePetMenuSide,
   type PetMenuSide
 } from "./windows/pet-window.js";
+import { getPetWindowSize } from "../shared/pet-display-scale.js";
+import { readProactiveSettings } from "./proactive/proactive-settings.js";
 import { clampPetWindow, clampRectToDisplayBounds } from "./windows/window-bounds.js";
 import {
   CHAT_WINDOW_DEFAULT_SIZE,
@@ -115,11 +116,30 @@ function ensureSettingsWindow(tab?: SettingsTab): void {
 
 function ensurePetWindow(): BrowserWindow {
   if (petWin && !petWin.isDestroyed()) return petWin;
-  petWin = createPetWindow(devUrl);
+  petWin = createPetWindow(devUrl, getPetWindowSizeNow());
   petWin.on("closed", () => {
     petWin = null;
   });
   return petWin;
+}
+
+function getPetDisplayScale(): number {
+  if (!vaultRef) return 1;
+  return readProactiveSettings(vaultRef).petDisplayScale;
+}
+
+function getPetWindowSizeNow(): { width: number; height: number } {
+  return getPetWindowSize(getPetDisplayScale());
+}
+
+function applyPetDisplayScale(nextScale?: number): void {
+  const pet = petWin;
+  if (!pet || pet.isDestroyed() || petContextMenuOpen) return;
+  const { width, height } = getPetWindowSize(nextScale ?? getPetDisplayScale());
+  const content = pet.getContentBounds();
+  const clamped = clampRectToDisplayBounds({ x: content.x, y: content.y, width, height });
+  pet.setContentBounds({ x: clamped.x, y: clamped.y, width, height });
+  syncChatNearPetIfVisible();
 }
 
 function ensureChatWindow(): BrowserWindow {
@@ -152,7 +172,7 @@ function ensureChatWindow(): BrowserWindow {
  * 调用次数累积漂移的 bug。
  */
 function getPetGeometry(pet: BrowserWindow): { x: number; y: number; width: number; height: number } {
-  const { width, height } = PET_WINDOW_SIZE;
+  const { width, height } = getPetWindowSizeNow();
   if (petContextMenuOpen && petBoundsBeforeMenu) {
     return { x: petBoundsBeforeMenu.x, y: petBoundsBeforeMenu.y, width, height };
   }
@@ -270,8 +290,9 @@ function syncChatNearPetIfVisible(): void {
 function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
   const pet = petWin;
   if (!pet || pet.isDestroyed()) return null;
-  const baseW = PET_WINDOW_SIZE.width;
-  const baseH = PET_WINDOW_SIZE.height;
+  const baseSize = getPetWindowSizeNow();
+  const baseW = baseSize.width;
+  const baseH = baseSize.height;
 
   if (!open) {
     petContextMenuOpen = false;
@@ -312,7 +333,7 @@ function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
     workArea: display.workArea
   });
 
-  const bounds = computePetMenuWindowBounds(geo.x, geo.y, side, display.workArea);
+  const bounds = computePetMenuWindowBounds(geo.x, geo.y, side, display.workArea, baseSize);
   pet.setContentBounds(bounds);
   pet.setIgnoreMouseEvents(false);
   return side;
@@ -351,7 +372,7 @@ function hidePet(): void {
  * 一条线上"。
  */
 function setPetContentOrigin(pet: BrowserWindow, x: number, y: number): { x: number; y: number } {
-  const { width, height } = PET_WINDOW_SIZE;
+  const { width, height } = getPetWindowSizeNow();
   const clamped = clampRectToDisplayBounds({ x, y, width, height });
   pet.setContentBounds({ x: clamped.x, y: clamped.y, width, height });
   return clamped;
@@ -367,7 +388,7 @@ function movePet(x: number, y: number): { x: number; y: number } {
 function positionPetAtPrimaryBottomRight(margin = 24): void {
   const pet = ensurePetWindow();
   const work = screen.getPrimaryDisplay().workArea;
-  const { width, height } = PET_WINDOW_SIZE;
+  const { width, height } = getPetWindowSizeNow();
   // 默认初始位置走 workArea + margin（避免一启动桌宠就压在任务栏上），
   // 但后续所有 clamp 都用 display.bounds，让用户能拖到物理边缘。
   const x = Math.max(work.x, work.x + work.width - width - margin);
@@ -377,7 +398,7 @@ function positionPetAtPrimaryBottomRight(margin = 24): void {
 
 function ensurePetOnScreen(): void {
   const pet = ensurePetWindow();
-  clampPetWindow(pet, PET_WINDOW_SIZE);
+  clampPetWindow(pet, getPetWindowSizeNow());
   syncChatNearPetIfVisible();
   if (!pet.isVisible()) pet.show();
 }
@@ -408,7 +429,7 @@ function petDragMove(): void {
   const pet = petWin;
   if (!pet || pet.isDestroyed()) return;
   const cursor = screen.getCursorScreenPoint();
-  const { width, height } = PET_WINDOW_SIZE;
+  const { width, height } = getPetWindowSizeNow();
   const newX = cursor.x - dragCursorOffset.dx;
   const newY = cursor.y - dragCursorOffset.dy;
   const clamped = clampRectToDisplayBounds({ x: newX, y: newY, width, height });
@@ -512,9 +533,10 @@ void app.whenReady().then(() => {
       // 用 contentBounds 取位置（不受 electron#27651 size 漂移污染），
       // width/height 永远走常量，让气泡定位 / chat 跟随等下游消费者拿到稳定的几何。
       const content = petWin.getContentBounds();
-      const { width, height } = PET_WINDOW_SIZE;
+      const { width, height } = getPetWindowSizeNow();
       return { x: content.x, y: content.y, width, height };
     },
+    applyPetDisplayScale,
     summonPetBubble,
     showChatNearPet,
     hideChat,

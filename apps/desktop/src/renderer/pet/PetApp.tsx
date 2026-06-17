@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SpriteEvent } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
+import {
+  PET_WINDOW_BASE_SIZE,
+  resolveAtlasPetPixelSize,
+  resolveDslPetPixelSize
+} from "../../shared/pet-display-scale.js";
 import { useT, useI18n } from "../shared/i18n/index.js";
 import { usePetSpriteEvents } from "./use-pet-sprite-events.js";
 
@@ -23,8 +28,7 @@ interface MyCharacter {
 }
 
 const HATCH_SS_KEY_PREFIX = "nuwa.hatched.";
-/** 与主进程 PET_WINDOW_SIZE.width 一致：菜单打开时左侧固定此宽度放桌宠。 */
-const PET_SLOT_WIDTH = 240;
+/** 菜单打开时左侧固定宽度 = 基准桌宠窗宽 × 用户缩放。 */
 /** 判定为「拖动」的最小位移（px）；略大于 0，避免手抖误触。 */
 const DRAG_START_PX = 3;
 
@@ -35,6 +39,30 @@ export function PetApp(): JSX.Element {
   const nuwa = useNuwa();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const menuLayerRef = useRef<HTMLDivElement | null>(null);
+
+  const [petDisplayScale, setPetDisplayScale] = useState(1);
+
+  useEffect(() => {
+    void nuwa.proactive.getSettings().then((s) => setPetDisplayScale(s.petDisplayScale ?? 1));
+    return nuwa.on.proactiveSettingsChanged((s) => {
+      setPetDisplayScale(s.petDisplayScale ?? 1);
+    });
+  }, [nuwa]);
+
+  const petSlotWidth = Math.round(PET_WINDOW_BASE_SIZE.width * petDisplayScale);
+
+  const petPixelSize = useMemo(() => {
+    if (!bundle?.sprite) return undefined;
+    const program = bundle.sprite;
+    if (program.mode === "atlas" && program.atlas) {
+      return resolveAtlasPetPixelSize(program.atlas.cell, petDisplayScale);
+    }
+    return resolveDslPetPixelSize(
+      program.size,
+      program.displayScale,
+      petDisplayScale
+    );
+  }, [bundle?.sprite, petDisplayScale]);
 
   // ===== 首次破壳 =====
   const [hatchKey, setHatchKey] = useState<number>(0);
@@ -254,7 +282,7 @@ export function PetApp(): JSX.Element {
     <div className={`pet-root${menu?.side === "left" ? " pet-root--menu-left" : ""}`}>
       <div
         className="pet-slot"
-        style={{ width: menu ? PET_SLOT_WIDTH : "100%" }}
+        style={{ width: menu ? petSlotWidth : "100%" }}
       >
         <div
           ref={wrapRef}
@@ -282,6 +310,8 @@ export function PetApp(): JSX.Element {
             runDirection={dragRunDirection}
             runDirectionRef={dragRunDirectionRef}
             hatching={hatching}
+            width={petPixelSize?.width}
+            height={petPixelSize?.height}
           />
         </div>
       </div>

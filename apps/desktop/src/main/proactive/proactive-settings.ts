@@ -1,4 +1,5 @@
 import type { ProactiveSettings } from "../../shared/ipc-contract.js";
+import { clampPetDisplayScale } from "../../shared/pet-display-scale.js";
 import type { LocalVault } from "../store/local-vault.js";
 
 export const SETTING_PROACTIVE_SETTINGS = "proactive_settings_json";
@@ -14,7 +15,8 @@ export const DEFAULT_PROACTIVE_SETTINGS: ProactiveSettings = {
   quietHoursEnabled: false,
   quietHoursStart: "22:00",
   quietHoursEnd: "08:00",
-  screenAwareness: "off"
+  screenAwareness: "off",
+  petDisplayScale: 1
 };
 
 export function readProactiveSettings(vault: LocalVault): ProactiveSettings {
@@ -61,6 +63,9 @@ export function normalizeProactiveSettings(
       input.screenAwareness,
       ["off", "signals", "screenshots"],
       DEFAULT_PROACTIVE_SETTINGS.screenAwareness
+    ),
+    petDisplayScale: clampPetDisplayScale(
+      input.petDisplayScale ?? DEFAULT_PROACTIVE_SETTINGS.petDisplayScale
     )
   };
 }

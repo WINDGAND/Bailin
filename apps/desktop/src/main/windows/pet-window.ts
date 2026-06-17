@@ -1,10 +1,12 @@
 import { BrowserWindow, screen } from "electron";
 import { join } from "node:path";
+import { PET_WINDOW_BASE_SIZE } from "../../shared/pet-display-scale.js";
 
 /**
- * 桌宠窗口的"内容尺寸"常量，clamp / setContentBounds 全程都以它为准。
+ * 桌宠窗口的"内容尺寸"基准（scale = 1.0）。
+ * 实际尺寸见 {@link getPetWindowSize} / 用户设置 `petDisplayScale`。
  *
- * 为什么固定下来：Electron 在 Windows 非整数 DPI（125% / 150% / 175% 等）上
+ * 为什么固定基准：Electron 在 Windows 非整数 DPI（125% / 150% / 175% 等）上
  * 存在已知 bug —— 反复 setPosition / setBounds 会让 getBounds() 返回的
  * width/height 微量增大（DIP↔物理像素舍入累积，electron #27651）。
  * 拖动桌宠每帧都用 getBounds() 实时读尺寸去 clamp，结果 maxX/maxY 越缩越小，
@@ -13,7 +15,7 @@ import { join } from "node:path";
  * 固化成常量后，clamp 永远用同一组宽高，不再被运行时的尺寸漂移污染；
  * 同时所有调用都改用 setContentBounds（不受同 bug 影响），双重保险。
  */
-export const PET_WINDOW_SIZE = { width: 240, height: 260 } as const;
+export const PET_WINDOW_SIZE = PET_WINDOW_BASE_SIZE;
 /** 右键菜单展开时临时加宽，给菜单留出桌宠旁侧空间。 */
 export const PET_MENU_EXTRA_WIDTH = 196;
 /** 菜单与聊天窗之间的最小间距（屏幕坐标）。 */
@@ -85,10 +87,11 @@ export function computePetMenuWindowBounds(
   petX: number,
   petY: number,
   side: PetMenuSide,
-  workArea: { x: number; y: number; width: number; height: number }
+  workArea: { x: number; y: number; width: number; height: number },
+  petSize: { width: number; height: number } = PET_WINDOW_BASE_SIZE
 ): { x: number; y: number; width: number; height: number } {
-  const baseW = PET_WINDOW_SIZE.width;
-  const baseH = PET_WINDOW_SIZE.height;
+  const baseW = petSize.width;
+  const baseH = petSize.height;
   const menuW = PET_MENU_EXTRA_WIDTH;
   const expandedW = baseW + menuW;
   const workRight = workArea.x + workArea.width;
@@ -108,12 +111,13 @@ export function computePetMenuWindowBounds(
   return { x: nextX, y: petY, width: expandedW, height: baseH };
 }
 
-export function createPetWindow(devUrl: string | undefined): BrowserWindow {
+export function createPetWindow(
+  devUrl: string | undefined,
+  initialSize: { width: number; height: number } = PET_WINDOW_BASE_SIZE
+): BrowserWindow {
   const display = screen.getPrimaryDisplay();
   const work = display.workArea;
-  // 气泡已经搬去独立的 BrowserWindow，桌宠窗口只需要装 sprite + 阴影 +
-  // 拖动手柄。维持紧凑尺寸，让用户能把桌宠拖到屏幕真正的边角。
-  const { width, height } = PET_WINDOW_SIZE;
+  const { width, height } = initialSize;
 
   const win = new BrowserWindow({
     width,

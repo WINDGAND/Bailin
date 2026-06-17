@@ -554,6 +554,8 @@ export interface ProactiveSettings {
   quietHoursStart: string;
   quietHoursEnd: string;
   screenAwareness: "off" | "signals" | "screenshots";
+  /** 桌宠显示倍率；0.75–1.5，默认 1.0。 */
+  petDisplayScale: number;
 }
 
 export interface ProactiveStatus {
@@ -675,5 +677,6 @@ export const IPC = {
   EventLocaleChanged: "nuwa.event.localeChanged",
   EventThemeChanged: "nuwa.event.themeChanged",
   EventProfileUpdated: "nuwa.event.profileUpdated",
-  EventNavigateSettings: "nuwa.event.navigateSettings"
+  EventNavigateSettings: "nuwa.event.navigateSettings",
+  EventProactiveSettingsChanged: "nuwa.event.proactiveSettingsChanged"
 } as const;
