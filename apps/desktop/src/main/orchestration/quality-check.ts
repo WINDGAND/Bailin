@@ -5,8 +5,13 @@ import type {
   ResearchDoc
 } from "@nuwa-pet/character-protocol";
 import {
+  buildSanityEdgeJudgePrompt,
+  buildSanityEdgeQuestionPrompt,
+  buildCharacterAnswerPrompt,
   buildVoiceJudgePrompt,
-  buildVoiceSamplePrompt
+  buildVoiceSamplePrompt,
+  researchDocsToSegments,
+  type SanityEdgeQuestionSet
 } from "@nuwa-pet/nuwa-prompts";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 
@@ -15,17 +20,19 @@ export interface RunQualityCheckInput {
   researchDocs?: ResearchDoc[];
   /** 是否做风格测试（一次额外 LLM 调用 + 一次评分调用）。默认 true。 */
   runVoiceTest?: boolean;
+  /** 是否做 Sanity + Edge 测试。默认 true（需 researchDocs）。 */
+  runSanityEdge?: boolean;
 }
 
 /**
- * Phase·4 质量自检：结构化指标 + 风格 LLM 评分。
+ * Phase·4 质量自检：结构化指标 + Sanity/Edge + 风格 LLM 评分。
  * 对应 huashu-nuwa SKILL.md 第 525 行附近的「通过标准」表。
  */
 export async function runQualityCheck(
   llm: LLMAdapter,
   input: RunQualityCheckInput
 ): Promise<QualityReport> {
-  const { card, researchDocs, runVoiceTest = true } = input;
+  const { card, researchDocs, runVoiceTest = true, runSanityEdge = true } = input;
   const items: QualityCheckItem[] = [];
 
   // 1. 心智模型数量 3..7
@@ -120,7 +127,6 @@ export async function runQualityCheck(
             : "无参考图，外貌可能凭训练知识硬编（点「重新生成形象」上传一张原作图能大幅提升）"
       });
     }
-    // gender 缺失 / unknown → 警告
     items.push({
       id: "appearance-gender",
       label: "外貌 gender 字段已确定",
@@ -163,8 +169,39 @@ export async function runQualityCheck(
     });
   }
 
+  let sanityTest: QualityReport["sanityTest"];
+  let edgeTest: QualityReport["edgeTest"];
+
+  if (runSanityEdge && researchDocs && researchDocs.length > 0) {
+    const sanityEdgeResult = await runSanityEdgeTestStep(llm, card, researchDocs);
+    if (sanityEdgeResult) {
+      sanityTest = sanityEdgeResult.sanityTest;
+      edgeTest = sanityEdgeResult.edgeTest;
+      if (sanityTest) {
+        items.push({
+          id: "sanity-test",
+          label: "Sanity 测试（公开立场方向一致）",
+          pass: sanityTest.overallPass,
+          score: clamp01(sanityTest.averageScore / 10),
+          reason: sanityTest.overallPass
+            ? `3 题平均 ${sanityTest.averageScore.toFixed(1)}/10`
+            : `平均 ${sanityTest.averageScore.toFixed(1)}/10，存在方向偏差`
+        });
+      }
+      if (edgeTest) {
+        items.push({
+          id: "edge-test",
+          label: "Edge 测试（边缘问题适度不确定）",
+          pass: edgeTest.pass,
+          score: clamp01(edgeTest.score / 10),
+          reason: edgeTest.critique
+        });
+      }
+    }
+  }
+
   // 8. 风格测试：先生成 100 字短文 → 再让 LLM 评分
-  let voiceTest: QualityReport["voiceTest"] | undefined;
+  let voiceTest: QualityReport["voiceTest"];
   if (runVoiceTest) {
     voiceTest = await runVoiceTestStep(llm, card);
     if (voiceTest) {
@@ -178,7 +215,6 @@ export async function runQualityCheck(
     }
   }
 
-  // 总体评分：加权平均
   const overallScore =
     items.reduce((acc, it) => acc + it.score, 0) / Math.max(items.length, 1);
   const hardFail = items.some((it) => !it.pass && it.score < 0.3);
@@ -194,8 +230,201 @@ export async function runQualityCheck(
     overallScore: clamp01(overallScore),
     items,
     voiceTest,
+    sanityTest,
+    edgeTest,
     createdAt: Date.now()
   };
+}
+
+async function runSanityEdgeTestStep(
+  llm: LLMAdapter,
+  card: CharacterCard,
+  researchDocs: ResearchDoc[]
+): Promise<{
+  sanityTest?: QualityReport["sanityTest"];
+  edgeTest?: QualityReport["edgeTest"];
+} | undefined> {
+  const segments = researchDocsToSegments(researchDocs);
+  if (segments.length === 0) return undefined;
+
+  const questionPrompt = buildSanityEdgeQuestionPrompt(card.meta.name, segments);
+  const questionR = await llm.chatOnce({
+    systemPrompt: questionPrompt.system,
+    messages: [{ role: "user", content: questionPrompt.user }],
+    temperature: 0.2,
+    maxTokens: 1200,
+    stream: false
+  });
+  if (questionR.kind !== "done") return undefined;
+
+  const questionSet = parseSanityEdgeQuestions(questionR.text);
+  if (!questionSet || questionSet.sanity.length === 0 || !questionSet.edge.question) {
+    return undefined;
+  }
+
+  const sanityAnswers: Array<{
+    question: string;
+    expectedStance: string;
+    answer: string;
+  }> = [];
+
+  for (const sq of questionSet.sanity.slice(0, 3)) {
+    const answerPrompt = buildCharacterAnswerPrompt(card, sq.question);
+    const answerR = await llm.chatOnce({
+      systemPrompt: answerPrompt.system,
+      messages: [{ role: "user", content: answerPrompt.user }],
+      temperature: 0.5,
+      maxTokens: 400,
+      stream: false
+    });
+    sanityAnswers.push({
+      question: sq.question,
+      expectedStance: sq.expectedStance,
+      answer:
+        answerR.kind === "done" && answerR.text.trim()
+          ? answerR.text.trim().slice(0, 800)
+          : "（回答生成失败）"
+    });
+  }
+
+  const edgeAnswerPrompt = buildCharacterAnswerPrompt(card, questionSet.edge.question);
+  const edgeAnswerR = await llm.chatOnce({
+    systemPrompt: edgeAnswerPrompt.system,
+    messages: [{ role: "user", content: edgeAnswerPrompt.user }],
+    temperature: 0.5,
+    maxTokens: 400,
+    stream: false
+  });
+  const edgeAnswer =
+    edgeAnswerR.kind === "done" && edgeAnswerR.text.trim()
+      ? edgeAnswerR.text.trim().slice(0, 800)
+      : "（回答生成失败）";
+
+  const judgePrompt = buildSanityEdgeJudgePrompt({
+    characterName: card.meta.name,
+    sanity: sanityAnswers,
+    edge: { question: questionSet.edge.question, answer: edgeAnswer }
+  });
+  const judgeR = await llm.chatOnce({
+    systemPrompt: judgePrompt.system,
+    messages: [{ role: "user", content: judgePrompt.user }],
+    temperature: 0.1,
+    maxTokens: 800,
+    stream: false
+  });
+  if (judgeR.kind !== "done") return undefined;
+
+  const judged = parseSanityEdgeJudge(judgeR.text, sanityAnswers.length);
+  if (!judged) return undefined;
+
+  const sanityQuestions = sanityAnswers.map((s, i) => {
+    const j = judged.sanity[i] ?? { score: 5, pass: false, critique: "评分缺失" };
+    return {
+      question: s.question,
+      expectedStance: s.expectedStance,
+      answer: s.answer,
+      score: j.score,
+      pass: j.pass,
+      critique: j.critique
+    };
+  });
+
+  const avgScore =
+    sanityQuestions.reduce((acc, q) => acc + q.score, 0) / Math.max(sanityQuestions.length, 1);
+
+  return {
+    sanityTest: {
+      questions: sanityQuestions,
+      overallPass: judged.overallSanityPass,
+      averageScore: Math.round(avgScore * 10) / 10
+    },
+    edgeTest: {
+      question: questionSet.edge.question,
+      answer: edgeAnswer,
+      score: judged.edge.score,
+      pass: judged.edge.pass,
+      critique: judged.edge.critique
+    }
+  };
+}
+
+function parseSanityEdgeQuestions(raw: string): SanityEdgeQuestionSet | null {
+  const candidate = extractJson(raw);
+  if (!candidate) return null;
+  try {
+    const j = JSON.parse(candidate) as {
+      sanity?: Array<{ question?: unknown; expectedStance?: unknown }>;
+      edge?: { question?: unknown; relevance?: unknown };
+    };
+    const sanity = (j.sanity ?? [])
+      .filter((s) => typeof s.question === "string" && typeof s.expectedStance === "string")
+      .map((s) => ({
+        question: (s.question as string).slice(0, 300),
+        expectedStance: (s.expectedStance as string).slice(0, 200)
+      }));
+    const edgeQuestion =
+      typeof j.edge?.question === "string" ? j.edge.question.slice(0, 300) : "";
+    const relevance =
+      typeof j.edge?.relevance === "string" ? j.edge.relevance.slice(0, 120) : "";
+    if (sanity.length === 0 || !edgeQuestion) return null;
+    return { sanity, edge: { question: edgeQuestion, relevance } };
+  } catch {
+    return null;
+  }
+}
+
+function parseSanityEdgeJudge(
+  raw: string,
+  sanityCount: number
+): {
+  sanity: Array<{ score: number; pass: boolean; critique: string }>;
+  edge: { score: number; pass: boolean; critique: string };
+  overallSanityPass: boolean;
+  overallEdgePass: boolean;
+} | null {
+  const candidate = extractJson(raw);
+  if (!candidate) return null;
+  try {
+    const j = JSON.parse(candidate) as {
+      sanity?: Array<{ score?: unknown; pass?: unknown; critique?: unknown }>;
+      edge?: { score?: unknown; pass?: unknown; critique?: unknown };
+      overallSanityPass?: unknown;
+      overallEdgePass?: unknown;
+    };
+    const sanity: Array<{ score: number; pass: boolean; critique: string }> = [];
+    for (let i = 0; i < sanityCount; i++) {
+      const row = j.sanity?.[i];
+      const score =
+        typeof row?.score === "number"
+          ? Math.max(1, Math.min(10, Math.round(row.score)))
+          : 5;
+      sanity.push({
+        score,
+        pass: typeof row?.pass === "boolean" ? row.pass : score >= 7,
+        critique:
+          typeof row?.critique === "string" ? row.critique.slice(0, 200) : "(无点评)"
+      });
+    }
+    const edgeScore =
+      typeof j.edge?.score === "number"
+        ? Math.max(1, Math.min(10, Math.round(j.edge.score)))
+        : 5;
+    const edge = {
+      score: edgeScore,
+      pass: typeof j.edge?.pass === "boolean" ? j.edge.pass : edgeScore >= 7,
+      critique:
+        typeof j.edge?.critique === "string" ? j.edge.critique.slice(0, 200) : "(无点评)"
+    };
+    const overallSanityPass =
+      typeof j.overallSanityPass === "boolean"
+        ? j.overallSanityPass
+        : sanity.every((s) => s.pass);
+    const overallEdgePass =
+      typeof j.overallEdgePass === "boolean" ? j.overallEdgePass : edge.pass;
+    return { sanity, edge, overallSanityPass, overallEdgePass };
+  } catch {
+    return null;
+  }
 }
 
 async function runVoiceTestStep(
@@ -232,13 +461,8 @@ async function runVoiceTestStep(
 }
 
 function parseScoreJson(raw: string): { score: number; critique: string } {
-  const trimmed = raw.trim();
-  let candidate = trimmed;
-  const fence = trimmed.match(/```(?:json)?\s*([\s\S]+?)```/i);
-  if (fence?.[1]) candidate = fence[1];
-  const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  if (start >= 0 && end > start) candidate = candidate.slice(start, end + 1);
+  const candidate = extractJson(raw);
+  if (!candidate) return { score: 5, critique: raw.slice(0, 200) };
   try {
     const j = JSON.parse(candidate) as { score?: unknown; critique?: unknown };
     const score = typeof j.score === "number" ? Math.max(1, Math.min(10, Math.round(j.score))) : 5;
@@ -247,6 +471,17 @@ function parseScoreJson(raw: string): { score: number; critique: string } {
   } catch {
     return { score: 5, critique: raw.slice(0, 200) };
   }
+}
+
+function extractJson(raw: string): string | null {
+  const trimmed = raw.trim();
+  let candidate = trimmed;
+  const fence = trimmed.match(/```(?:json)?\s*([\s\S]+?)```/i);
+  if (fence?.[1]) candidate = fence[1];
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start >= 0 && end > start) return candidate.slice(start, end + 1);
+  return null;
 }
 
 function clamp01(n: number): number {

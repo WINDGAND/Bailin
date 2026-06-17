@@ -3,6 +3,7 @@ import { ulid } from "ulid";
 import {
   IPC,
   type AmbientSignal,
+  type DistillationApprovalResult,
   type DistillationProgressEvent,
   type ImageGenerationConfigDTO,
   type ImageTierName,
@@ -70,8 +71,8 @@ export const SETTING_IMAGE_PROVIDER = "image_provider_json";
 export const SETTING_IMAGE_API_KEY = "image_api_key_enc";
 
 interface ApprovalGate {
-  promise: Promise<void>;
-  resolve: () => void;
+  promise: Promise<DistillationApprovalResult>;
+  resolve: (result: DistillationApprovalResult) => void;
   reject: (err: Error) => void;
 }
 
@@ -82,9 +83,9 @@ interface DeepJobState {
 }
 
 function makeGate(): ApprovalGate {
-  let resolve!: () => void;
+  let resolve!: (result: DistillationApprovalResult) => void;
   let reject!: (err: Error) => void;
-  const promise = new Promise<void>((res, rej) => {
+  const promise = new Promise<DistillationApprovalResult>((res, rej) => {
     resolve = res;
     reject = rej;
   });
@@ -491,14 +492,27 @@ export function registerIpc(deps: IpcDeps): void {
     return { ok: true, jobId };
   });
 
-  ipcMain.handle(IPC.CharactersApproveDistillation, (_e, input: { jobId: string; phase: "research" | "synthesis" }) => {
+  ipcMain.handle(
+    IPC.CharactersApproveDistillation,
+    (
+      _e,
+      input: {
+        jobId: string;
+        phase: "research" | "synthesis";
+        supplementalAgentIds?: DistillationApprovalResult["supplementalAgentIds"];
+      }
+    ) => {
     const state = activeJobs.get(input.jobId);
     if (!state) return { ok: false };
     const gate = state.approvals.get(input.phase);
     if (!gate) return { ok: false };
-    gate.resolve();
+    gate.resolve({
+      supplementalAgentIds:
+        input.phase === "research" ? input.supplementalAgentIds : undefined
+    });
     return { ok: true };
-  });
+  }
+  );
 
   ipcMain.handle(IPC.CharactersCancelDistillation, (_e, jobId: string) => {
     const state = activeJobs.get(jobId);

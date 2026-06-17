@@ -39,11 +39,40 @@ import {
   buildCharacterNameResolutionPrompt,
   buildCharacterQuoteResolutionPrompt,
   buildCharacterQuoteTranslationPrompt,
-  buildFrameworkSynthesisPrompt
+  type ResearchAgentSlug
 } from "@nuwa-pet/nuwa-prompts";
 import type { LLMAdapter, ChatContentPart } from "../adapters/llm-adapter.js";
-import { runResearchAgents } from "./research-pipeline.js";
+import { runResearchAgents, agentIdsToSlugs, type AgentResearchPlan } from "./research-pipeline.js";
+import {
+  anyAgentNeedsWebSearch,
+  buildAgentPlansFromCoverage,
+  buildLocalOnlyAgentPlans,
+  buildWebAgentPlans,
+  classifyMaterialCoverage,
+  coverageSummaryForWarning,
+  formatCoveragePlanMessage,
+  resolveEffectiveMaterialMode
+} from "./material-coverage-plan.js";
 import { runQualityCheck } from "./quality-check.js";
+import {
+  annotateQualityWeaknesses,
+  applyResynthesisPatch,
+  MAX_SYNTHESIS_ROUNDS,
+  runTargetedResynthesis,
+  runTwoPhaseSynthesis,
+  shouldTriggerResynthesis,
+  ensureAnswerProtocol
+} from "./synthesis-pipeline.js";
+import {
+  mergeResearchDocs,
+  mergeResearchSummary,
+  summarizeResearchRun
+} from "./merge-research-summary.js";
+import type {
+  DistillationApprovalResult,
+  ResearchSummaryPayload,
+  SynthesisSummaryPayload
+} from "../../shared/ipc-contract.js";
 import {
   HatchPetPipeline,
   type HatchProgressEvent
@@ -109,22 +138,6 @@ export type DeepProgressEvent =
   | { kind: "failed"; jobId: string; reason: string; warnings: string[] }
   | { kind: "cancelled"; jobId: string };
 
-export interface ResearchSummaryPayload {
-  docs: Array<Pick<ResearchDoc, "agentId" | "agentName" | "status" | "confidence" | "webSearchUsed" | "durationMs" | "sources" | "errorMessage"> & { excerpt: string }>;
-  okCount: number;
-  failedCount: number;
-  totalDurationMs: number;
-}
-
-export interface SynthesisSummaryPayload {
-  mentalModelNames: string[];
-  heuristicsCount: number;
-  expressionSignatures: string[];
-  expressionForbidden: string[];
-  tensions: string[];
-  honestyNotes: string[];
-}
-
 /**
  * 深度蒸馏入参：来自 IPC，已经被 DistillationJobConfigSchema 校验。
  * 与快速版 OrchestrateInput 互补。
@@ -133,7 +146,7 @@ export interface DeepOrchestrateInput {
   jobId: string;
   config: DistillationJobConfig;
   /** 上层用于在 Checkpoint 等待用户确认；resolve 后继续；reject 则取消。 */
-  awaitApproval: (phase: "research" | "synthesis") => Promise<void>;
+  awaitApproval: (phase: "research" | "synthesis") => Promise<DistillationApprovalResult>;
   /** 是否启用风格测试（额外 LLM 调用），默认 true。 */
   runVoiceTest?: boolean;
   /**
@@ -329,8 +342,31 @@ export class NuwaOrchestrator {
     yield { kind: "started", jobId };
 
     // ===== Phase 1: 6 Agent 并行调研 =====
-    yield phaseEvent(jobId, "researching", 5, "启动 6 路并行调研…");
-    if (config.enableWebSearch) {
+    const effectiveMaterialMode = resolveEffectiveMaterialMode(config);
+    let agentPlans: AgentResearchPlan[];
+    let coverageResult: Awaited<ReturnType<typeof classifyMaterialCoverage>> = null;
+
+    if (effectiveMaterialMode === "local-only") {
+      agentPlans = buildLocalOnlyAgentPlans();
+    } else if (effectiveMaterialMode === "local-first" && config.userMaterial?.trim()) {
+      yield phaseEvent(jobId, "researching", 3, "分析用户素材覆盖范围…");
+      coverageResult = await classifyMaterialCoverage(this.llm, config);
+      if (coverageResult) {
+        agentPlans = buildAgentPlansFromCoverage(coverageResult, config.enableWebSearch);
+        yield yieldWarn(`本地素材优先：${coverageSummaryForWarning(coverageResult)}`);
+      } else {
+        yield yieldWarn("素材覆盖分类失败，将回退为全网调研。");
+        agentPlans = buildWebAgentPlans(config.enableWebSearch);
+      }
+    } else {
+      agentPlans = buildWebAgentPlans(config.enableWebSearch);
+    }
+
+    const phaseMessage = formatCoveragePlanMessage(effectiveMaterialMode, coverageResult, agentPlans);
+    yield phaseEvent(jobId, "researching", 5, phaseMessage);
+
+    const needsWebVerify = anyAgentNeedsWebSearch(agentPlans);
+    if (needsWebVerify) {
       const webReadyError = await this.verifyWebSearchReady(config);
       if (webReadyError) {
         yield yieldWarn(webReadyError);
@@ -338,9 +374,7 @@ export class NuwaOrchestrator {
         return;
       }
     }
-    const agentEventBuffer: DeepProgressEvent[] = [];
     // 在调研前先做一次"原作上下文 + 英文名"的智能解析，让 6 路调研都能用稳定的消歧义短语。
-    // 单字/二字角色名（"三笠"、"绫波"）在不带原作上下文时，搜索结果几乎必然漂移到同名地名/战舰。
     const { sourceContext, englishName } = await this.resolveResearchContext(
       config,
       warnings
@@ -355,32 +389,19 @@ export class NuwaOrchestrator {
           (sourceContext ? `（${sourceContext}）` : "")
       );
     }
-    const research = await runResearchAgents(this.llm, {
-      characterName: config.characterName,
-      sourceType: config.sourceType,
-      track: config.track,
-      userMaterial: config.userMaterial,
-      sourceContext,
-      englishName,
-      webSearchEnabled: config.enableWebSearch,
-      concurrency: config.concurrency,
-      timeoutMs: config.agentTimeoutMs,
-      researchModel: config.researchModel,
-      onAgentStart: (slug, agentName) => {
-        const id = AGENT_SLUG_TO_ID[slug];
-        if (id == null) return;
-        const evt: DeepProgressEvent = { kind: "agent_start", jobId, agentId: id, agentName };
-        agentEventBuffer.push(evt);
-        input.liveBroadcast?.(evt);
-      },
-      onAgentDone: (doc) => {
-        const evt: DeepProgressEvent = { kind: "agent_done", jobId, doc };
-        agentEventBuffer.push(evt);
-        input.liveBroadcast?.(evt);
-      }
-    });
-    // 把缓存的事件按顺序 yield 出来（runResearchAgents 是 await 整个完成的，事件回调期间没法 yield，
-    // 所以这里一次性 flush；UI 收到时也会按时间序渲染）
+    const agentEventBuffer: DeepProgressEvent[] = [];
+    const researchStartedAt = Date.now();
+    let researchDocs = (
+      await this.runResearchAgentsForJob(
+        config,
+        { sourceContext, englishName },
+        jobId,
+        agentEventBuffer,
+        input,
+        undefined,
+        agentPlans
+      )
+    ).docs;
     for (const evt of agentEventBuffer) yield evt;
 
     if (aborted()) {
@@ -388,50 +409,85 @@ export class NuwaOrchestrator {
       return;
     }
 
-    const researchSummary: ResearchSummaryPayload = {
-      docs: research.docs.map((d) => ({
-        agentId: d.agentId,
-        agentName: d.agentName,
-        status: d.status,
-        confidence: d.confidence,
-        webSearchUsed: d.webSearchUsed,
-        durationMs: d.durationMs,
-        sources: d.sources,
-        errorMessage: d.errorMessage,
-        excerpt: d.markdown.slice(0, 400)
-      })),
-      okCount: research.okCount,
-      failedCount: research.failedCount,
-      totalDurationMs: research.totalDurationMs
+    // ===== Checkpoint 1: Phase 1.5 调研 Review（可定向补跑）=====
+    while (true) {
+      const { okCount, failedCount } = summarizeResearchRun(researchDocs);
+      const researchSummary = buildResearchSummaryPayload(
+        researchDocs,
+        Date.now() - researchStartedAt,
+        okCount,
+        failedCount
+      );
+      yield { kind: "research_complete", jobId, summary: researchSummary };
+      yield phaseEvent(
+        jobId,
+        "awaiting_research_ok",
+        30,
+        `调研完成（成功 ${okCount}/6，失败 ${failedCount}），等待你确认`
+      );
+
+      let approval: DistillationApprovalResult;
+      try {
+        approval = await input.awaitApproval("research");
+      } catch {
+        yield { kind: "cancelled", jobId };
+        return;
+      }
+      if (aborted()) {
+        yield { kind: "cancelled", jobId };
+        return;
+      }
+
+      const supplementalIds = (approval.supplementalAgentIds ?? []).filter(
+        (id) => id >= 1 && id <= 6
+      );
+      if (supplementalIds.length === 0) break;
+
+      const slugs = agentIdsToSlugs(supplementalIds);
+      if (slugs.length === 0) break;
+
+      yield phaseEvent(
+        jobId,
+        "researching",
+        28,
+        `补跑 ${slugs.length} 路调研…`
+      );
+
+      const supplementBuffer: DeepProgressEvent[] = [];
+      const supplemental = await this.runResearchAgentsForJob(
+        config,
+        { sourceContext, englishName },
+        jobId,
+        supplementBuffer,
+        input,
+        slugs
+      );
+      for (const evt of supplementBuffer) yield evt;
+      researchDocs = mergeResearchDocs(researchDocs, supplemental.docs);
+
+      if (aborted()) {
+        yield { kind: "cancelled", jobId };
+        return;
+      }
+    }
+
+    const research = {
+      docs: researchDocs,
+      ...summarizeResearchRun(researchDocs),
+      totalDurationMs: Date.now() - researchStartedAt
     };
-    yield { kind: "research_complete", jobId, summary: researchSummary };
-    yield phaseEvent(
-      jobId,
-      "awaiting_research_ok",
-      30,
-      `调研完成（成功 ${research.okCount}/6，失败 ${research.failedCount}），等待你确认`
+
+    // ===== Phase 2: 两阶段框架提炼 =====
+    yield phaseEvent(jobId, "synthesizing", 40, "正在用调研结果提炼心智模型与表达风格…");
+    let synthesisRound = 1;
+    const twoPhaseResult = await runTwoPhaseSynthesis(
+      this.llm,
+      config,
+      research.docs,
+      warnings
     );
-
-    // 调研质量信号统一在 QualityReport 里给用户看（CharacterLibrary 详情面板），
-    // 不在主流程 yieldWarn 里弹"联网验证没通过"之类的硬话——那种文案会让用户以为
-    // 产品坏了。failedCount / realWebUsed 的事实会被 doc.webSearchUsed / doc.sources
-    // 自然反映到调研档案 + 质量自检里。
-
-    // 等待用户在 UI 上点「确认」
-    try {
-      await input.awaitApproval("research");
-    } catch (e) {
-      yield { kind: "cancelled", jobId };
-      return;
-    }
-    if (aborted()) {
-      yield { kind: "cancelled", jobId };
-      return;
-    }
-
-    // ===== Phase 2: 框架提炼 =====
-    yield phaseEvent(jobId, "synthesizing", 40, "正在用调研结果提炼心智模型与表达 DNA…");
-    const synthCard = await this.runSynthesisStep(config, research.docs, warnings);
+    let synthCard = twoPhaseResult.card;
+    let synthesisPassA = twoPhaseResult.passA;
     if (!synthCard) {
       yield yieldWarn("[phase2·synthesis] 框架提炼失败，将回退到骨架角色");
     }
@@ -451,7 +507,7 @@ export class NuwaOrchestrator {
 
     try {
       await input.awaitApproval("synthesis");
-    } catch (e) {
+    } catch {
       yield { kind: "cancelled", jobId };
       return;
     }
@@ -506,7 +562,7 @@ export class NuwaOrchestrator {
       jobId,
       "researching_appearance",
       70,
-      "深度外貌调研：vision 读图 → 结构化 → 视觉自检…"
+      "深度外貌分析：读图 → 结构化 → 视觉自检…"
     );
     // 兼容旧字段：userImageRef 也算一张参考图
     const refs: ReferenceImageInput[] = [...(config.referenceImages ?? [])];
@@ -542,7 +598,7 @@ export class NuwaOrchestrator {
     }
 
     // ===== Phase 3c: 形象（atlas 优先，CSS 兜底）=====
-    yield phaseEvent(jobId, "building_sprite", 80, "正在画桌宠的 hatch-pet 精灵图…");
+    yield phaseEvent(jobId, "building_sprite", 80, "正在绘制桌宠像素形象…");
     // 关键：即使 phase3b 的 vision 链路失败、appearance 为 null，也要给一个最小默认 appearance，
     // 让 gpt-image-2 始终有机会跑起来。这样用户至少能拿到一只"AI 画的桌宠"，
     // 而不是骨架占位图。重新生成形象时还可以补素材。
@@ -573,19 +629,84 @@ export class NuwaOrchestrator {
     const finalSprite: SpriteProgram = sprite ?? skeleton.sprite;
     finalSprite.schemaVersion = SCHEMA_VERSION;
 
-    // ===== Phase 4: 质量自检 =====
-    yield phaseEvent(jobId, "quality_check", 90, "运行质量自检…");
+    // ===== Phase 4: 质量自检（含定向重提炼闭环，最多 MAX_SYNTHESIS_ROUNDS 轮）=====
     let qualityReport: QualityReport | undefined;
+
+    yield phaseEvent(jobId, "quality_check", 90, "运行质量自检…");
     try {
       qualityReport = await runQualityCheck(this.llm, {
         card,
         researchDocs: research.docs,
         runVoiceTest: input.runVoiceTest ?? true
       });
+      qualityReport.synthesisRounds = synthesisRound;
       yield { kind: "quality_report", jobId, report: qualityReport };
     } catch (e) {
       yield yieldWarn(
         `[phase4·quality] 自检失败：${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+
+    while (
+      qualityReport &&
+      shouldTriggerResynthesis(qualityReport) &&
+      synthesisRound < MAX_SYNTHESIS_ROUNDS
+    ) {
+      if (aborted()) {
+        yield { kind: "cancelled", jobId };
+        return;
+      }
+
+      synthesisRound += 1;
+      yield phaseEvent(
+        jobId,
+        "synthesizing",
+        42,
+        `第 ${synthesisRound} 轮提炼中…`
+      );
+
+      const patch = await runTargetedResynthesis(
+        this.llm,
+        config,
+        research.docs,
+        card,
+        qualityReport,
+        synthesisPassA,
+        warnings
+      );
+      if (patch) {
+        applyResynthesisPatch(card, patch);
+        if (synthCard) {
+          synthCard.mentalModels = card.mentalModels;
+          synthCard.heuristics = card.heuristics;
+        }
+        await ensureAnswerProtocol(this.llm, card, warnings);
+      } else {
+        yield yieldWarn("[phase2·retry] 定向重提炼未产出有效 patch，停止迭代");
+        break;
+      }
+
+      yield phaseEvent(jobId, "quality_check", 90, "运行质量自检…");
+      try {
+        qualityReport = await runQualityCheck(this.llm, {
+          card,
+          researchDocs: research.docs,
+          runVoiceTest: input.runVoiceTest ?? true
+        });
+        qualityReport.synthesisRounds = synthesisRound;
+        yield { kind: "quality_report", jobId, report: qualityReport };
+      } catch (e) {
+        yield yieldWarn(
+          `[phase4·quality] 自检失败：${e instanceof Error ? e.message : String(e)}`
+        );
+        break;
+      }
+    }
+
+    if (qualityReport && shouldTriggerResynthesis(qualityReport)) {
+      annotateQualityWeaknesses(card, qualityReport, synthesisRound);
+      yield yieldWarn(
+        `[phase4·quality] 已达 ${synthesisRound} 轮提炼上限，已在诚实边界标注薄弱项后交付`
       );
     }
 
@@ -606,6 +727,48 @@ export class NuwaOrchestrator {
   }
 
   // ===== 内部步骤 =====
+
+  private async runResearchAgentsForJob(
+    config: DistillationJobConfig,
+    context: { sourceContext?: string; englishName?: string },
+    jobId: string,
+    eventBuffer: DeepProgressEvent[],
+    input: DeepOrchestrateInput,
+    onlyAgents?: ResearchAgentSlug[],
+    agentPlans?: AgentResearchPlan[]
+  ) {
+    const webEnabled =
+      agentPlans != null
+        ? anyAgentNeedsWebSearch(agentPlans)
+        : config.enableWebSearch;
+
+    return runResearchAgents(this.llm, {
+      characterName: config.characterName,
+      sourceType: config.sourceType,
+      track: config.track,
+      userMaterial: config.userMaterial,
+      sourceContext: context.sourceContext,
+      englishName: context.englishName,
+      webSearchEnabled: webEnabled,
+      concurrency: config.concurrency,
+      timeoutMs: config.agentTimeoutMs,
+      researchModel: config.researchModel,
+      onlyAgents,
+      agentPlans,
+      onAgentStart: (slug, agentName) => {
+        const id = AGENT_SLUG_TO_ID[slug];
+        if (id == null) return;
+        const evt: DeepProgressEvent = { kind: "agent_start", jobId, agentId: id, agentName };
+        eventBuffer.push(evt);
+        input.liveBroadcast?.(evt);
+      },
+      onAgentDone: (doc) => {
+        const evt: DeepProgressEvent = { kind: "agent_done", jobId, doc };
+        eventBuffer.push(evt);
+        input.liveBroadcast?.(evt);
+      }
+    });
+  }
 
   private async runCardStep(
     input: OrchestrateInput,
@@ -1031,58 +1194,6 @@ export class NuwaOrchestrator {
       return null;
     }
     return normalizeQuoteOneLiner(quoteOneLiner);
-  }
-
-  /**
-   * Phase 2: 框架提炼。吃 6 份调研 Markdown，吐 CharacterCard。
-   */
-  private async runSynthesisStep(
-    config: DistillationJobConfig,
-    docs: ResearchDoc[],
-    warnings: string[]
-  ): Promise<CharacterCard | null> {
-    const segments = docs.map((d) => ({
-      agentId: d.agentId,
-      agentName: d.agentName,
-      markdown: d.status === "ok" ? d.markdown : `> Agent ${d.agentId} 失败：${d.errorMessage ?? "未知"}`,
-      confidence: d.confidence
-    }));
-    const { system, user } = buildFrameworkSynthesisPrompt({
-      characterName: config.characterName,
-      sourceType: config.sourceType,
-      track: config.track,
-      researchSegments: segments,
-      userMaterial: config.userMaterial
-    });
-    const r = await this.llm.chatOnce({
-      systemPrompt: system,
-      messages: [{ role: "user", content: user }],
-      temperature: 0.3,
-      maxTokens: 5000,
-      stream: false
-    });
-    if (r.kind === "error") {
-      warnings.push(`[phase2·synthesis] LLM 调用失败：${r.message}`);
-      return null;
-    }
-    const json = extractJSON(r.text) as Record<string, unknown> | null;
-    if (!json) {
-      warnings.push("[phase2·synthesis] LLM 未返回合法 JSON");
-      return null;
-    }
-    const seeded: Record<string, unknown> = {
-      ...json,
-      id: "temp",
-      schemaVersion: SCHEMA_VERSION,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    const parsed = parseCard(seeded);
-    if (parsed.ok && parsed.data) return parsed.data;
-    warnings.push(
-      `[phase2·synthesis] 校验失败：${(parsed.errors ?? []).map((e) => e.path).slice(0, 6).join(", ")}`
-    );
-    return null;
   }
 
   /**
@@ -1624,6 +1735,31 @@ const AGENT_SLUG_TO_ID: Record<string, ResearchAgentId> = {
   timeline: 6
 };
 
+function buildResearchSummaryPayload(
+  docs: ResearchDoc[],
+  totalDurationMs: number,
+  okCount: number,
+  failedCount: number
+): ResearchSummaryPayload {
+  return {
+    docs: docs.map((d) => ({
+      agentId: d.agentId,
+      agentName: d.agentName,
+      status: d.status,
+      confidence: d.confidence,
+      webSearchUsed: d.webSearchUsed,
+      durationMs: d.durationMs,
+      sources: d.sources,
+      errorMessage: d.errorMessage,
+      excerpt: d.markdown.slice(0, 400)
+    })),
+    okCount,
+    failedCount,
+    totalDurationMs,
+    review: mergeResearchSummary(docs)
+  };
+}
+
 function phaseEvent(
   jobId: string,
   phase: DistillationJob["status"],
@@ -1645,7 +1781,7 @@ function toUserFacingProviderError(raw: string): string {
     return "模型响应超时。请稍后重试，或换一个更稳定的供应商。";
   }
   if (/search-preview|web_search|annotations|citation|url_citation|web_search_options|baseUrl/i.test(text)) {
-    return "联网来源验证没有通过。系统可以继续造人，但调研可信度会偏低。";
+    return "联网来源验证没有通过。系统可以继续深度创建，但调研可信度会偏低。";
   }
   return text.slice(0, 180);
 }

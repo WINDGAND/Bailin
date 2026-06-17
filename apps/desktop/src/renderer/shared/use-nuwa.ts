@@ -3,6 +3,7 @@ import type {
   CharacterBundle,
   DistillationJobConfig,
   QualityReport,
+  ResearchAgentId,
   ResearchDoc
 } from "@nuwa-pet/character-protocol";
 import type {
@@ -44,7 +45,11 @@ interface NuwaWindow {
       importStarter(id: string): Promise<{ ok: boolean; characterId?: string; error?: string }>;
       create(input: unknown): Promise<{ ok: boolean; characterId?: string; isSkeleton?: boolean; warnings?: string[]; error?: string }>;
       createDeep(input: Partial<DistillationJobConfig> & { characterName: string; sourceType: DistillationJobConfig["sourceType"]; track: DistillationJobConfig["track"] }): Promise<{ ok: boolean; jobId?: string; error?: string }>;
-      approveDistillation(input: { jobId: string; phase: "research" | "synthesis" }): Promise<{ ok: boolean }>;
+      approveDistillation(input: {
+        jobId: string;
+        phase: "research" | "synthesis";
+        supplementalAgentIds?: ResearchAgentId[];
+      }): Promise<{ ok: boolean }>;
       cancelDistillation(jobId: string): Promise<{ ok: boolean }>;
       getResearchDocs(jobId: string): Promise<ResearchDoc[]>;
       getResearchByCharacter(characterId: string): Promise<{ docs: ResearchDoc[]; qualityReport?: QualityReport }>;

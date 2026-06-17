@@ -24,6 +24,8 @@ export interface ResearchAgentInput {
   sourceContext?: string;
   /** 角色的英文名 / 原文名，强化搜索 query 的命中率（如 "Mikasa Ackerman"）。 */
   englishName?: string;
+  /** 本维度已从用户素材提取的摘要（local-first 模式 partial 维度）。 */
+  localMaterialFocus?: string;
 }
 
 export type ResearchAgentSlug =
@@ -230,7 +232,8 @@ export function buildResearchAgentPrompt(
     userMaterial,
     webSearchEnabled,
     sourceContext,
-    englishName
+    englishName,
+    localMaterialFocus
   } = input;
   // 构造主要搜索锚点：英文名（如果有）+ 原作上下文（如果有）拼成完整短语。
   // 例："Mikasa Ackerman Attack on Titan" 或 "三笠 进击的巨人"
@@ -334,7 +337,17 @@ export function buildResearchAgentPrompt(
       "",
       "用户提供的补充素材（权威性高于你搜到的二手转述，优先采用）：",
       "---",
-      userMaterial.slice(0, 2000),
+      userMaterial.slice(0, 8000),
+      "---"
+    );
+  }
+
+  if (localMaterialFocus && localMaterialFocus.trim().length > 0) {
+    userParts.push(
+      "",
+      "本维度已从用户素材提取的要点（必须优先采用，可在此基础上整理成完整调研）：",
+      "---",
+      localMaterialFocus.slice(0, 4000),
       "---"
     );
   }
@@ -345,7 +358,11 @@ export function buildResearchAgentPrompt(
       ? `现在请**先用 web_search 搜索**（搜索 query 必须包含「${
           sourceContext ?? characterName
         }」作为消歧义锚点），再开始为「${subject}」做「${def.agentName}」调研。`
-      : `现在开始为「${subject}」做「${def.agentName}」调研。`
+      : localMaterialFocus
+        ? `现在请**仅基于用户素材与训练知识**（不要联网搜索），为「${subject}」做「${def.agentName}」调研。`
+        : `现在开始为「${subject}」做「${def.agentName}」调研（不联网，仅用训练知识${
+            userMaterial?.trim() ? "与用户素材" : ""
+          }）。`
   );
 
   return { system, user: userParts.join("\n"), agentName: def.agentName };

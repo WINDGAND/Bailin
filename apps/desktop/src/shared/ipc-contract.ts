@@ -67,7 +67,12 @@ export interface BailinApi {
       input: DistillationJobConfig
     ): Promise<{ ok: boolean; jobId?: string; error?: string }>;
     /** Checkpoint 用户「同意」继续。 */
-    approveDistillation(input: { jobId: string; phase: "research" | "synthesis" }): Promise<{ ok: boolean }>;
+    approveDistillation(input: {
+      jobId: string;
+      phase: "research" | "synthesis";
+      /** research checkpoint：补跑指定 Agent（1–6），空则直接进入下一阶段。 */
+      supplementalAgentIds?: ResearchAgentId[];
+    }): Promise<{ ok: boolean }>;
     /** Checkpoint 用户「取消 / 退回快速版」。 */
     cancelDistillation(jobId: string): Promise<{ ok: boolean }>;
     /** 取回某 job 已落盘的调研文档（用于 UI 在 Checkpoint 1 展示）。 */
@@ -240,6 +245,33 @@ export type HatchProgressEventDTO =
       atlasPath: string;
     };
 
+export type DistillationApprovalResult = {
+  supplementalAgentIds?: ResearchAgentId[];
+};
+
+export interface ResearchReviewAgentRow {
+  agentId: ResearchAgentId;
+  agentName: string;
+  status: ResearchDoc["status"];
+  confidence: ResearchDoc["confidence"];
+  uniqueUrlCount: number;
+  primaryMarkerCount: number;
+  secondaryMarkerCount: number;
+  keyFindings: string[];
+}
+
+/** Phase 1.5 结构化调研 Review（对齐女娲 merge_research.py）。 */
+export interface ResearchReviewPayload {
+  agents: ResearchReviewAgentRow[];
+  totalUniqueUrls: number;
+  primaryMarkerTotal: number;
+  secondaryMarkerTotal: number;
+  primaryRatioLabel: string;
+  contradictions: string[];
+  weakDimensions: string[];
+  lowSourceWarning: boolean;
+}
+
 export interface ResearchSummaryPayload {
   docs: Array<
     Pick<
@@ -250,6 +282,7 @@ export interface ResearchSummaryPayload {
   okCount: number;
   failedCount: number;
   totalDurationMs: number;
+  review: ResearchReviewPayload;
 }
 
 export interface SynthesisSummaryPayload {

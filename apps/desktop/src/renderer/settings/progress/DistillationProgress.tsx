@@ -55,11 +55,20 @@ const PHASE_EXACT: Record<string, string> = {
   "完成": "distill.phaseComplete",
   "启动 6 路并行调研…": "distill.phaseResearchStart",
   "正在用调研结果提炼心智模型与表达 DNA…": "distill.phaseSynthesizing",
+  "正在用调研结果提炼心智模型与表达风格…": "distill.phaseSynthesizing",
   "提炼完成，等待你确认": "distill.phaseAwaitSynth",
   "装配人格卡…": "distill.phaseBuildingCard",
   "深度外貌调研：vision 读图 → 结构化 → 视觉自检…": "distill.phaseAppearanceDeep",
+  "深度外貌分析：读图 → 结构化 → 视觉自检…": "distill.phaseAppearanceDeep",
   "正在画桌宠的 hatch-pet 精灵图…": "distill.phaseBuildingSprite",
-  "运行质量自检…": "distill.phaseQualityCheck"
+  "正在绘制桌宠像素形象…": "distill.phaseBuildingSprite",
+  "运行质量自检…": "distill.phaseQualityCheck",
+  "补跑 1 路调研…": "distill.phaseResearchSupplement",
+  "补跑 2 路调研…": "distill.phaseResearchSupplement",
+  "补跑 3 路调研…": "distill.phaseResearchSupplement",
+  "补跑 4 路调研…": "distill.phaseResearchSupplement",
+  "补跑 5 路调研…": "distill.phaseResearchSupplement",
+  "补跑 6 路调研…": "distill.phaseResearchSupplement"
 };
 
 function agentNameKey(id: ResearchAgentId): string {
@@ -92,6 +101,16 @@ function translatePhaseMessage(raw: string, t: TFn, locale: Locale): string {
         : ` (${context})`
       : "";
     return t("distill.phaseLockedTarget", { name, english: englishPart, context: contextPart });
+  }
+
+  const supplement = raw.match(/^补跑 (\d+) 路调研…$/);
+  if (supplement) {
+    return t("distill.phaseResearchSupplement", { count: supplement[1]! });
+  }
+
+  const synthRetry = raw.match(/^第 (\d+) 轮提炼中…$/);
+  if (synthRetry) {
+    return t("distill.phaseSynthesisRetry", { round: synthRetry[1]! });
   }
 
   return raw;
@@ -215,9 +234,12 @@ export function DistillationProgress({
     return off;
   }, [nuwa, jobId]);
 
-  async function approve(phase: "research" | "synthesis"): Promise<void> {
+  async function approve(
+    phase: "research" | "synthesis",
+    supplementalAgentIds?: ResearchAgentId[]
+  ): Promise<void> {
     setShowCheckpoint(null);
-    await nuwa.characters.approveDistillation({ jobId, phase });
+    await nuwa.characters.approveDistillation({ jobId, phase, supplementalAgentIds });
   }
 
   const running = finalState == null;
@@ -424,6 +446,7 @@ export function DistillationProgress({
           researchSummary={researchSummary}
           synthSummary={synthSummary}
           onApprove={() => void approve(showCheckpoint)}
+          onSupplement={(agentIds) => void approve("research", agentIds)}
           onCancel={() => {
             setShowCheckpoint(null);
             onCancel();
@@ -662,6 +685,9 @@ function QualityReportCard({ report }: { report: QualityReport }): JSX.Element {
         <span style={{ color: verdictColor, fontWeight: 600 }}>
           {report.verdict.toUpperCase()}
           {t("distill.phase4Score", { score: (report.overallScore * 100).toFixed(0) })}
+          {report.synthesisRounds && report.synthesisRounds > 1
+            ? t("distill.phase4SynthesisRounds", { rounds: report.synthesisRounds })
+            : ""}
         </span>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -689,6 +715,41 @@ function QualityReportCard({ report }: { report: QualityReport }): JSX.Element {
           </blockquote>
           <p className="body-sm" style={{ color: "var(--ink-soft)" }}>
             {t("distill.voiceCritique", { text: report.voiceTest.critique })}
+          </p>
+        </details>
+      ) : null}
+      {report.sanityTest ? (
+        <details style={{ marginTop: 10 }}>
+          <summary className="eyebrow" style={{ cursor: "pointer" }}>
+            {t("distill.sanityTestSummary", { score: report.sanityTest.averageScore })}
+          </summary>
+          {report.sanityTest.questions.map((q, i) => (
+            <div key={i} className="body-sm" style={{ marginTop: 8 }}>
+              <div style={{ color: q.pass ? "var(--emerald)" : "var(--magenta)" }}>
+                {t("distill.sanityQuestionLine", { n: i + 1, question: q.question })}
+                {" · "}
+                {q.score}/10
+              </div>
+              <div style={{ color: "var(--ink-faint)", marginTop: 2 }}>
+                {t("distill.sanityAnswerLine", { answer: q.answer.slice(0, 200) })}
+              </div>
+            </div>
+          ))}
+        </details>
+      ) : null}
+      {report.edgeTest ? (
+        <details style={{ marginTop: 10 }}>
+          <summary className="eyebrow" style={{ cursor: "pointer" }}>
+            {t("distill.edgeTestSummary", { score: report.edgeTest.score })}
+          </summary>
+          <p className="body-sm" style={{ marginTop: 6 }}>
+            {t("distill.edgeQuestionLine", { question: report.edgeTest.question })}
+          </p>
+          <p className="body-sm" style={{ whiteSpace: "pre-wrap" }}>
+            {report.edgeTest.answer}
+          </p>
+          <p className="body-sm" style={{ color: "var(--ink-faint)" }}>
+            {report.edgeTest.critique}
           </p>
         </details>
       ) : null}
@@ -721,13 +782,35 @@ function CheckpointDialog(props: {
   researchSummary: ResearchSummaryPayload | null;
   synthSummary: SynthesisSummaryPayload | null;
   onApprove: () => void;
+  onSupplement: (agentIds: ResearchAgentId[]) => void;
   onCancel: () => void;
 }): JSX.Element {
   const t = useT();
-  const { phase, researchSummary, synthSummary, onApprove, onCancel } = props;
+  const { phase, researchSummary, synthSummary, onApprove, onSupplement, onCancel } = props;
   const approveRef = useRef<HTMLButtonElement | null>(null);
+  const review = researchSummary?.review;
 
-  // 键盘：Enter 确认，Esc 取消，focus 锁在按钮上
+  const defaultSelected = useMemo(() => {
+    if (!review) return new Set<ResearchAgentId>();
+    const ids = new Set<ResearchAgentId>();
+    for (const row of review.agents) {
+      if (
+        row.status !== "ok" ||
+        row.confidence === "low" ||
+        (row.uniqueUrlCount === 0 && row.status === "ok")
+      ) {
+        ids.add(row.agentId);
+      }
+    }
+    return ids;
+  }, [review]);
+
+  const [selectedAgents, setSelectedAgents] = useState<Set<ResearchAgentId>>(defaultSelected);
+
+  useEffect(() => {
+    setSelectedAgents(defaultSelected);
+  }, [defaultSelected]);
+
   useEffect(() => {
     approveRef.current?.focus();
     const handler = (e: KeyboardEvent) => {
@@ -743,6 +826,15 @@ function CheckpointDialog(props: {
     return () => window.removeEventListener("keydown", handler);
   }, [onApprove, onCancel]);
 
+  function toggleAgent(id: ResearchAgentId): void {
+    setSelectedAgents((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div
       className="modal-backdrop"
@@ -753,7 +845,7 @@ function CheckpointDialog(props: {
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="modal" style={{ width: 540 }}>
+      <div className="modal" style={{ width: 580, maxHeight: "85vh", overflowY: "auto" }}>
         <div className="eyebrow" style={{ marginBottom: 8 }}>
           {phase === "research" ? t("distill.checkpoint1Eyebrow") : t("distill.checkpoint2Eyebrow")}
         </div>
@@ -764,7 +856,7 @@ function CheckpointDialog(props: {
         >
           {phase === "research" ? t("distill.checkpoint1Title") : t("distill.checkpoint2Title")}
         </div>
-        {phase === "research" && researchSummary ? (
+        {phase === "research" && researchSummary && review ? (
           <div style={{ marginBottom: 14 }}>
             <p className="body-sm" style={{ margin: 0 }}>
               {t("distill.checkpointResearchStats", {
@@ -773,19 +865,82 @@ function CheckpointDialog(props: {
                 seconds: Math.round(researchSummary.totalDurationMs / 1000)
               })}
             </p>
-            <ul className="body-sm" style={{ marginTop: 8 }}>
-              {researchSummary.docs.map((d) => (
-                <li key={d.agentId}>
-                  {t("distill.checkpointDocLine", {
-                    id: d.agentId,
-                    name: t(agentNameKey(d.agentId as ResearchAgentId)) || d.agentName,
-                    status: d.status,
-                    confidence: d.confidence,
-                    sources: d.sources.length
-                  })}
-                </li>
-              ))}
-            </ul>
+            <p className="body-sm" style={{ margin: "8px 0 0" }}>
+              {t("distill.checkpointReviewSources", {
+                count: review.totalUniqueUrls,
+                ratio: review.primaryRatioLabel
+              })}
+            </p>
+            {review.lowSourceWarning ? (
+              <p className="body-sm" style={{ margin: "6px 0 0", color: "var(--amber)" }}>
+                {t("distill.checkpointReviewLowSource")}
+              </p>
+            ) : null}
+
+            <table
+              className="body-sm"
+              style={{ width: "100%", marginTop: 12, borderCollapse: "collapse" }}
+            >
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--ink-faint)" }}>
+                  <th style={{ padding: "4px 6px 4px 0", width: 28 }} />
+                  <th style={{ padding: "4px 6px" }}>#</th>
+                  <th style={{ padding: "4px 6px" }}>{t("distill.checkpointReviewFindings")}</th>
+                  <th style={{ padding: "4px 6px" }}>URL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {review.agents.map((row) => (
+                  <tr key={row.agentId}>
+                    <td style={{ padding: "4px 6px 4px 0" }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedAgents.has(row.agentId)}
+                        onChange={() => toggleAgent(row.agentId)}
+                        aria-label={t(agentNameKey(row.agentId))}
+                      />
+                    </td>
+                    <td style={{ padding: "4px 6px", whiteSpace: "nowrap" }}>
+                      {row.agentId}{" "}
+                      {t(agentNameKey(row.agentId))}
+                      <div style={{ color: "var(--ink-faint)", fontSize: 12 }}>
+                        {row.status} · {row.confidence}
+                      </div>
+                    </td>
+                    <td style={{ padding: "4px 6px" }}>
+                      {row.keyFindings.length > 0
+                        ? row.keyFindings.join(" · ")
+                        : t("distill.checkpointReviewNone")}
+                    </td>
+                    <td style={{ padding: "4px 6px" }}>{row.uniqueUrlCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {review.weakDimensions.length > 0 ? (
+              <div style={{ marginTop: 10 }}>
+                <div className="eyebrow">{t("distill.checkpointReviewWeak")}</div>
+                <p className="body-sm" style={{ margin: "4px 0 0" }}>
+                  {review.weakDimensions.join(" · ")}
+                </p>
+              </div>
+            ) : null}
+
+            {review.contradictions.length > 0 ? (
+              <div style={{ marginTop: 10 }}>
+                <div className="eyebrow">{t("distill.checkpointReviewContradictions")}</div>
+                <ul className="body-sm" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                  {review.contradictions.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <p className="body-sm" style={{ marginTop: 12, color: "var(--ink-faint)" }}>
+              {t("distill.checkpointSelectAgents")}
+            </p>
           </div>
         ) : null}
         {phase === "synthesis" && synthSummary ? (
@@ -802,6 +957,15 @@ function CheckpointDialog(props: {
           >
             {t("distill.checkpointCancel")}
           </button>
+          {phase === "research" && selectedAgents.size > 0 ? (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => onSupplement(Array.from(selectedAgents).sort((a, b) => a - b))}
+            >
+              {t("distill.checkpointSupplement")}
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn btn--magenta"

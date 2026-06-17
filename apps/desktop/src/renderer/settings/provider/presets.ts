@@ -33,7 +33,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     kind: "openai-compatible",
     baseUrl: "https://api.deepseek.com",
     model: "deepseek-v4-flash",
-    note: "便宜的主模型；不支持联网调研，深度造人不可用。"
+    note: "便宜的主模型；不支持联网调研，深度创建不可用。"
   },
   {
     id: "moonshot",
@@ -50,7 +50,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: "https://api.ohmygpt.com",
     model: "deepseek-v4-flash",
     visionModel: "bytedance/doubao-seed-2.0-lite-260428",
-    note: "中转。主模型用 DeepSeek，深度造人会自动切到 search-preview。"
+    note: "中转。主模型用 DeepSeek，深度创建时会自动切换联网检索模型。"
   },
   {
     id: "claude",

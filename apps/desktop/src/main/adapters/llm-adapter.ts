@@ -181,7 +181,7 @@ export class LLMAdapter {
 
     if (p.kind === "openai-compatible") {
       if (matchesSearchModel(model)) {
-        return { webSearch: true, reason: `${model} 自带联网（chat/completions + web_search_options）` };
+        return { webSearch: true, reason: `${model} 自带联网检索能力` };
       }
       if (isSearchRelayBaseUrl(p.baseUrl)) {
         const mainNote = model.includes("deepseek")
@@ -189,27 +189,27 @@ export class LLMAdapter {
           : "";
         return {
           webSearch: true,
-          reason: `${mainNote}${p.baseUrl} 支持 search-preview 系列；调研阶段会切到 gpt-4o-mini-search-preview`
+          reason: `${mainNote}${p.baseUrl} 支持联网检索模型；调研阶段会自动切换`
         };
       }
       if (model.includes("deepseek")) {
         return {
           webSearch: false,
           reason:
-            "DeepSeek 直连不支持 OpenAI search-preview 式内置联网；深度蒸馏将使用模型训练知识。需要联网请换 OhMyGPT 等中转，或把 provider 模型改为 gpt-*-search-preview。"
+            "DeepSeek 直连不支持内置联网检索；深度蒸馏将使用模型训练知识。需要联网请换 OhMyGPT 等中转，或改用带联网能力的模型。"
         };
       }
       return {
         webSearch: false,
-        reason: `当前 baseUrl (${p.baseUrl}) 不在已知支持 search-preview 的清单`
+        reason: `当前 baseUrl (${p.baseUrl}) 不在已知支持联网检索的清单`
       };
     }
     if (p.kind === "anthropic-compatible") {
       const known = ANTHROPIC_WEB_SEARCH_MODELS.some((m) => model.startsWith(m));
-      if (known) return { webSearch: true, reason: `Anthropic ${model} 支持 server-side web_search 工具` };
+      if (known) return { webSearch: true, reason: `Anthropic ${model} 支持联网检索` };
       return {
         webSearch: false,
-        reason: `Anthropic 协议下，仅 ${ANTHROPIC_WEB_SEARCH_MODELS.join("/")} 系列支持 web_search`
+        reason: `Anthropic 协议下，仅 ${ANTHROPIC_WEB_SEARCH_MODELS.join("/")} 系列支持联网检索`
       };
     }
     return { webSearch: false, reason: "未知的 provider 协议" };

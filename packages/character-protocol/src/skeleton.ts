@@ -4,7 +4,7 @@ import { defaultRuntimeConfig } from "./runtime-config.js";
 import type { CharacterBundle } from "./bundle.js";
 
 /**
- * 当造人 LLM 调用失败 / 返回不合法 JSON 时使用：保证产品体验"任何输入都能上桌"。
+ * 当创建角色 LLM 调用失败 / 返回不合法 JSON 时使用：保证产品体验"任何输入都能上桌"。
  * 骨架卡始终带有 isHighInformationRichness = false，UI 必须显眼标识"骨架角色"。
  */
 export function makeSkeletonCard(input: {
@@ -41,7 +41,7 @@ export function makeSkeletonCard(input: {
     },
     identity: {
       selfIntro: `我是 ${name}，一个还在成形中的视角助手。`,
-      origin: "造人流程未完成，因此我现在只有最基础的骨架。",
+      origin: "深度蒸馏尚未完成，因此我现在只有最基础的骨架。",
       currentDoing: "等待你给我更多素材"
     },
     mentalModels: [
@@ -79,8 +79,35 @@ export function makeSkeletonCard(input: {
       tensions: ["要友好 vs 要克制"]
     },
     honestyBoundary: {
-      notes: ["这是骨架角色，没有跑完女娲流程", "需要用户在角色卡中补充素材"],
+      notes: ["这是骨架角色，尚未完成深度蒸馏", "需要用户在角色卡中补充素材"],
       isHighInformationRichness: false
+    },
+    answerProtocol: {
+      classifyHint:
+        "先分类：需要具体事实的问题 → 诚实说资料不足；抽象或陪伴类 → 选下面路由；混合题 → 先澄清再回答。",
+      routes: [
+        {
+          id: "r1",
+          label: "诚实说不确定",
+          when: "问题需要我不具备的最新事实或细节",
+          steps: ["承认信息不足", "说明我能从什么角度帮", "邀请用户补充背景"],
+          linkedModels: ["诚实地说我不知道"]
+        },
+        {
+          id: "r2",
+          label: "先问清楚",
+          when: "用户问题太模糊",
+          steps: ["问一个关键澄清问题", "确认意图后再回应"],
+          linkedModels: []
+        },
+        {
+          id: "r3",
+          label: "先弄清楚问题",
+          when: "用户只说「帮我」或缺少上下文",
+          steps: ["复述我理解的部分", "问「帮你做什么？」"],
+          linkedModels: []
+        }
+      ]
     }
   };
 }

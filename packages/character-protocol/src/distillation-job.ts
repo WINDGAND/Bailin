@@ -27,12 +27,19 @@ export const DistillationJobConfigSchema = z.object({
   sourceType: z.enum(["public-figure", "fictional", "original"]),
   track: z.enum(["utility", "companion"]),
   enableWebSearch: z.boolean().default(true),
+  /**
+   * 素材调研模式：
+   * - web：6 路默认联网（或按 enableWebSearch）
+   * - local-first：用户素材充分时，已覆盖维度用本地摘要，仅缺口联网
+   * - local-only：不联网调研，仅用户素材 + 训练知识
+   */
+  materialMode: z.enum(["web", "local-first", "local-only"]).default("web"),
   /** 并发数 1..6。 */
   concurrency: z.number().int().min(1).max(6).default(2),
   /** 单 agent 超时（毫秒）。 */
   agentTimeoutMs: z.number().int().min(30000).max(900000).default(300000),
-  /** 用户提供的补充素材（≤2000 字符）。 */
-  userMaterial: z.string().max(4000).optional(),
+  /** 用户提供的补充素材（长文本访谈/设定等，本地优先模式可用更多）。 */
+  userMaterial: z.string().max(12000).optional(),
   /** 用户提供的外貌补充（短句）。 */
   userHint: z.string().max(400).optional(),
   /** 用户提供的参考图 URL 或 data URI，用于深度外貌阶段（旧字段，保留兼容）。 */

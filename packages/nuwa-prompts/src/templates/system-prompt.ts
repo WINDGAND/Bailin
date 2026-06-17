@@ -1,4 +1,5 @@
 import type { CharacterCard } from "@nuwa-pet/character-protocol";
+import { formatAnswerProtocolForPrompt, resolveAnswerProtocol } from "./agentic-protocol.js";
 
 export interface SystemPromptInput {
   card: CharacterCard;
@@ -61,6 +62,10 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
   if (card.values.tensions && card.values.tensions.length > 0) {
     lines.push(`内在矛盾：${card.values.tensions.join("；")}`);
   }
+
+  lines.push("");
+  lines.push("[ANSWER WORKFLOW]");
+  lines.push(...formatAnswerProtocolForPrompt(resolveAnswerProtocol(card)));
 
   if (userProfile && (
     userProfile.preferredName ||

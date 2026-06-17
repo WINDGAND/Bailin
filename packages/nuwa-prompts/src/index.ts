@@ -9,4 +9,8 @@ export * from "./templates/system-prompt.js";
 export * from "./templates/profile-extraction.js";
 export * from "./templates/research-agents.js";
 export * from "./templates/framework-synthesis.js";
+export * from "./templates/synthesis-two-phase.js";
+export * from "./templates/agentic-protocol.js";
+export * from "./templates/material-coverage.js";
 export * from "./templates/voice-test.js";
+export * from "./templates/sanity-edge-test.js";

@@ -78,6 +78,7 @@ const gen = orch.createCharacterDeep({
   // 自动 approve 两个 checkpoint
   awaitApproval: async (phase) => {
     console.log(`[deep-e2e] auto-approve checkpoint: ${phase}`);
+    return {};
   }
 });
 

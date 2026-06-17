@@ -31,8 +31,37 @@ export const QualityReportSchema = z.object({
       critique: z.string().max(400)
     })
     .optional(),
+  /** Sanity 测试：3 个公开立场问题的方向一致性。 */
+  sanityTest: z
+    .object({
+      questions: z.array(
+        z.object({
+          question: z.string().max(300),
+          expectedStance: z.string().max(200),
+          answer: z.string().max(800),
+          score: z.number().int().min(1).max(10),
+          pass: z.boolean(),
+          critique: z.string().max(200)
+        })
+      ),
+      overallPass: z.boolean(),
+      averageScore: z.number().min(1).max(10)
+    })
+    .optional(),
+  /** Edge 测试：未公开讨论问题的适度不确定。 */
+  edgeTest: z
+    .object({
+      question: z.string().max(300),
+      answer: z.string().max(800),
+      score: z.number().int().min(1).max(10),
+      pass: z.boolean(),
+      critique: z.string().max(200)
+    })
+    .optional(),
   /** 产生这份报告时的时间戳。 */
-  createdAt: z.number().int().nonnegative()
+  createdAt: z.number().int().nonnegative(),
+  /** 经历了几轮提炼（含定向重提炼）。 */
+  synthesisRounds: z.number().int().min(1).max(4).optional()
 });
 
 export type QualityReport = z.infer<typeof QualityReportSchema>;

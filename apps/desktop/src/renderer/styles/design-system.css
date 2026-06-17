@@ -1300,7 +1300,7 @@ body {
   }
 }
 
-/* ---------- Forge (造一个角色) page-specific
+/* ---------- Create Character page-specific
  *
  * 设计原则：让"角色名"成为视觉主体；其余字段降权但保持可达。
  * 不引入新颜色 / 字体 / 阴影；全部基于既有 token。

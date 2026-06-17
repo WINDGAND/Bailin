@@ -1,6 +1,7 @@
 export * from "./sprite-states.js";
 export * from "./appearance.js";
 export * from "./character-card.js";
+export * from "./answer-protocol.js";
 export * from "./character-names.js";
 export * from "./character-quote.js";
 export * from "./atlas-pet.js";

@@ -1,4 +1,4 @@
-import type { ResearchDoc } from "@nuwa-pet/character-protocol";
+import type { ResearchAgentId, ResearchDoc } from "@nuwa-pet/character-protocol";
 import {
   buildResearchAgentPrompt,
   RESEARCH_AGENT_ORDER,
@@ -15,6 +15,34 @@ const SLUG_TO_AGENT_ID: Record<ResearchAgentSlug, 1 | 2 | 3 | 4 | 5 | 6> = {
   decisions: 5,
   timeline: 6
 };
+
+export const AGENT_ID_TO_SLUG: Record<1 | 2 | 3 | 4 | 5 | 6, ResearchAgentSlug> = {
+  1: "writings",
+  2: "conversations",
+  3: "expression-dna",
+  4: "external-views",
+  5: "decisions",
+  6: "timeline"
+};
+
+export function agentIdsToSlugs(ids: ResearchAgentId[]): ResearchAgentSlug[] {
+  const slugs: ResearchAgentSlug[] = [];
+  for (const id of ids) {
+    const slug = AGENT_ID_TO_SLUG[id as 1 | 2 | 3 | 4 | 5 | 6];
+    if (slug && !slugs.includes(slug)) slugs.push(slug);
+  }
+  return slugs;
+}
+
+export interface AgentResearchPlan {
+  slug: ResearchAgentSlug;
+  webSearchEnabled: boolean;
+  /** 若 true，直接用 localMarkdown 落 doc，不调 LLM。 */
+  skipRun?: boolean;
+  localMarkdown?: string;
+  /** partial 维度：注入该维度的本地摘要片段。 */
+  localMaterialFocus?: string;
+}
 
 export interface RunResearchAgentsInput {
   characterName: string;
@@ -43,6 +71,10 @@ export interface RunResearchAgentsInput {
   onAgentDone?: (doc: ResearchDoc) => void;
   /** 给上层透出每个 agent 开始时的事件。 */
   onAgentStart?: (slug: ResearchAgentSlug, agentName: string) => void;
+  /** 仅跑指定 Agent（补调研）；默认跑全部 6 路。 */
+  onlyAgents?: ResearchAgentSlug[];
+  /** 每路 Agent 的联网 / 本地策略；缺省则全部使用 webSearchEnabled。 */
+  agentPlans?: AgentResearchPlan[];
 }
 
 export interface RunResearchAgentsResult {
@@ -61,20 +93,52 @@ export async function runResearchAgents(
 ): Promise<RunResearchAgentsResult> {
   const startedAt = Date.now();
   const docs: ResearchDoc[] = [];
-  const queue = [...RESEARCH_AGENT_ORDER];
+  const queue = input.onlyAgents?.length
+    ? RESEARCH_AGENT_ORDER.filter((s) => input.onlyAgents!.includes(s))
+    : [...RESEARCH_AGENT_ORDER];
   const inflight = new Set<Promise<void>>();
   const concurrency = Math.max(1, Math.min(6, input.concurrency));
 
   const runOne = async (slug: ResearchAgentSlug): Promise<void> => {
     const agentId = SLUG_TO_AGENT_ID[slug];
+    const plan = input.agentPlans?.find((p) => p.slug === slug);
+    const webForAgent = plan?.webSearchEnabled ?? input.webSearchEnabled;
+
+    if (plan?.skipRun && plan.localMarkdown) {
+      const agentName = buildResearchAgentPrompt(slug, {
+        characterName: input.characterName,
+        sourceType: input.sourceType,
+        track: input.track,
+        userMaterial: input.userMaterial,
+        webSearchEnabled: false,
+        sourceContext: input.sourceContext,
+        englishName: input.englishName
+      }).agentName;
+      input.onAgentStart?.(slug, agentName);
+      const doc: ResearchDoc = {
+        agentId,
+        agentName,
+        markdown: plan.localMarkdown,
+        sources: [],
+        confidence: inferConfidence(plan.localMarkdown),
+        webSearchUsed: false,
+        durationMs: 0,
+        status: "ok"
+      };
+      docs.push(doc);
+      input.onAgentDone?.(doc);
+      return;
+    }
+
     const { system, user, agentName } = buildResearchAgentPrompt(slug, {
       characterName: input.characterName,
       sourceType: input.sourceType,
       track: input.track,
       userMaterial: input.userMaterial,
-      webSearchEnabled: input.webSearchEnabled,
+      webSearchEnabled: webForAgent,
       sourceContext: input.sourceContext,
-      englishName: input.englishName
+      englishName: input.englishName,
+      localMaterialFocus: plan?.localMaterialFocus
     });
     input.onAgentStart?.(slug, agentName);
     const agentStartedAt = Date.now();
@@ -90,9 +154,9 @@ export async function runResearchAgents(
         maxTokens: 4500,
         stream: false,
         signal: controller.signal,
-        enableWebSearch: input.webSearchEnabled,
+        enableWebSearch: webForAgent,
         maxToolCalls: 6,
-        modelOverride: input.webSearchEnabled ? input.researchModel : undefined,
+        modelOverride: webForAgent ? input.researchModel : undefined,
         searchContextSize: "medium",
         requestLabel
       });
@@ -192,7 +256,7 @@ export async function runResearchAgents(
 
 function researchErrorToUserMessage(raw: string, timeout: boolean): string {
   if (timeout) {
-    return "这一路调研响应太慢，已跳过。系统会用其他调研结果继续完成造人。";
+    return "这一路调研响应太慢，已跳过。系统会用其他调研结果继续完成深度创建。";
   }
   if (/401|403|unauthorized|invalid api key|AUTH_FAILED/i.test(raw)) {
     return "模型 Key 无效或没有权限，这一路调研已跳过。";

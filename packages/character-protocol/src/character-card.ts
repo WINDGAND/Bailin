@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AppearanceSpecSchema } from "./appearance.js";
+import { AnswerProtocolSchema } from "./answer-protocol.js";
 
 /**
  * CharacterCard 描述一个角色"怎么想 / 怎么说"。
@@ -115,7 +116,9 @@ export const CharacterCardSchema = z.object({
       secondary: z.array(z.string()).default([]),
       keyQuotes: z.array(z.string()).optional()
     })
-    .optional()
+    .optional(),
+  /** 轻量 Agentic Protocol：3~5 条回答路由，运行时注入 system prompt。 */
+  answerProtocol: AnswerProtocolSchema.optional()
 });
 
 export type CharacterCard = z.infer<typeof CharacterCardSchema>;
@@ -123,3 +126,5 @@ export type MentalModel = z.infer<typeof MentalModelSchema>;
 export type Heuristic = z.infer<typeof HeuristicSchema>;
 export type ExpressionDNA = z.infer<typeof ExpressionDNASchema>;
 export type CharacterMeta = z.infer<typeof CharacterMetaSchema>;
+export type { AnswerProtocol, AnswerRoute } from "./answer-protocol.js";
+export { AnswerProtocolSchema, AnswerRouteSchema, isAnswerProtocolValid } from "./answer-protocol.js";
