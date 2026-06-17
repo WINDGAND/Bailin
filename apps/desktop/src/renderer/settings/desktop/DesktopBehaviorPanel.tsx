@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { ProactiveSettings, ProactiveStatus } from "../../../shared/ipc-contract.js";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { useToast } from "../../shared/feedback.js";
+import { BlSelect } from "../../shared/BlSelect.js";
 import { useI18n } from "../../shared/i18n/index.js";
 
 const DEFAULT_SETTINGS: ProactiveSettings = {
@@ -116,75 +117,67 @@ export function DesktopBehaviorPanel(): JSX.Element {
 
         <div className="grid-2" style={{ marginTop: 18 }}>
           <Field label={t("desktop.intensityLabel")}>
-            <select
-              className="input"
+            <BlSelect
               value={settings.intensity}
-              onChange={(e) =>
+              onChange={(intensity) =>
                 void save({
                   ...settings,
-                  intensity: e.currentTarget.value as ProactiveSettings["intensity"],
-                  enabled: e.currentTarget.value !== "off"
+                  intensity,
+                  enabled: intensity !== "off"
                 })
               }
-            >
-              <option value="off">{t("desktop.intensityOff")}</option>
-              <option value="light">{t("desktop.intensityLight")}</option>
-              <option value="standard">{t("desktop.intensityStandard")}</option>
-            </select>
+              options={[
+                { value: "off", label: t("desktop.intensityOff") },
+                { value: "light", label: t("desktop.intensityLight") },
+                { value: "standard", label: t("desktop.intensityStandard") }
+              ]}
+            />
           </Field>
           <Field label={t("desktop.maxPerHourLabel")}>
-            <select
-              className="input"
-              value={settings.maxPerHour}
-              onChange={(e) =>
+            <BlSelect
+              value={String(settings.maxPerHour)}
+              onChange={(raw) =>
                 void save({
                   ...settings,
-                  maxPerHour: Number(e.currentTarget.value) as ProactiveSettings["maxPerHour"]
+                  maxPerHour: Number(raw) as ProactiveSettings["maxPerHour"]
                 })
               }
-            >
-              {MAX_PER_HOUR.map((n) => (
-                <option key={n} value={n}>
-                  {t("desktop.timesPerHour", { count: n })}
-                </option>
-              ))}
-            </select>
+              options={MAX_PER_HOUR.map((n) => ({
+                value: String(n),
+                label: t("desktop.timesPerHour", { count: n })
+              }))}
+            />
           </Field>
           <Field label={t("desktop.defaultHushLabel")}>
-            <select
-              className="input"
-              value={settings.defaultHushMinutes}
-              onChange={(e) =>
+            <BlSelect
+              value={String(settings.defaultHushMinutes)}
+              onChange={(raw) =>
                 void save({
                   ...settings,
-                  defaultHushMinutes: Number(
-                    e.currentTarget.value
-                  ) as ProactiveSettings["defaultHushMinutes"]
+                  defaultHushMinutes: Number(raw) as ProactiveSettings["defaultHushMinutes"]
                 })
               }
-            >
-              {HUSH_MINUTES.map((n) => (
-                <option key={n} value={n}>
-                  {t("desktop.minutes", { count: n })}
-                </option>
-              ))}
-            </select>
+              options={HUSH_MINUTES.map((n) => ({
+                value: String(n),
+                label: t("desktop.minutes", { count: n })
+              }))}
+            />
           </Field>
           <Field label={t("desktop.screenAwarenessLabel")}>
-            <select
-              className="input"
+            <BlSelect
               value={settings.screenAwareness}
-              onChange={(e) =>
+              onChange={(screenAwareness) =>
                 void save({
                   ...settings,
-                  screenAwareness: e.currentTarget.value as ProactiveSettings["screenAwareness"]
+                  screenAwareness
                 })
               }
-            >
-              <option value="off">{t("desktop.screenOptionOff")}</option>
-              <option value="signals">{t("desktop.screenOptionSignals")}</option>
-              <option value="screenshots">{t("desktop.screenOptionScreenshots")}</option>
-            </select>
+              options={[
+                { value: "off", label: t("desktop.screenOptionOff") },
+                { value: "signals", label: t("desktop.screenOptionSignals") },
+                { value: "screenshots", label: t("desktop.screenOptionScreenshots") }
+              ]}
+            />
           </Field>
         </div>
       </section>

@@ -4,6 +4,7 @@ import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
+import { BlSelect } from "../../shared/BlSelect.js";
 import { PROVIDER_PRESETS, type ProviderPreset } from "../provider/presets.js";
 import { useT } from "../../shared/i18n/index.js";
 
@@ -261,14 +262,15 @@ function ProviderStep({
 
       <div>
         <label className="eyebrow">{t("provider.protocolLabel")}</label>
-        <select
-          className="select"
+        <BlSelect
           value={kind}
-          onChange={(e) => setKind(e.target.value as typeof kind)}
-        >
-          <option value="openai-compatible">{t("setup.protocolOpenAILong")}</option>
-          <option value="anthropic-compatible">{t("setup.protocolAnthropicLong")}</option>
-        </select>
+          onChange={setKind}
+          triggerClassName="select"
+          options={[
+            { value: "openai-compatible", label: t("setup.protocolOpenAILong") },
+            { value: "anthropic-compatible", label: t("setup.protocolAnthropicLong") }
+          ]}
+        />
       </div>
       <div>
         <label className="eyebrow">{t("provider.baseUrlLabel")}</label>

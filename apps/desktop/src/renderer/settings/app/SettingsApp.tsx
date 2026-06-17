@@ -8,17 +8,19 @@ import { CreateCharacter } from "../create/CreateCharacter.js";
 import { MemoryPanel } from "../memory/MemoryPanel.js";
 import { ApiKeyPanel } from "../provider/ApiKeyPanel.js";
 import { DesktopBehaviorPanel } from "../desktop/DesktopBehaviorPanel.js";
-import { LanguagePanel } from "../language/LanguagePanel.js";
+import { GeneralSettingsPanel } from "../general/GeneralSettingsPanel.js";
 import { DirtyContext, type DirtyContextValue } from "./dirty-context.js";
 import { VisualJobProvider } from "./visual-job-context.js";
 import { VisualJobBanner } from "./VisualJobBanner.js";
+import { DistillationJobProvider } from "./distillation-job-context.js";
+import { DistillationJobBanner } from "./DistillationJobBanner.js";
 import { useI18n } from "../../shared/i18n/index.js";
 
-type Tab = "library" | "create" | "memory" | "desktop" | "key" | "language";
+type Tab = "library" | "create" | "memory" | "desktop" | "key" | "settings";
 
 interface TabDef {
   id: Tab;
-  labelKey: "nav.library" | "nav.create" | "nav.memory" | "nav.desktop" | "nav.key" | "nav.language";
+  labelKey: "nav.library" | "nav.create" | "nav.memory" | "nav.desktop" | "nav.key" | "nav.settings";
   icon: (props: { size?: number }) => JSX.Element;
 }
 
@@ -28,7 +30,7 @@ const TABS: TabDef[] = [
   { id: "memory", labelKey: "nav.memory", icon: MemoryIcon },
   { id: "desktop", labelKey: "nav.desktop", icon: CompanionIcon },
   { id: "key", labelKey: "nav.key", icon: KeyIcon },
-  { id: "language", labelKey: "nav.language", icon: LanguageIcon }
+  { id: "settings", labelKey: "nav.settings", icon: SettingsIcon }
 ];
 
 export function SettingsApp(): JSX.Element {
@@ -120,8 +122,8 @@ export function SettingsApp(): JSX.Element {
     id: "tab-6",
     combo: "6",
     scope: "Settings",
-    label: t("nav.language"),
-    handler: () => void tryGoTab("language")
+    label: t("nav.settings"),
+    handler: () => void tryGoTab("settings")
   });
   useShortcut({
     id: "help",
@@ -152,44 +154,52 @@ export function SettingsApp(): JSX.Element {
 
   return (
     <DirtyContext.Provider value={dirtyCtx}>
-      <VisualJobProvider>
-        <div className="settings-shell">
-          <aside className="settings-sidebar" aria-label={t("common.settingsSidebar")}>
-            <div className="settings-brand">
-              <div className="eyebrow">Bailin · 0.0.1</div>
-              <div className="display display--section" style={{ marginTop: 4 }}>
-                百灵
+      <DistillationJobProvider>
+        <VisualJobProvider>
+          <div className="settings-shell">
+            <aside className="settings-sidebar" aria-label={t("common.settingsSidebar")}>
+              <div className="settings-brand">
+                <div className="eyebrow">Bailin · 0.0.1</div>
+                <div className="display display--section" style={{ marginTop: 4 }}>
+                  百灵
+                </div>
               </div>
-            </div>
 
-            <nav className="settings-nav" aria-label={t("common.settingsNav")}>
-              {TABS.map((tabDef) => (
-                <button
-                  key={tabDef.id}
-                  type="button"
-                  className={tab === tabDef.id ? "settings-nav__item is-active" : "settings-nav__item"}
-                  onClick={() => void tryGoTab(tabDef.id)}
-                  aria-current={tab === tabDef.id ? "page" : undefined}
-                >
-                  <tabDef.icon size={17} />
-                  <span>{t(tabDef.labelKey)}</span>
-                </button>
-              ))}
-            </nav>
-          </aside>
-          <main key={tab} className="settings-main fade-in-up">
-            <div className="settings-page settings-page--centered">
-              <VisualJobBanner onGoLibrary={() => void tryGoTab("library")} />
-              {tab === "library" ? <CharacterLibrary onNewClick={() => void tryGoTab("create")} /> : null}
-              {tab === "create" ? <CreateCharacter onDone={() => void tryGoTab("library")} /> : null}
-              {tab === "memory" ? <MemoryPanel /> : null}
-              {tab === "desktop" ? <DesktopBehaviorPanel /> : null}
-              {tab === "key" ? <ApiKeyPanel /> : null}
-              {tab === "language" ? <LanguagePanel /> : null}
-            </div>
-          </main>
-        </div>
-      </VisualJobProvider>
+              <nav className="settings-nav" aria-label={t("common.settingsNav")}>
+                {TABS.map((tabDef) => (
+                  <button
+                    key={tabDef.id}
+                    type="button"
+                    className={tab === tabDef.id ? "settings-nav__item is-active" : "settings-nav__item"}
+                    onClick={() => void tryGoTab(tabDef.id)}
+                    aria-current={tab === tabDef.id ? "page" : undefined}
+                  >
+                    <tabDef.icon size={17} />
+                    <span>{t(tabDef.labelKey)}</span>
+                  </button>
+                ))}
+              </nav>
+            </aside>
+            <main key={tab} className="settings-main fade-in-up">
+              <div className="settings-page settings-page--centered">
+                {tab !== "create" ? (
+                  <DistillationJobBanner
+                    onViewProgress={() => void tryGoTab("create")}
+                    onGoLibrary={() => void tryGoTab("library")}
+                  />
+                ) : null}
+                <VisualJobBanner onGoLibrary={() => void tryGoTab("library")} />
+                {tab === "library" ? <CharacterLibrary onNewClick={() => void tryGoTab("create")} /> : null}
+                {tab === "create" ? <CreateCharacter onDone={() => void tryGoTab("library")} /> : null}
+                {tab === "memory" ? <MemoryPanel /> : null}
+                {tab === "desktop" ? <DesktopBehaviorPanel /> : null}
+                {tab === "key" ? <ApiKeyPanel /> : null}
+                {tab === "settings" ? <GeneralSettingsPanel /> : null}
+              </div>
+            </main>
+          </div>
+        </VisualJobProvider>
+      </DistillationJobProvider>
     </DirtyContext.Provider>
   );
 }
@@ -319,7 +329,7 @@ function KeyIcon({ size = 18 }: IconProps): JSX.Element {
   );
 }
 
-function LanguageIcon({ size = 18 }: IconProps): JSX.Element {
+function SettingsIcon({ size = 18 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
@@ -332,9 +342,9 @@ function LanguageIcon({ size = 18 }: IconProps): JSX.Element {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M3 12h18" />
-      <path d="M12 3a15 15 0 0 1 4 9 15 15 0 0 1-4 9 15 15 0 0 1-4-9 15 15 0 0 1 4-9z" />
+      {/* 齿轮：外圈齿 + 中心孔，与侧栏其它描边图标一致 */}
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }

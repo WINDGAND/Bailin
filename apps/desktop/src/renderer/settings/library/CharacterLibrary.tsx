@@ -362,17 +362,7 @@ export function CharacterLibrary({
                   onClick={() => void pick(c.id)}
                 >
                   <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      flexShrink: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: 10,
-                      background: c.isActive ? "rgba(178, 24, 88, 0.08)" : "rgba(255, 255, 255, 0.62)",
-                      transition: "background var(--motion-fast) var(--ease-out)"
-                    }}
+                    className={`library-item__thumb${c.isActive ? " is-active-pet" : ""}`}
                   >
                     {thumbnails[c.id] ? (
                       <PetPreview

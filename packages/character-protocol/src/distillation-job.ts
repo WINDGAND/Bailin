@@ -34,8 +34,8 @@ export const DistillationJobConfigSchema = z.object({
    * - local-only：不联网调研，仅用户素材 + 训练知识
    */
   materialMode: z.enum(["web", "local-first", "local-only"]).default("web"),
-  /** 并发数 1..6。 */
-  concurrency: z.number().int().min(1).max(6).default(2),
+  /** 并发数 1..6；默认 6 路全开。 */
+  concurrency: z.number().int().min(1).max(6).default(6),
   /** 单 agent 超时（毫秒）。 */
   agentTimeoutMs: z.number().int().min(30000).max(900000).default(300000),
   /** 用户提供的补充素材（长文本访谈/设定等，本地优先模式可用更多）。 */

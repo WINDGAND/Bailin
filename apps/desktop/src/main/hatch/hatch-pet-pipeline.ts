@@ -43,7 +43,7 @@ import {
  *
  * 1. 准备 manifest（1 base + 9 rows）
  * 2. 生成 base canonical 立绘
- * 3. 串行/有限并发地生成 9 行 strip（running-left 可由 running-right 镜像）
+ * 3. 有限并发地生成 9 行 strip（running-left 可由 running-right 镜像）
  * 4. 抠 chroma → 裁帧 → 拼 atlas
  * 5. 校验 + contact sheet + preview
  * 6. 落盘到 %APPDATA%/Bailin/characters/<id>/pet/
@@ -90,6 +90,8 @@ export interface HatchPipelineInput {
     | "painterly";
   /** 关键事件流（QA 面板用）。 */
   onProgress?: (evt: HatchProgressEvent) => void;
+  /** 9 行 strip 并发数（1–6，默认 4）。base 立绘仍串行优先生成。 */
+  rowConcurrency?: number;
   signal?: AbortSignal;
 }
 
@@ -140,6 +142,37 @@ export type HatchProgressEvent =
 const CHROMA_GREEN = { r: 0, g: 255, b: 0 };
 const CHROMA_WHITE = { r: 255, g: 255, b: 255 };
 const DEFAULT_CHROMA = CHROMA_GREEN; // 旧字段，保留供 verify-hatch-pet 等回归用
+
+/** 9 行 strip 默认并发数；可通过 input.rowConcurrency 或 NUWA_PET_HATCH_ROW_CONCURRENCY 覆盖。 */
+const DEFAULT_HATCH_ROW_CONCURRENCY = 4;
+const MAX_HATCH_ROW_CONCURRENCY = 6;
+
+function resolveHatchRowConcurrency(input?: number): number {
+  const fromEnv = Number(process.env.NUWA_PET_HATCH_ROW_CONCURRENCY);
+  const raw = input ?? (Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : DEFAULT_HATCH_ROW_CONCURRENCY);
+  return Math.max(1, Math.min(MAX_HATCH_ROW_CONCURRENCY, Math.floor(raw)));
+}
+
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  const queue = [...items];
+  const inflight = new Set<Promise<void>>();
+  while (queue.length > 0 || inflight.size > 0) {
+    while (queue.length > 0 && inflight.size < concurrency) {
+      const item = queue.shift()!;
+      const task = worker(item).finally(() => {
+        inflight.delete(task);
+      });
+      inflight.add(task);
+    }
+    if (inflight.size > 0) {
+      await Promise.race(inflight);
+    }
+  }
+}
 
 export class HatchPetPipeline {
   constructor(private deps: HatchPipelineDeps) {}
@@ -227,41 +260,15 @@ export class HatchPetPipeline {
     }
     let totalCost = baseCost;
 
-    // ===== Step 2: 9 行 strip =====
+    // ===== Step 2: 9 行 strip（有限并发） =====
+    const rowConcurrency = resolveHatchRowConcurrency(input.rowConcurrency);
     const rowResults: Record<
       HatchPetRowState,
       { png?: Buffer; failed?: string; cost?: number }
     > = {} as Record<HatchPetRowState, { png?: Buffer; failed?: string }>;
 
-    for (const rowState of HATCH_PET_ROW_STATES) {
-      if (input.signal?.aborted) return abortResult(start);
-
-      // 如果允许 mirror 且当前是 running-left 且 running-right 已成功，直接派生
-      if (
-        rowState === "running-left" &&
-        allowMirror &&
-        rowResults["running-right"]?.png
-      ) {
-        try {
-          const mirroredPng = mirrorStripHorizontally({
-            stripPng: rowResults["running-right"].png!,
-            frameCount: frameCounts["running-right"],
-            cell
-          });
-          rowResults["running-left"] = { png: mirroredPng };
-          input.onProgress?.({
-            kind: "job_mirrored",
-            jobId: "row-running-left",
-            from: "row-running-right"
-          });
-          continue;
-        } catch (e) {
-          warnings.push(
-            `running-left 镜像失败：${e instanceof Error ? e.message : String(e)}，将回退到独立生成`
-          );
-        }
-      }
-
+    const generateOneRow = async (rowState: HatchPetRowState): Promise<void> => {
+      if (input.signal?.aborted) return;
       const t0 = Date.now();
       input.onProgress?.({
         kind: "job_start",
@@ -280,7 +287,6 @@ export class HatchPetPipeline {
           useTransparent
         );
         rowResults[rowState] = { png: result.png, cost: result.costUsd };
-        totalCost += result.costUsd ?? 0;
         input.onProgress?.({
           kind: "job_done",
           jobId: `row-${rowState}`,
@@ -299,6 +305,41 @@ export class HatchPetPipeline {
           reason: msg
         });
       }
+    };
+
+    const rowsToGenerate = HATCH_PET_ROW_STATES.filter(
+      (rowState) => !(rowState === "running-left" && allowMirror)
+    );
+    await runWithConcurrency(rowsToGenerate, rowConcurrency, generateOneRow);
+
+    if (input.signal?.aborted) return abortResult(start);
+
+    // running-left：优先镜像 running-right，失败再单独生图
+    if (allowMirror && rowResults["running-right"]?.png) {
+      try {
+        const mirroredPng = mirrorStripHorizontally({
+          stripPng: rowResults["running-right"].png!,
+          frameCount: frameCounts["running-right"],
+          cell
+        });
+        rowResults["running-left"] = { png: mirroredPng };
+        input.onProgress?.({
+          kind: "job_mirrored",
+          jobId: "row-running-left",
+          from: "row-running-right"
+        });
+      } catch (e) {
+        warnings.push(
+          `running-left 镜像失败：${e instanceof Error ? e.message : String(e)}，将回退到独立生成`
+        );
+        await generateOneRow("running-left");
+      }
+    } else if (!rowResults["running-left"]?.png && !rowResults["running-left"]?.failed) {
+      await generateOneRow("running-left");
+    }
+
+    for (const rowState of HATCH_PET_ROW_STATES) {
+      totalCost += rowResults[rowState]?.cost ?? 0;
     }
 
     // ===== Step 3: 抠 chroma + 裁帧 =====

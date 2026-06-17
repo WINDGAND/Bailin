@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
-  AtlasPet as AtlasPetDSL,
   AtlasStateBinding,
   SpriteEvent,
   SpriteProgram,
   SpriteState
 } from "@nuwa-pet/character-protocol";
+import { atlasWalkLeftBinding } from "@nuwa-pet/character-protocol";
 import { createStateMachine } from "@nuwa-pet/sprite-runtime";
 import "./atlas-pet.css";
 
@@ -21,6 +21,10 @@ interface AtlasPetProps {
   program: SpriteProgram;
   externalEvent?: { kind: SpriteEvent; nonce: number };
   forceState?: SpriteState;
+  /** 拖行时根据水平方向选 running-right / running-left 行。 */
+  runDirection?: "left" | "right";
+  /** 与 runDirection 同步；RAF 每帧读取，保证快速左右拖曳时方向跟手。 */
+  runDirectionRef?: React.RefObject<"left" | "right">;
   hatching?: boolean;
   width?: number;
   height?: number;
@@ -37,6 +41,8 @@ export function AtlasPet({
   program,
   externalEvent,
   forceState,
+  runDirection = "right",
+  runDirectionRef,
   hatching,
   width: widthOverride,
   height: heightOverride
@@ -48,7 +54,22 @@ export function AtlasPet({
   );
   const [frameIndex, setFrameIndex] = useState(0);
 
-  // 渲染尺寸：每帧大小默认就是 cell；如果上层指定 width/height，按宽度等比例缩放
+  const walkLeftBinding = useMemo(
+    () => (atlas ? atlasWalkLeftBinding() : null),
+    [atlas]
+  );
+
+  const currentRunDirection = (): "left" | "right" =>
+    runDirectionRef?.current ?? runDirection;
+
+  const resolveBinding = (spriteState: SpriteState): AtlasStateBinding => {
+    if (!atlas) return FALLBACK_BINDING;
+    if (spriteState === "drag" && currentRunDirection() === "left" && walkLeftBinding) {
+      return walkLeftBinding;
+    }
+    return atlas.states[spriteState] ?? atlas.states.idle ?? FALLBACK_BINDING;
+  };
+
   const display = useMemo(() => {
     if (!atlas) return { w: 96, h: 96, scale: 1 };
     const cellW = atlas.cell.width;
@@ -59,7 +80,6 @@ export function AtlasPet({
     return { w, h, scale };
   }, [atlas, widthOverride, heightOverride]);
 
-  // 状态机：复用 sprite-runtime；atlas 的 stateMachine 直接满足 StateMachineHost
   useEffect(() => {
     if (!atlas) return;
     const machine = createStateMachine({ stateMachine: atlas.stateMachine });
@@ -70,6 +90,7 @@ export function AtlasPet({
     let frameLast = performance.now();
     let localFrame = 0;
     let prevState: SpriteState = machine.state as SpriteState;
+    let prevDragDir: "left" | "right" | null = null;
 
     const tick = (now: number) => {
       const delta = now - last;
@@ -77,6 +98,17 @@ export function AtlasPet({
       machine.step(delta);
 
       const next = forceState ?? (machine.state as SpriteState);
+      if (next === "drag") {
+        const dir = currentRunDirection();
+        if (dir !== prevDragDir) {
+          prevDragDir = dir;
+          localFrame = 0;
+          frameLast = now;
+          setFrameIndex(0);
+        }
+      } else {
+        prevDragDir = null;
+      }
       if (next !== prevState) {
         prevState = next;
         localFrame = 0;
@@ -87,8 +119,7 @@ export function AtlasPet({
         setState(next);
       }
 
-      const binding =
-        atlas.states[next] ?? atlas.states.idle ?? FALLBACK_BINDING;
+      const binding = resolveBinding(next);
       const frameDuration = 1000 / Math.max(1, binding.fps);
       if (now - frameLast >= frameDuration) {
         frameLast = now;
@@ -116,11 +147,9 @@ export function AtlasPet({
       cancelAnimationFrame(raf);
       machineRef.current = null;
     };
-    // 故意只在 atlas / forceState 改变时重建；state 是它的输出，不放进依赖
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atlas, forceState]);
 
-  // 外部事件接入
   useEffect(() => {
     if (!externalEvent) return;
     machineRef.current?.send(externalEvent.kind);
@@ -128,7 +157,7 @@ export function AtlasPet({
 
   if (!atlas) return null;
 
-  const binding = atlas.states[state] ?? atlas.states.idle ?? FALLBACK_BINDING;
+  const binding = resolveBinding(state);
   const cellW = atlas.cell.width;
   const cellH = atlas.cell.height;
   const sheetW = cellW * atlas.grid.columns;
@@ -143,6 +172,7 @@ export function AtlasPet({
     <div
       className={`atlas-pet${hatching ? " atlas-pet--hatch" : ""}`}
       data-state={state}
+      data-run-direction={state === "drag" ? currentRunDirection() : undefined}
       style={{
         width: display.w,
         height: display.h

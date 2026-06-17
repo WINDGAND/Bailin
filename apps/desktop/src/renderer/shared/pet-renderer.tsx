@@ -6,6 +6,8 @@ interface PetRendererProps {
   program: SpriteProgram;
   forceState?: SpriteState;
   externalEvent?: { kind: SpriteEvent; nonce: number };
+  runDirection?: "left" | "right";
+  runDirectionRef?: React.RefObject<"left" | "right">;
   hatching?: boolean;
   onClick?: () => void;
   width?: number;
@@ -21,6 +23,8 @@ export function PetRenderer({
   program,
   forceState,
   externalEvent,
+  runDirection,
+  runDirectionRef,
   hatching,
   onClick,
   width,
@@ -32,6 +36,8 @@ export function PetRenderer({
         program={program}
         forceState={forceState}
         externalEvent={externalEvent}
+        runDirection={runDirection}
+        runDirectionRef={runDirectionRef}
         hatching={hatching}
         width={width}
         height={height}

@@ -13,6 +13,7 @@ import type {
  */
 
 export type AppLocale = "zh" | "en";
+export type ThemePreference = "light" | "dark" | "system";
 
 export interface BailinApi {
   // ===== 系统 / 首启 =====
@@ -22,6 +23,8 @@ export interface BailinApi {
     quit(): Promise<void>;
     getLocale(): Promise<AppLocale>;
     setLocale(locale: AppLocale): Promise<void>;
+    getTheme(): Promise<ThemePreference>;
+    setTheme(theme: ThemePreference): Promise<void>;
   };
 
   // ===== LLM 提供商 =====
@@ -69,7 +72,7 @@ export interface BailinApi {
     /** Checkpoint 用户「同意」继续。 */
     approveDistillation(input: {
       jobId: string;
-      phase: "research" | "synthesis";
+      phase: "research";
       /** research checkpoint：补跑指定 Agent（1–6），空则直接进入下一阶段。 */
       supplementalAgentIds?: ResearchAgentId[];
     }): Promise<{ ok: boolean }>;
@@ -179,18 +182,21 @@ export interface BailinApi {
   // ===== 事件订阅（主→渲染）=====
   on: {
     chatStream(handler: (chunk: ChatStreamChunk) => void): () => void;
+    chatVisibility(handler: (evt: ChatVisibilityEvent) => void): () => void;
     activeCharacterChanged(handler: (bundle: CharacterBundle | null) => void): () => void;
     petSummon(handler: () => void): () => void;
     proactiveWhisper(handler: (evt: ProactiveWhisperEvent) => void): () => void;
     ambientSignal(handler: (evt: AmbientSignal) => void): () => void;
     /** 深度蒸馏的实时进度（包含 6 个 Agent 各自的开始 / 结束）。 */
     distillationProgress(handler: (evt: DistillationProgressEvent) => void): () => void;
+    localeChanged(handler: (locale: AppLocale) => void): () => void;
+    themeChanged(handler: (theme: ThemePreference) => void): () => void;
     profileUpdated(handler: (evt: ProfileUpdatedEvent) => void): () => void;
     navigateSettings(handler: (evt: NavigateSettingsEvent) => void): () => void;
   };
 }
 
-export type SettingsTab = "library" | "create" | "memory" | "desktop" | "key" | "language";
+export type SettingsTab = "library" | "create" | "memory" | "desktop" | "key" | "settings";
 
 export interface NavigateSettingsEvent {
   tab: SettingsTab;
@@ -436,11 +442,22 @@ export interface ChatSessionSummary {
 export interface ChatStreamChunk {
   requestId: string;
   sessionId: string;
+  /** 便于桌宠窗口过滤非激活角色的流式事件。 */
+  characterId?: string;
   done: boolean;
+  /** send 后、首个 delta 前的思考阶段。 */
+  phase?: "thinking";
+  /** 用户主动取消。 */
+  cancelled?: boolean;
   delta?: string;
   error?: string;
   finishReason?: "stop" | "length" | "error" | "safety";
   assistantTurnId?: string;
+}
+
+export interface ChatVisibilityEvent {
+  visible: boolean;
+  characterId?: string;
 }
 
 export interface ChatTurn {
@@ -570,6 +587,8 @@ export const IPC = {
   AppQuit: "nuwa.app.quit",
   AppGetLocale: "nuwa.app.getLocale",
   AppSetLocale: "nuwa.app.setLocale",
+  AppGetTheme: "nuwa.app.getTheme",
+  AppSetTheme: "nuwa.app.setTheme",
 
   LlmSetProvider: "nuwa.llm.setProvider",
   LlmGetProvider: "nuwa.llm.getProvider",
@@ -647,12 +666,14 @@ export const IPC = {
   ProactiveTriggerNow: "nuwa.proactive.triggerNow",
 
   EventChatStream: "nuwa.event.chatStream",
+  EventChatVisibility: "nuwa.event.chatVisibility",
   EventActiveCharacterChanged: "nuwa.event.activeCharacterChanged",
   EventPetSummon: "nuwa.event.petSummon",
   EventProactiveWhisper: "nuwa.event.proactiveWhisper",
   EventAmbientSignal: "nuwa.event.ambientSignal",
   EventDistillationProgress: "nuwa.event.distillationProgress",
   EventLocaleChanged: "nuwa.event.localeChanged",
+  EventThemeChanged: "nuwa.event.themeChanged",
   EventProfileUpdated: "nuwa.event.profileUpdated",
   EventNavigateSettings: "nuwa.event.navigateSettings"
 } as const;

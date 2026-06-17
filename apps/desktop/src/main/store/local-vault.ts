@@ -8,7 +8,7 @@ import type {
   DistillationJobStatus,
   ResearchDoc
 } from "@nuwa-pet/character-protocol";
-import { RESEARCH_AGENT_LABELS } from "@nuwa-pet/character-protocol";
+import { RESEARCH_AGENT_LABELS, mergeAtlasRuntimeDefaults } from "@nuwa-pet/character-protocol";
 import type { ProfileChangeRecord, UserProfile } from "../../shared/ipc-contract.js";
 import { emptyProfile, normalizeProfile } from "../../shared/profile.js";
 
@@ -296,7 +296,7 @@ export class LocalVault {
       | undefined;
     if (!row) return null;
     try {
-      return JSON.parse(row.bundle_json) as CharacterBundle;
+      return normalizeAtlasBundle(JSON.parse(row.bundle_json) as CharacterBundle);
     } catch {
       return null;
     }
@@ -871,4 +871,15 @@ export class LocalVault {
       };
     });
   }
+}
+
+function normalizeAtlasBundle(bundle: CharacterBundle): CharacterBundle {
+  if (bundle.sprite.mode !== "atlas" || !bundle.sprite.atlas) return bundle;
+  return {
+    ...bundle,
+    sprite: {
+      ...bundle.sprite,
+      atlas: mergeAtlasRuntimeDefaults(bundle.sprite.atlas)
+    }
+  };
 }

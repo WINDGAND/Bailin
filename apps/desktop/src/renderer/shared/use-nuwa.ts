@@ -15,10 +15,11 @@ import type {
   ProactiveStatus,
   ProactiveWhisperEvent
 } from "../../shared/ipc-contract.js";
+import type { ChatStreamChunk, ChatVisibilityEvent } from "../../shared/ipc-contract.js";
 
 interface NuwaWindow {
   nuwa: {
-    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void> };
+    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void> };
     llm: {
       setProvider(input: unknown): Promise<{ ok: boolean; error?: string }>;
       getProvider(): Promise<unknown>;
@@ -47,7 +48,7 @@ interface NuwaWindow {
       createDeep(input: Partial<DistillationJobConfig> & { characterName: string; sourceType: DistillationJobConfig["sourceType"]; track: DistillationJobConfig["track"] }): Promise<{ ok: boolean; jobId?: string; error?: string }>;
       approveDistillation(input: {
         jobId: string;
-        phase: "research" | "synthesis";
+        phase: "research";
         supplementalAgentIds?: ResearchAgentId[];
       }): Promise<{ ok: boolean }>;
       cancelDistillation(jobId: string): Promise<{ ok: boolean }>;
@@ -126,13 +127,15 @@ interface NuwaWindow {
       triggerNow(reason?: AmbientSignal["kind"]): Promise<{ ok: boolean; reason?: string }>;
     };
     on: {
-      chatStream(h: (chunk: { requestId: string; sessionId: string; done: boolean; delta?: string; error?: string; finishReason?: string; assistantTurnId?: string }) => void): () => void;
+      chatStream(h: (chunk: ChatStreamChunk) => void): () => void;
+      chatVisibility(h: (evt: ChatVisibilityEvent) => void): () => void;
       activeCharacterChanged(h: (bundle: CharacterBundle | null) => void): () => void;
       petSummon(h: () => void): () => void;
       proactiveWhisper(h: (evt: ProactiveWhisperEvent) => void): () => void;
       ambientSignal(h: (evt: AmbientSignal) => void): () => void;
       distillationProgress(h: (evt: DistillationProgressEvent) => void): () => void;
       localeChanged(h: (locale: "zh" | "en") => void): () => void;
+      themeChanged(h: (theme: import("../../shared/ipc-contract.js").ThemePreference) => void): () => void;
       profileUpdated(h: (evt: import("../../shared/ipc-contract.js").ProfileUpdatedEvent) => void): () => void;
       navigateSettings(h: (evt: import("../../shared/ipc-contract.js").NavigateSettingsEvent) => void): () => void;
     };
@@ -178,6 +181,14 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       setLocale: async (locale: "zh" | "en") => {
         localStorage.setItem("bailin.locale", locale);
         window.dispatchEvent(new CustomEvent("bailin-locale", { detail: locale }));
+      },
+      getTheme: async () => {
+        const v = localStorage.getItem("bailin.theme");
+        return v === "light" || v === "dark" || v === "system" ? v : "system";
+      },
+      setTheme: async (theme: "light" | "dark" | "system") => {
+        localStorage.setItem("bailin.theme", theme);
+        window.dispatchEvent(new CustomEvent("bailin-theme", { detail: theme }));
       }
     },
     llm: {
@@ -310,6 +321,7 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
     },
     on: {
       chatStream: noopOff,
+      chatVisibility: noopOff,
       activeCharacterChanged: noopOff,
       petSummon: noopOff,
       proactiveWhisper: noopOff,
@@ -330,6 +342,26 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
         return () => {
           window.removeEventListener("storage", onStorage);
           window.removeEventListener("bailin-locale", onCustom);
+        };
+      },
+      themeChanged: (h) => {
+        const onStorage = (e: StorageEvent) => {
+          if (
+            e.key === "bailin.theme" &&
+            (e.newValue === "light" || e.newValue === "dark" || e.newValue === "system")
+          ) {
+            h(e.newValue);
+          }
+        };
+        const onCustom = (e: Event) => {
+          const next = (e as CustomEvent<"light" | "dark" | "system">).detail;
+          if (next === "light" || next === "dark" || next === "system") h(next);
+        };
+        window.addEventListener("storage", onStorage);
+        window.addEventListener("bailin-theme", onCustom);
+        return () => {
+          window.removeEventListener("storage", onStorage);
+          window.removeEventListener("bailin-theme", onCustom);
         };
       },
       profileUpdated: noopOff,

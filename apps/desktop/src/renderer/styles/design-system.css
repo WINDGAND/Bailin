@@ -1220,6 +1220,22 @@ body {
   border-left-color: var(--magenta);
 }
 
+.library-item__thumb {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.library-item__thumb.is-active-pet {
+  background: rgba(178, 24, 88, 0.08);
+}
+
 .segmented {
   display: inline-grid;
   grid-auto-flow: column;
@@ -1318,6 +1334,17 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.forge-mode--triple {
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 720px;
+}
+
+@media (max-width: 720px) {
+  .forge-mode--triple {
+    grid-template-columns: 1fr;
+  }
 }
 
 .forge-mode__card {
@@ -2024,13 +2051,11 @@ body {
   color: var(--ink-soft);
   transition:
     background var(--motion-fast) var(--ease-out),
-    color var(--motion-fast) var(--ease-out),
-    transform var(--motion-fast) var(--ease-out);
+    color var(--motion-fast) var(--ease-out);
 }
 
 .settings-nav__item:hover {
   background: rgba(255, 255, 255, 0.58);
-  transform: translateX(1px);
 }
 
 .settings-nav__item.is-active {
@@ -2350,4 +2375,430 @@ body {
   .apple-single-column {
     max-width: 100%;
   }
+}
+
+/* =============================================================
+ * Dark theme · 夜读稿纸 (Warm Manuscript Night)
+ *
+ * 浅色是「暖纸 + 墨青 + 洋红」；暗色不是简单反色，而是同一套
+ * 编辑室叙事：暖棕稿纸、奶油字、低饱和洋红/琥珀光晕。
+ * 避免冷青黑底 + 惨白字的高对比「阴间感」。
+ * ============================================================= */
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  accent-color: var(--magenta);
+
+  /* 暖棕稿纸 —— 对齐浅色 paper 色温，不是冷绿黑 */
+  --paper: #26221e;
+  --paper-deep: #201c19;
+  --paper-sink: #1a1714;
+  --paper-warm: #2e2924;
+
+  /* 奶油墨 —— 略降对比，长时间阅读不刺眼 */
+  --ink: #ece6df;
+  --ink-soft: #b9aea2;
+  --ink-faint: #887f75;
+  --ink-ghost: #5f5750;
+
+  /* 品牌色：暗底上略提亮、降饱和 */
+  --magenta: #d46794;
+  --magenta-soft: #e895b5;
+  --magenta-deep: #a83262;
+  --amber: #d4a052;
+  --emerald: #5a9f7a;
+
+  /* 暖色分隔与阴影 */
+  --grid: rgba(236, 230, 223, 0.06);
+  --grid-strong: rgba(236, 230, 223, 0.11);
+  --grid-stronger: rgba(236, 230, 223, 0.2);
+  --shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.38);
+  --shadow-soft: none;
+  --shadow-pressed: 0 2px 4px -2px rgba(0, 0, 0, 0.45);
+  --shadow-lifted: 0 18px 40px -16px rgba(0, 0, 0, 0.42);
+  --shadow-card:
+    0 1px 0 rgba(255, 248, 240, 0.04),
+    0 14px 28px -22px rgba(0, 0, 0, 0.38);
+
+  --magenta-tint: rgba(212, 103, 148, 0.12);
+  --amber-tint: rgba(212, 160, 82, 0.12);
+  --emerald-tint: rgba(90, 159, 122, 0.14);
+
+  --surface-glass: rgba(38, 34, 30, 0.82);
+  --surface-glass-strong: rgba(42, 38, 34, 0.94);
+  --surface-subtle: rgba(32, 28, 25, 0.72);
+  --hairline: rgba(236, 230, 223, 0.09);
+  --hairline-strong: rgba(236, 230, 223, 0.14);
+  --focus-ring-soft: 0 0 0 4px rgba(212, 103, 148, 0.14);
+  --shadow-panel:
+    0 1px 0 rgba(255, 248, 240, 0.05) inset,
+    0 18px 60px -48px rgba(0, 0, 0, 0.42);
+
+  /* 角色预览台：比页面底略抬升，深色角色也能看清轮廓 */
+  --character-pedestal: #4a433b;
+  --character-pedestal-deep: #3d3832;
+  --character-pedestal-active: #4f4540;
+}
+
+/* —— 设置壳：暖光晕，像台灯照在稿纸上 —— */
+[data-theme="dark"] .settings-shell {
+  background:
+    radial-gradient(circle at 58% 14%, rgba(178, 24, 88, 0.11), transparent 34%),
+    radial-gradient(circle at 84% 78%, rgba(217, 154, 58, 0.09), transparent 32%),
+    radial-gradient(circle at 8% 92%, rgba(90, 159, 122, 0.05), transparent 28%),
+    linear-gradient(180deg, #1e1b18 0%, var(--paper) 50%, var(--paper-deep) 100%);
+}
+
+[data-theme="dark"] .settings-sidebar {
+  background: rgba(34, 30, 27, 0.88);
+}
+
+[data-theme="dark"] .settings-nav__item:hover {
+  background: rgba(255, 248, 240, 0.06);
+}
+
+[data-theme="dark"] .settings-nav__item.is-active {
+  background: rgba(255, 248, 240, 0.09);
+  box-shadow:
+    0 1px 0 rgba(255, 248, 240, 0.07) inset,
+    0 10px 30px -26px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .settings-nav__item.is-active::before {
+  box-shadow: 0 0 12px rgba(212, 103, 148, 0.38);
+}
+
+/* —— 卡片 / 表单 / 浮层 —— */
+[data-theme="dark"] .card,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .bl-card {
+  background: var(--paper-warm);
+  border-color: var(--hairline);
+}
+
+[data-theme="dark"] .modal-backdrop {
+  background: rgba(26, 22, 19, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+[data-theme="dark"] .input,
+[data-theme="dark"] .textarea,
+[data-theme="dark"] .select,
+[data-theme="dark"] select.input,
+[data-theme="dark"] select.select {
+  background: rgba(255, 248, 240, 0.04);
+  border-color: var(--hairline);
+  color: var(--ink);
+  color-scheme: dark;
+}
+
+[data-theme="dark"] select option {
+  background-color: var(--paper-warm);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .input:hover,
+[data-theme="dark"] .textarea:hover,
+[data-theme="dark"] .select:hover,
+[data-theme="dark"] select.input:hover {
+  border-color: var(--hairline-strong);
+  background: rgba(255, 248, 240, 0.06);
+}
+
+/* 角色列表：去掉 Apple 层的白块高光，改为暖色微抬升 + 洋红选中条 */
+[data-theme="dark"] .plain-list__item:hover {
+  background: rgba(255, 248, 240, 0.045);
+}
+
+[data-theme="dark"] .plain-list__item.is-selected {
+  background: rgba(212, 103, 148, 0.11);
+  border-left-color: transparent;
+  box-shadow: inset 3px 0 0 rgba(212, 103, 148, 0.62);
+}
+
+[data-theme="dark"] .library-item__thumb {
+  background: linear-gradient(180deg, var(--character-pedestal), var(--character-pedestal-deep));
+  border: 1px solid rgba(236, 230, 223, 0.16);
+  box-shadow:
+    0 1px 0 rgba(255, 248, 240, 0.07) inset,
+    0 6px 14px -10px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .library-item__thumb.is-active-pet {
+  background: linear-gradient(180deg, var(--character-pedestal-active), var(--character-pedestal-deep));
+  border-color: rgba(212, 103, 148, 0.28);
+}
+
+[data-theme="dark"] .apple-stage {
+  background:
+    radial-gradient(circle at 50% 36%, rgba(212, 160, 82, 0.12), transparent 44%),
+    radial-gradient(circle at 50% 42%, rgba(212, 103, 148, 0.1), transparent 40%),
+    linear-gradient(180deg, var(--character-pedestal), var(--character-pedestal-deep));
+  border-color: rgba(236, 230, 223, 0.16);
+  box-shadow:
+    0 1px 0 rgba(255, 248, 240, 0.08) inset,
+    0 26px 60px -46px rgba(0, 0, 0, 0.42);
+}
+
+[data-theme="dark"] .apple-stage::after {
+  opacity: 0.12;
+}
+
+[data-theme="dark"] .pet-preview__sheet {
+  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.32));
+}
+
+[data-theme="dark"] .segmented {
+  background: rgba(255, 248, 240, 0.04);
+  border-color: var(--hairline);
+}
+
+[data-theme="dark"] .segmented__item.is-active {
+  background: rgba(255, 248, 240, 0.08);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+[data-theme="dark"] .toast {
+  background: rgba(42, 38, 34, 0.96);
+  border-color: var(--hairline-strong);
+}
+
+[data-theme="dark"] .btn--ghost {
+  background: rgba(255, 248, 240, 0.05);
+  border-color: var(--hairline);
+}
+
+[data-theme="dark"] .btn--ghost:hover {
+  background: rgba(255, 248, 240, 0.1);
+  border-color: var(--hairline-strong);
+}
+
+[data-theme="dark"] .btn--magenta {
+  box-shadow: 0 12px 28px -22px rgba(178, 24, 88, 0.55);
+}
+
+/* Apple 层：forge / status / tag 的白底在暗色下改为暖半透明 */
+[data-theme="dark"] .forge-mode__card {
+  background: rgba(255, 248, 240, 0.04);
+}
+
+[data-theme="dark"] .forge-mode__card:hover:not(:disabled) {
+  background: rgba(255, 248, 240, 0.07);
+  border-color: var(--hairline-strong);
+}
+
+[data-theme="dark"] .forge-mode__card.is-active {
+  background: rgba(255, 248, 240, 0.1);
+  border-color: rgba(212, 103, 148, 0.32);
+  box-shadow:
+    0 1px 0 rgba(255, 248, 240, 0.07) inset,
+    0 14px 34px -30px rgba(178, 24, 88, 0.38);
+}
+
+[data-theme="dark"] .bl-status-strip,
+[data-theme="dark"] .bl-status-strip.is-ok,
+[data-theme="dark"] .bl-status-strip.is-warn,
+[data-theme="dark"] .bl-status-strip.is-error {
+  background: rgba(255, 248, 240, 0.05);
+  box-shadow: 0 1px 0 rgba(255, 248, 240, 0.04) inset;
+}
+
+[data-theme="dark"] .bl-tag--utility,
+[data-theme="dark"] .bl-tag--companion,
+[data-theme="dark"] .bl-tag--skeleton {
+  background: rgba(255, 248, 240, 0.06);
+  border-color: var(--hairline);
+}
+
+[data-theme="dark"] .bl-tag--companion {
+  color: #d4a052;
+}
+
+[data-theme="dark"] .bl-tag--active {
+  color: var(--magenta-soft);
+  background: var(--magenta-tint);
+  border-color: rgba(212, 103, 148, 0.28);
+}
+
+[data-theme="dark"] .apple-dropzone {
+  border-color: var(--hairline);
+  background: rgba(255, 248, 240, 0.03);
+}
+
+/* —— 聊天窗 —— */
+[data-theme="dark"] .chat-panel {
+  border-color: rgba(236, 230, 223, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 240, 0.05),
+    0 22px 56px -28px rgba(0, 0, 0, 0.48),
+    0 10px 28px -16px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .chat-scroll-down {
+  background: color-mix(in srgb, var(--paper-warm) 92%, transparent);
+  box-shadow:
+    0 6px 18px -8px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 248, 240, 0.06);
+}
+
+[data-theme="dark"] .chat-scroll-down:hover {
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.4);
+}
+
+/* —— 桌宠空状态 CTA —— */
+/* —— 桌宠空状态 CTA —— */
+.pet-empty-cta {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  background: rgba(23, 38, 38, 0.92);
+  color: var(--paper);
+  border-radius: 14px;
+  border: 1px solid rgba(245, 239, 226, 0.18);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 18px 36px -16px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .pet-empty-cta {
+  background: rgba(46, 40, 36, 0.94);
+  color: var(--ink);
+  border-color: rgba(236, 230, 223, 0.12);
+  box-shadow: 0 18px 36px -16px rgba(0, 0, 0, 0.42);
+}
+
+/* —— 自绘下拉（替代原生 select，避免 Windows 系统蓝高亮） —— */
+.bl-select {
+  position: relative;
+  width: 100%;
+}
+
+.bl-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bl-select__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bl-select__chevron {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.bl-select.is-open .bl-select__chevron {
+  transform: rotate(180deg);
+}
+
+.bl-select__menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-glass-strong);
+  backdrop-filter: var(--blur-bg);
+  box-shadow: var(--shadow-panel);
+  max-height: 240px;
+  overflow-y: auto;
+  animation: backdrop-fade var(--motion-fast) var(--ease-out) both;
+}
+
+.bl-select__option {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.bl-select__option:hover {
+  background: rgba(255, 248, 240, 0.08);
+  color: var(--ink);
+}
+
+.bl-select__trigger:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: var(--focus-ring-soft, 0 0 0 3px rgba(178, 24, 88, 0.18));
+}
+
+/* 菜单展开时：高亮跟随 hover / 键盘焦点，当前值仅作弱标记 */
+.bl-select.is-open .bl-select__option.is-selected:not(:hover):not(:focus-visible) {
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+}
+
+.bl-select.is-open .bl-select__option:hover,
+.bl-select.is-open .bl-select__option:focus-visible {
+  background: var(--magenta-tint);
+  color: var(--ink);
+  box-shadow: inset 2px 0 0 var(--magenta);
+}
+
+.bl-select__option.is-selected {
+  color: var(--ink);
+}
+
+.bl-select--inline .bl-select__trigger {
+  min-height: 34px;
+  padding: 6px 9px;
+}
+
+.pet-preview__sheet {
+  filter: drop-shadow(0 6px 12px rgba(20, 24, 40, 0.16));
+}
+
+[data-theme="dark"] .bl-select__menu {
+  background: rgba(42, 38, 34, 0.98);
+  border-color: var(--hairline-strong);
+}
+
+[data-theme="dark"] .bl-select__option:hover {
+  background: rgba(255, 248, 240, 0.04);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .bl-select.is-open .bl-select__option.is-selected:not(:hover):not(:focus-visible) {
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .bl-select.is-open .bl-select__option:hover,
+[data-theme="dark"] .bl-select.is-open .bl-select__option:focus-visible {
+  background: rgba(212, 103, 148, 0.1);
+  color: var(--ink);
+  box-shadow: inset 2px 0 0 rgba(212, 103, 148, 0.48);
 }

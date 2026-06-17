@@ -38,6 +38,8 @@ const {
   parseSprite,
   defaultAtlasStateBindings,
   defaultAtlasStateMachine,
+  atlasWalkLeftBinding,
+  mergeAtlasRuntimeDefaults,
   DEFAULT_ATLAS_CELL,
   DEFAULT_ATLAS_GRID,
   DEFAULT_ROW_FRAME_COUNTS,
@@ -64,7 +66,7 @@ const fail = (msg) => {
 const ok = (msg) => console.log(`  ok   ${msg}`);
 
 // ===== 1. SpriteProgram schema =====
-console.log("\n[1/4] SpriteProgram atlas schema");
+console.log("\n[1/5] SpriteProgram atlas schema");
 
 const dummyAtlasPng = makeCheckerboard(
   DEFAULT_ATLAS_CELL.width * DEFAULT_ATLAS_GRID.columns,
@@ -95,6 +97,31 @@ const parsed = parseSprite(atlasProgram);
 parsed.ok ? ok("atlas SpriteProgram 校验通过") : fail(
   `atlas 校验失败: ${(parsed.errors ?? []).map((e) => `${e.path}=${e.message}`).join(" | ")}`
 );
+
+const bindings = defaultAtlasStateBindings();
+const hatchRowsUsed = new Set(
+  Object.values(bindings).map((b) => b.hatchRow).filter(Boolean)
+);
+hatchRowsUsed.add(atlasWalkLeftBinding().hatchRow);
+for (const row of HATCH_PET_ROW_STATES) {
+  hatchRowsUsed.has(row)
+    ? ok(`图集行 ${row} 已绑定到 SpriteState`)
+    : fail(`图集行 ${row} 未绑定到任何 SpriteState`);
+}
+
+const sm = defaultAtlasStateMachine();
+sm.states.sad && sm.states.work
+  ? ok("状态机包含 sad / work 状态")
+  : fail("状态机缺少 sad 或 work");
+
+const merged = mergeAtlasRuntimeDefaults({
+  ...atlasProgram.atlas,
+  states: { idle: bindings.idle },
+  stateMachine: { initial: "idle", states: { idle: sm.states.idle } }
+});
+merged.states.work && merged.states.sad
+  ? ok("mergeAtlasRuntimeDefaults 补全旧 bundle 绑定")
+  : fail("mergeAtlasRuntimeDefaults 未补全 work/sad");
 
 // 老 dsl 仍然可解析
 const dslSkeleton = {

@@ -3,6 +3,7 @@ import type { SpriteEvent } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import { useT, useI18n } from "../shared/i18n/index.js";
+import { usePetSpriteEvents } from "./use-pet-sprite-events.js";
 
 interface Starter {
   id: string;
@@ -24,6 +25,8 @@ interface MyCharacter {
 const HATCH_SS_KEY_PREFIX = "nuwa.hatched.";
 /** 与主进程 PET_WINDOW_SIZE.width 一致：菜单打开时左侧固定此宽度放桌宠。 */
 const PET_SLOT_WIDTH = 240;
+/** 判定为「拖动」的最小位移（px）；略大于 0，避免手抖误触。 */
+const DRAG_START_PX = 3;
 
 export function PetApp(): JSX.Element {
   const t = useT();
@@ -84,20 +87,24 @@ export function PetApp(): JSX.Element {
   }, [nuwa]);
 
   // ===== 拖动 + 单击唤起 =====
-  // 拖动判定：鼠标移动 ≥ 4px 即视为拖动（无延迟，完全跟手）。
   // 位移计算全在主进程（getCursorScreenPoint），彻底规避 HiDPI 下
   // 渲染进程 CSS 像素与 Electron 物理坐标系不一致的问题。
   const dragStateRef = useRef<{
     dragging: boolean;
     startScreenX: number;
     startScreenY: number;
+    lastScreenX: number;
   } | null>(null);
   const [externalEvent, setExternalEvent] = useState<{ kind: SpriteEvent; nonce: number } | null>(
     null
   );
+  const dragRunDirectionRef = useRef<"left" | "right">("right");
+  const [dragRunDirection, setDragRunDirection] = useState<"left" | "right">("right");
   const sendSpriteEvent = useCallback((kind: SpriteEvent) => {
     setExternalEvent((prev) => ({ kind, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
+
+  usePetSpriteEvents(bundle?.card.id, sendSpriteEvent);
 
   const onPetPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -107,22 +114,43 @@ export function PetApp(): JSX.Element {
       dragStateRef.current = {
         dragging: false,
         startScreenX: e.screenX,
-        startScreenY: e.screenY
+        startScreenY: e.screenY,
+        lastScreenX: e.screenX
       };
       void nuwa.pet.setMouseIgnore(false);
     },
     [nuwa]
   );
 
+  const applyDragRunDelta = useCallback((deltaX: number) => {
+    if (deltaX === 0) return;
+    const dir: "left" | "right" = deltaX > 0 ? "right" : "left";
+    if (dragRunDirectionRef.current === dir) return;
+    dragRunDirectionRef.current = dir;
+    setDragRunDirection(dir);
+  }, []);
+
   const onPetPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const s = dragStateRef.current;
       if (!s) return;
+
+      const deltaX =
+        e.movementX !== 0 ? e.movementX : e.screenX - s.lastScreenX;
+      s.lastScreenX = e.screenX;
+
       if (!s.dragging) {
-        // 超过 4px 才判定为拖动，避免误把点击识别为拖动。
-        if (Math.abs(e.screenX - s.startScreenX) < 8 && Math.abs(e.screenY - s.startScreenY) < 8) return;
+        if (
+          Math.abs(e.screenX - s.startScreenX) < DRAG_START_PX &&
+          Math.abs(e.screenY - s.startScreenY) < DRAG_START_PX
+        ) {
+          return;
+        }
         s.dragging = true;
         draggingRef.current = true;
+        applyDragRunDelta(
+          deltaX !== 0 ? deltaX : e.screenX - s.startScreenX
+        );
         void (async () => {
           await nuwa.pet.dragStart();
           await nuwa.pet.dragMove();
@@ -130,9 +158,11 @@ export function PetApp(): JSX.Element {
         sendSpriteEvent("dragStart");
         return;
       }
+
+      applyDragRunDelta(deltaX);
       void nuwa.pet.dragMove();
     },
-    [nuwa, sendSpriteEvent]
+    [nuwa, sendSpriteEvent, applyDragRunDelta]
   );
 
   const onPetPointerUp = useCallback(
@@ -149,7 +179,11 @@ export function PetApp(): JSX.Element {
         void nuwa.pet.dragEnd();
         sendSpriteEvent("dragEnd");
       } else {
-        void nuwa.pet.openChat();
+        sendSpriteEvent("click");
+        window.setTimeout(() => {
+          void nuwa.pet.openChat();
+          sendSpriteEvent("chatOpen");
+        }, 420);
       }
     },
     [nuwa, sendSpriteEvent]
@@ -245,6 +279,8 @@ export function PetApp(): JSX.Element {
             key={`sprite-${hatchKey}-${bundle.card.id}`}
             program={bundle.sprite}
             externalEvent={externalEvent ?? undefined}
+            runDirection={dragRunDirection}
+            runDirectionRef={dragRunDirectionRef}
             hatching={hatching}
           />
         </div>
@@ -309,23 +345,7 @@ function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element
       <button
         type="button"
         onClick={onPickStarter}
-        className="fade-in-up"
-        style={{
-          pointerEvents: "auto",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 8,
-          padding: "12px 16px 14px",
-          background: "rgba(31, 58, 58, 0.92)",
-          color: "var(--paper)",
-          borderRadius: 14,
-          border: "1px solid rgba(245, 239, 226, 0.18)",
-          fontFamily: "var(--font-body)",
-          fontSize: 13,
-          cursor: "pointer",
-          boxShadow: "0 18px 36px -16px rgba(0,0,0,0.5)"
-        }}
+        className="fade-in-up pet-empty-cta"
         title={t("pet.emptyTitle")}
       >
         {/* 像素剪影：一只 chibi 形状 */}

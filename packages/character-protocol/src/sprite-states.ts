@@ -27,7 +27,9 @@ export const SPRITE_STATES = [
   "drag",
   "talk",
   "think",
+  "work",
   "sleep",
+  "sad",
   "fidget"
 ] as const;
 
@@ -39,7 +41,9 @@ export const SPRITE_EVENTS = [
   "chatOpen",
   "chatClose",
   "responseStart",
+  "responseStreaming",
   "responseEnd",
+  "chatError",
   "idleLong",
   "screenLock",
   "screenUnlock"

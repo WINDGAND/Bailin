@@ -7,7 +7,9 @@ const api = {
     completeFirstRun: () => ipcRenderer.invoke(IPC.AppCompleteFirstRun),
     quit: () => ipcRenderer.invoke(IPC.AppQuit),
     getLocale: () => ipcRenderer.invoke(IPC.AppGetLocale),
-    setLocale: (locale: "zh" | "en") => ipcRenderer.invoke(IPC.AppSetLocale, locale)
+    setLocale: (locale: "zh" | "en") => ipcRenderer.invoke(IPC.AppSetLocale, locale),
+    getTheme: () => ipcRenderer.invoke(IPC.AppGetTheme),
+    setTheme: (theme: "light" | "dark" | "system") => ipcRenderer.invoke(IPC.AppSetTheme, theme)
   },
   llm: {
     setProvider: (input: unknown) => ipcRenderer.invoke(IPC.LlmSetProvider, input),
@@ -105,6 +107,11 @@ const api = {
       ipcRenderer.on(IPC.EventChatStream, listener);
       return () => ipcRenderer.removeListener(IPC.EventChatStream, listener);
     },
+    chatVisibility(handler: (evt: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventChatVisibility, listener);
+      return () => ipcRenderer.removeListener(IPC.EventChatVisibility, listener);
+    },
     activeCharacterChanged(handler: (bundle: unknown) => void) {
       const listener = (_e: unknown, p: unknown) => handler(p);
       ipcRenderer.on(IPC.EventActiveCharacterChanged, listener);
@@ -134,6 +141,12 @@ const api = {
       const listener = (_e: unknown, p: unknown) => handler(p as "zh" | "en");
       ipcRenderer.on(IPC.EventLocaleChanged, listener);
       return () => ipcRenderer.removeListener(IPC.EventLocaleChanged, listener);
+    },
+    themeChanged(handler: (theme: "light" | "dark" | "system") => void) {
+      const listener = (_e: unknown, p: unknown) =>
+        handler(p as "light" | "dark" | "system");
+      ipcRenderer.on(IPC.EventThemeChanged, listener);
+      return () => ipcRenderer.removeListener(IPC.EventThemeChanged, listener);
     },
     profileUpdated(handler: (evt: unknown) => void) {
       const listener = (_e: unknown, p: unknown) => handler(p);

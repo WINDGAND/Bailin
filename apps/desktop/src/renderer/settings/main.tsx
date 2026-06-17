@@ -4,17 +4,20 @@ import { SettingsApp } from "./app/SettingsApp.js";
 import { FeedbackProvider } from "../shared/feedback.js";
 import { KeyboardScope } from "../shared/keyboard.js";
 import { I18nProvider } from "../shared/i18n/index.js";
+import { ThemeProvider } from "../shared/theme/index.js";
 
 const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <StrictMode>
       <I18nProvider>
-        <KeyboardScope>
-          <FeedbackProvider>
-            <SettingsApp />
-          </FeedbackProvider>
-        </KeyboardScope>
+        <ThemeProvider>
+          <KeyboardScope>
+            <FeedbackProvider>
+              <SettingsApp />
+            </FeedbackProvider>
+          </KeyboardScope>
+        </ThemeProvider>
       </I18nProvider>
     </StrictMode>
   );

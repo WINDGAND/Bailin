@@ -52,7 +52,7 @@ const config = {
   sourceType: "public-figure",
   track: "utility",
   enableWebSearch: true,
-  concurrency: 2,
+  concurrency: 6,
   agentTimeoutMs: 300000,
   researchModel: "gpt-4o-mini-search-preview"
 };

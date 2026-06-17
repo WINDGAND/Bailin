@@ -165,11 +165,16 @@ export function defaultAtlasStateMachine(): AtlasPet["stateMachine"] {
           { on: "dragStart", to: "drag" },
           { on: "responseStart", to: "think" },
           { on: "screenLock", to: "sleep" },
-          { on: "idleLong", to: "fidget" }
+          { on: "chatError", to: "sad" }
         ]
       },
       walk: {
-        transitions: [{ on: "tick", to: "idle", guard: "arrived()" }]
+        transitions: [
+          { on: "tick", to: "idle", guard: "rand() < 0.02" },
+          { on: "click", to: "click" },
+          { on: "chatOpen", to: "talk" },
+          { on: "dragStart", to: "drag" }
+        ]
       },
       click: {
         transitions: [{ on: "tick", to: "idle", guard: "frameDone()" }]
@@ -180,17 +185,39 @@ export function defaultAtlasStateMachine(): AtlasPet["stateMachine"] {
       talk: {
         transitions: [
           { on: "chatClose", to: "idle" },
-          { on: "responseEnd", to: "idle" }
+          { on: "responseStart", to: "think" },
+          { on: "chatError", to: "sad" }
         ]
       },
       think: {
-        transitions: [{ on: "responseStart", to: "talk" }]
+        transitions: [
+          { on: "responseStreaming", to: "work" },
+          { on: "chatError", to: "sad" }
+        ]
+      },
+      work: {
+        transitions: [
+          { on: "responseEnd", to: "idle" },
+          { on: "chatError", to: "sad" }
+        ]
       },
       sleep: {
-        transitions: [{ on: "screenUnlock", to: "idle" }]
+        transitions: [
+          { on: "screenUnlock", to: "idle" },
+          { on: "click", to: "click" },
+          { on: "chatOpen", to: "talk" }
+        ]
+      },
+      sad: {
+        transitions: [{ on: "tick", to: "idle", guard: "frameDone()" }]
       },
       fidget: {
-        transitions: [{ on: "tick", to: "idle", guard: "frameDone()" }]
+        transitions: [
+          { on: "tick", to: "idle", guard: "frameDone()" },
+          { on: "click", to: "click" },
+          { on: "chatOpen", to: "talk" },
+          { on: "dragStart", to: "drag" }
+        ]
       }
     }
   };
@@ -235,11 +262,11 @@ export function defaultAtlasStateBindings(
       hatchRow: "jumping"
     },
     drag: {
-      row: rowIndex.waving,
-      frameCount: fc.waving,
-      fps: 8,
+      row: rowIndex["running-right"],
+      frameCount: fc["running-right"],
+      fps: 10,
       loop: true,
-      hatchRow: "waving"
+      hatchRow: "running-right"
     },
     talk: {
       row: rowIndex.waving,
@@ -255,6 +282,13 @@ export function defaultAtlasStateBindings(
       loop: true,
       hatchRow: "review"
     },
+    work: {
+      row: rowIndex.running,
+      frameCount: fc.running,
+      fps: 8,
+      loop: true,
+      hatchRow: "running"
+    },
     sleep: {
       row: rowIndex.waiting,
       frameCount: fc.waiting,
@@ -262,12 +296,53 @@ export function defaultAtlasStateBindings(
       loop: true,
       hatchRow: "waiting"
     },
-    fidget: {
-      row: rowIndex.waving,
-      frameCount: fc.waving,
-      fps: 8,
+    sad: {
+      row: rowIndex.failed,
+      frameCount: fc.failed,
+      fps: 6,
       loop: false,
-      hatchRow: "waving"
+      hatchRow: "failed"
+    },
+    fidget: {
+      row: rowIndex.jumping,
+      frameCount: fc.jumping,
+      fps: 10,
+      loop: false,
+      hatchRow: "jumping"
+    }
+  };
+}
+
+/** 左向散步时 walk 状态使用的行绑定（渲染层按 walkDirection 选用）。 */
+export function atlasWalkLeftBinding(
+  frameCounts: Partial<Record<HatchPetRowState, number>> = {}
+): AtlasStateBinding {
+  const fc = { ...DEFAULT_ROW_FRAME_COUNTS, ...frameCounts };
+  const rowIndex = HATCH_PET_ROW_STATES.indexOf("running-left");
+  return {
+    row: rowIndex,
+    frameCount: fc["running-left"],
+    fps: 10,
+    loop: true,
+    hatchRow: "running-left"
+  };
+}
+
+/**
+ * 将已有 atlas 角色的 stateMachine / states 与当前默认配置合并，
+ * 使旧 bundle 无需重跑 hatch 即可获得新动作绑定。
+ */
+export function mergeAtlasRuntimeDefaults(atlas: AtlasPet): AtlasPet {
+  const defaults = defaultAtlasStateBindings();
+  const defaultSm = defaultAtlasStateMachine();
+  const mergedStates = { ...atlas.states, ...defaults };
+  const mergedSmStates = { ...atlas.stateMachine.states, ...defaultSm.states };
+  return {
+    ...atlas,
+    states: mergedStates as AtlasPet["states"],
+    stateMachine: {
+      initial: defaultSm.initial,
+      states: mergedSmStates as AtlasPet["stateMachine"]["states"]
     }
   };
 }

@@ -3,6 +3,7 @@ import { useNuwa } from "../../shared/use-nuwa.js";
 import { DistillationProgress } from "../progress/DistillationProgress.js";
 import { useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
+import { useDistillationJobs } from "../app/distillation-job-context.js";
 
 type Mode = "deep" | "quick";
 type SourceType = "public-figure" | "fictional" | "original";
@@ -48,6 +49,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const t = useT();
   const nuwa = useNuwa();
   const { showToast } = useToast();
+  const { activeJob, startJob, clearJob, cancelJob } = useDistillationJobs();
 
   const [name, setName] = useState("");
   const [sourceType, setSourceType] = useState<SourceType>("public-figure");
@@ -66,7 +68,6 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const [busy, setBusy] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [skeletonNote, setSkeletonNote] = useState<string | null>(null);
-  const [runningJobId, setRunningJobId] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -223,6 +224,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       characterName: trimmedName,
       sourceType,
       track,
+      concurrency: 6,
       userHint: userHint.trim() || undefined,
       userMaterial: userMaterial.trim() || undefined,
       materialMode: resolvedMode,
@@ -234,7 +236,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       showToast({ kind: "error", text: r.error ?? t("forge.toastDeepFailed") });
       return;
     }
-    setRunningJobId(r.jobId);
+    startJob({ jobId: r.jobId, characterName: trimmedName, track });
   }
 
   function submit(): void {
@@ -257,17 +259,17 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     }));
   }
 
-  if (runningJobId) {
+  if (activeJob) {
     return (
       <DistillationProgress
-        jobId={runningJobId}
-        characterName={trimmedName}
-        track={track}
-        onComplete={() => onDone()}
-        onCancel={() => {
-          void nuwa.characters.cancelDistillation(runningJobId);
-          setRunningJobId(null);
+        jobId={activeJob.jobId}
+        characterName={activeJob.characterName}
+        track={activeJob.track}
+        onComplete={() => {
+          clearJob();
+          onDone();
         }}
+        onCancel={() => void cancelJob()}
       />
     );
   }

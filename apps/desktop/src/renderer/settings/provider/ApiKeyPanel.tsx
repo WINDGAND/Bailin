@@ -7,6 +7,7 @@ import type {
   ImageTierName
 } from "../../../shared/ipc-contract.js";
 import { useDirtyTracker } from "../app/dirty-context.js";
+import { BlSelect } from "../../shared/BlSelect.js";
 import {
   PROVIDER_PRESETS,
   VISION_MODEL_PRESETS,
@@ -488,15 +489,16 @@ export function ApiKeyPanel(): JSX.Element {
             <label className="bl-field-label" htmlFor="provider-kind">
               {t("provider.protocolLabel")}
             </label>
-            <select
+            <BlSelect
               id="provider-kind"
-              className="select"
               value={kind}
-              onChange={(e) => setKind(e.target.value as Kind)}
-            >
-              <option value="openai-compatible">{t("provider.protocolOpenAI")}</option>
-              <option value="anthropic-compatible">{t("provider.protocolAnthropic")}</option>
-            </select>
+              onChange={setKind}
+              triggerClassName="select"
+              options={[
+                { value: "openai-compatible", label: t("provider.protocolOpenAI") },
+                { value: "anthropic-compatible", label: t("provider.protocolAnthropic") }
+              ]}
+            />
           </div>
           <div>
             <label className="bl-field-label" htmlFor="provider-base">
@@ -742,34 +744,38 @@ export function ApiKeyPanel(): JSX.Element {
                     onChange={(e) => updateImageTier(tier, { model: e.target.value })}
                     placeholder={t("provider.modelNamePlaceholder")}
                   />
-                  <select
-                    className="select select--inline"
+                  <BlSelect
+                    className="bl-select--inline"
+                    triggerClassName="select select--inline"
                     value={cfg.quality ?? "medium"}
-                    onChange={(e) =>
+                    onChange={(quality) =>
                       updateImageTier(tier, {
-                        quality: e.target.value as ImageTierConfigDTO["quality"]
+                        quality: quality as ImageTierConfigDTO["quality"]
                       })
                     }
-                  >
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                    <option value="standard">standard</option>
-                    <option value="hd">hd</option>
-                  </select>
-                  <select
-                    className="select select--inline"
+                    options={[
+                      { value: "low", label: "low" },
+                      { value: "medium", label: "medium" },
+                      { value: "high", label: "high" },
+                      { value: "standard", label: "standard" },
+                      { value: "hd", label: "hd" }
+                    ]}
+                  />
+                  <BlSelect
+                    className="bl-select--inline"
+                    triggerClassName="select select--inline"
                     value={cfg.size ?? "1024x1024"}
-                    onChange={(e) =>
+                    onChange={(size) =>
                       updateImageTier(tier, {
-                        size: e.target.value as ImageTierConfigDTO["size"]
+                        size: size as ImageTierConfigDTO["size"]
                       })
                     }
-                  >
-                    <option value="1024x1024">1024x1024</option>
-                    <option value="1024x1536">1024x1536</option>
-                    <option value="1536x1024">1536x1024</option>
-                  </select>
+                    options={[
+                      { value: "1024x1024", label: "1024x1024" },
+                      { value: "1024x1536", label: "1024x1536" },
+                      { value: "1536x1024", label: "1536x1024" }
+                    ]}
+                  />
                   <input
                     className="input input--inline input--price"
                     type="number"

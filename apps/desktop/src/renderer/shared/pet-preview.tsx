@@ -44,6 +44,7 @@ export function PetPreview({
       >
         <div
           aria-hidden="true"
+          className="pet-preview__sheet"
           style={{
             width: w,
             height: h,
@@ -51,8 +52,7 @@ export function PetPreview({
             backgroundPosition: "0px 0px",
             backgroundSize: `${sheetW * scale}px ${sheetH * scale}px`,
             backgroundRepeat: "no-repeat",
-            imageRendering: "auto",
-            filter: "drop-shadow(0 6px 12px rgba(20, 24, 40, 0.16))"
+            imageRendering: "auto"
           }}
         />
       </div>

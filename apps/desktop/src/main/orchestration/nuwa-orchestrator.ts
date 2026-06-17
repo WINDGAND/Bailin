@@ -55,6 +55,12 @@ import {
   formatCoveragePlanMessage,
   resolveEffectiveMaterialMode
 } from "./material-coverage-plan.js";
+import {
+  APPEARANCE_PHASE_FALLBACK_NO_IMAGES,
+  APPEARANCE_PHASE_FALLBACK_NO_VISION,
+  APPEARANCE_PHASE_FALLBACK_VISION_FAILED,
+  buildAppearancePhaseMessage
+} from "../../shared/appearance-phase-message.js";
 import { runQualityCheck } from "./quality-check.js";
 import {
   annotateQualityWeaknesses,
@@ -148,7 +154,7 @@ export interface DeepOrchestrateInput {
   jobId: string;
   config: DistillationJobConfig;
   /** 上层用于在 Checkpoint 等待用户确认；resolve 后继续；reject 则取消。 */
-  awaitApproval: (phase: "research" | "synthesis") => Promise<DistillationApprovalResult>;
+  awaitApproval: (phase: "research") => Promise<DistillationApprovalResult>;
   /** 是否启用风格测试（额外 LLM 调用），默认 true。 */
   runVoiceTest?: boolean;
   /**
@@ -510,14 +516,8 @@ export class NuwaOrchestrator {
       };
       yield { kind: "synthesis_summary", jobId, summary };
     }
-    yield phaseEvent(jobId, "awaiting_synth_ok", 55, "提炼完成，等待你确认");
+    yield phaseEvent(jobId, "synthesizing", 55, "提炼完成，继续装配人格卡…");
 
-    try {
-      await input.awaitApproval("synthesis");
-    } catch {
-      yield { kind: "cancelled", jobId };
-      return;
-    }
     if (aborted()) {
       yield { kind: "cancelled", jobId };
       return;
@@ -565,25 +565,34 @@ export class NuwaOrchestrator {
     );
 
     // ===== Phase 3b: 深度外貌（vision-first 流程） =====
-    yield phaseEvent(
-      jobId,
-      "researching_appearance",
-      70,
-      "深度外貌分析：读图 → 结构化 → 视觉自检…"
-    );
-    // 兼容旧字段：userImageRef 也算一张参考图
-    const refs: ReferenceImageInput[] = [...(config.referenceImages ?? [])];
+    const appearanceRefs: ReferenceImageInput[] = [...(config.referenceImages ?? [])];
     if (
       config.userImageRef &&
-      !refs.some((r) => r.url === config.userImageRef)
+      !appearanceRefs.some((r) => r.url === config.userImageRef)
     ) {
-      refs.push({
+      appearanceRefs.push({
         url: config.userImageRef,
         source: "user-upload",
         role: "primary",
         notes: "userImageRef (legacy)"
       });
     }
+    const userUploadedRefCount = appearanceRefs.filter((r) => r.source === "user-upload").length;
+    const visCap = this.llm.detectVisionCapability();
+    const emitAppearanceStatus = (message: string, progress = 72): void => {
+      const evt = phaseEvent(jobId, "researching_appearance", progress, message);
+      input.liveBroadcast?.(evt);
+    };
+    yield phaseEvent(
+      jobId,
+      "researching_appearance",
+      70,
+      buildAppearancePhaseMessage({
+        userReferenceCount: userUploadedRefCount,
+        webSearchEnabled: config.enableWebSearch,
+        visionAvailable: visCap.vision
+      })
+    );
     const appearance = await this.runAppearanceDeep(
       {
         characterName: config.characterName,
@@ -592,7 +601,8 @@ export class NuwaOrchestrator {
         track: config.track,
         userHint: config.userHint,
         userMaterial: config.userMaterial,
-        referenceImages: refs
+        referenceImages: appearanceRefs,
+        onStatusMessage: emitAppearanceStatus
       },
       config.enableWebSearch,
       warnings,
@@ -622,7 +632,7 @@ export class NuwaOrchestrator {
       config.characterName,
       config.sourceType,
       appearanceForSprite,
-      refs,
+      appearanceRefs,
       warnings,
       (evt) => {
         // 实时把 hatch 事件推给 UI；避免等 5~10 分钟才看到第一行进度
@@ -1243,12 +1253,14 @@ export class NuwaOrchestrator {
       userHint?: string;
       userMaterial?: string;
       referenceImages: ReferenceImageInput[];
+      onStatusMessage?: (message: string) => void;
     },
     webSearchEnabled: boolean,
     warnings: string[],
     researchModel?: string
   ): Promise<AppearanceSpec | null> {
     const vis = this.llm.detectVisionCapability();
+    const notify = input.onStatusMessage;
 
     // Step 0: 收集参考图
     let refs = input.referenceImages.slice(0, 4);
@@ -1270,14 +1282,17 @@ export class NuwaOrchestrator {
         { runVerification: true }
       );
       if (spec) return spec;
+      notify?.(APPEARANCE_PHASE_FALLBACK_VISION_FAILED);
       warnings.push(
         "[phase3b·vision] vision 路径未能产出合法 spec，降级到纯文本三步法"
       );
     } else if (!vis.vision) {
+      notify?.(APPEARANCE_PHASE_FALLBACK_NO_VISION);
       warnings.push(
         `[phase3b·vision] 视觉模型不可用（${vis.reason}），降级到纯文本三步法；结果可能偏离原作。`
       );
     } else {
+      notify?.(APPEARANCE_PHASE_FALLBACK_NO_IMAGES);
       warnings.push(
         "[phase3b·vision] 无参考图且未联网搜图成功，降级到纯文本三步法"
       );

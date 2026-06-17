@@ -68,6 +68,7 @@ export interface IpcDeps {
 
 const SETTING_FIRST_RUN_DONE = "first_run_done";
 export const SETTING_LOCALE = "ui.locale";
+export const SETTING_THEME = "ui.theme";
 const SETTING_ACTIVE_CHARACTER = "active_character_id";
 const SETTING_LLM_PROVIDER = "llm_provider_json";
 const SETTING_LLM_API_KEY = "llm_api_key_enc";
@@ -83,7 +84,7 @@ interface ApprovalGate {
 interface DeepJobState {
   jobId: string;
   abortCtl: AbortController;
-  approvals: Map<"research" | "synthesis", ApprovalGate>;
+  approvals: Map<"research", ApprovalGate>;
 }
 
 function makeGate(): ApprovalGate {
@@ -117,6 +118,15 @@ export function registerIpc(deps: IpcDeps): void {
     vault.setSetting(SETTING_LOCALE, next);
     deps.onLocaleChanged?.();
     broadcast(IPC.EventLocaleChanged, next);
+  });
+  ipcMain.handle(IPC.AppGetTheme, () => {
+    const raw = vault.getSetting(SETTING_THEME);
+    return raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
+  });
+  ipcMain.handle(IPC.AppSetTheme, (_evt, theme: string) => {
+    const next = theme === "light" || theme === "dark" || theme === "system" ? theme : "system";
+    vault.setSetting(SETTING_THEME, next);
+    broadcast(IPC.EventThemeChanged, next);
   });
 
   // ===== LLM =====
@@ -397,10 +407,7 @@ export function registerIpc(deps: IpcDeps): void {
     vault.upsertJob(job);
 
     const abortCtl = new AbortController();
-    const approvals = new Map<"research" | "synthesis", ApprovalGate>([
-      ["research", makeGate()],
-      ["synthesis", makeGate()]
-    ]);
+    const approvals = new Map<"research", ApprovalGate>([["research", makeGate()]]);
     activeJobs.set(jobId, { jobId, abortCtl, approvals });
 
     // 后台跑 generator，不阻塞 IPC 返回
@@ -503,13 +510,13 @@ export function registerIpc(deps: IpcDeps): void {
       _e,
       input: {
         jobId: string;
-        phase: "research" | "synthesis";
+        phase: "research";
         supplementalAgentIds?: DistillationApprovalResult["supplementalAgentIds"];
       }
     ) => {
     const state = activeJobs.get(input.jobId);
     if (!state) return { ok: false };
-    const gate = state.approvals.get(input.phase);
+    const gate = state.approvals.get("research");
     if (!gate) return { ok: false };
     gate.resolve({
       supplementalAgentIds:
@@ -574,6 +581,7 @@ export function registerIpc(deps: IpcDeps): void {
       broadcast(IPC.EventChatStream, {
         requestId,
         sessionId: input.sessionId,
+        characterId: input.characterId,
         done: true,
         error: "character not found"
       });
@@ -585,6 +593,13 @@ export function registerIpc(deps: IpcDeps): void {
     const requestId = ulid();
     const userTurnId = input.userTurnId ?? ulid();
     const assistantTurnId = input.assistantTurnId ?? ulid();
+    broadcast(IPC.EventChatStream, {
+      requestId,
+      sessionId,
+      characterId: input.characterId,
+      done: false,
+      phase: "thinking"
+    });
     void (async () => {
       try {
         for await (const chunk of runtime.sendMessage({
@@ -600,6 +615,7 @@ export function registerIpc(deps: IpcDeps): void {
             broadcast(IPC.EventChatStream, {
               requestId,
               sessionId,
+              characterId: input.characterId,
               done: false,
               delta: chunk.text
             });
@@ -607,6 +623,7 @@ export function registerIpc(deps: IpcDeps): void {
             broadcast(IPC.EventChatStream, {
               requestId,
               sessionId,
+              characterId: input.characterId,
               done: true,
               finishReason: chunk.finishReason,
               assistantTurnId
@@ -622,6 +639,7 @@ export function registerIpc(deps: IpcDeps): void {
             broadcast(IPC.EventChatStream, {
               requestId,
               sessionId,
+              characterId: input.characterId,
               done: true,
               error: chunk.message,
               finishReason: "error"
@@ -632,6 +650,7 @@ export function registerIpc(deps: IpcDeps): void {
         broadcast(IPC.EventChatStream, {
           requestId,
           sessionId,
+          characterId: input.characterId,
           done: true,
           error: e instanceof Error ? e.message : String(e),
           finishReason: "error"
@@ -643,6 +662,17 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle(IPC.ChatCancel, () => {
     runtime.cancelActive();
+    const characterId = deps.getActiveCharacterId();
+    if (characterId) {
+      broadcast(IPC.EventChatStream, {
+        requestId: ulid(),
+        sessionId: "",
+        characterId,
+        done: true,
+        cancelled: true,
+        finishReason: "error"
+      });
+    }
   });
 
   ipcMain.handle(IPC.ChatHide, () => {

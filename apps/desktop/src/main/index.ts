@@ -179,6 +179,13 @@ function repositionChatNearPet(chat: BrowserWindow): void {
   chatRepositioning = false;
 }
 
+function broadcastChatVisibility(visible: boolean): void {
+  broadcastToAllWindows(IPC.EventChatVisibility, {
+    visible,
+    characterId: activeCharacterId ?? undefined
+  });
+}
+
 function showChatNearPet(): void {
   const pet = ensurePetWindow();
   const chat = ensureChatWindow();
@@ -186,6 +193,7 @@ function showChatNearPet(): void {
   chat.show();
   chat.moveTop();
   chat.focus();
+  broadcastChatVisibility(true);
   broadcastToAllWindows("nuwa.event.petSummon", null);
 }
 
@@ -212,6 +220,7 @@ function summonPetBubble(): void {
 
 function hideChat(): void {
   if (chatWin && !chatWin.isDestroyed()) chatWin.hide();
+  broadcastChatVisibility(false);
 }
 
 function isChatVisible(): boolean {
