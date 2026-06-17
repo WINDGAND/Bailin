@@ -12,6 +12,8 @@
   position: relative;
   pointer-events: none;
   overflow: hidden;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 /* hatch 入场动画：从下方淡入 + 轻微弹跳 */

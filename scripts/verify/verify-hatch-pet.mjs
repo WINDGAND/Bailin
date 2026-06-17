@@ -61,7 +61,8 @@ const {
   detectNativeTransparency,
   countInteriorTransparentPixels,
   removeChromaBackgroundConnected,
-  measureFrameAnchor
+  measureFrameAnchor,
+  stripMatchesEqualSlotLayout
 } = require(toolsPath);
 
 let allOk = true;
@@ -625,6 +626,51 @@ const rightEdgeRed = countRedOpaque(
 rightEdgeRed === 0
   ? ok("slot 切缝内缩：帧 0 右缘无邻帧污染")
   : fail(`slot 切缝后帧 0 右缘仍有 ${rightEdgeRed} 个红色污染像素`);
+
+stripMatchesEqualSlotLayout(
+  decodePng(encodePng(squareStrip)),
+  stripFrameCount,
+  DEFAULT_ATLAS_CELL
+) === false
+  ? ok("1024×1024 方图不会误判为等宽 strip 布局")
+  : fail("1024×1024 方图被误判为等宽 strip 布局");
+
+const widePoseStripW = DEFAULT_ATLAS_CELL.width * waveFrameCount;
+const widePoseStrip = blankImage(widePoseStripW, DEFAULT_ATLAS_CELL.height);
+fillChroma(widePoseStrip, whiteKey);
+for (let i = 0; i < waveFrameCount; i += 1) {
+  const cx = i * DEFAULT_ATLAS_CELL.width + DEFAULT_ATLAS_CELL.width / 2;
+  const footY = DEFAULT_ATLAS_CELL.height - 40;
+  drawDisc(widePoseStrip, cx, footY - 30, 28, 50, 50, 60);
+  if (i === 2) {
+    drawDisc(widePoseStrip, cx + 72, footY - 55, 14, 50, 50, 60);
+  }
+}
+const widePoseFrames = extractStripFrames(
+  {
+    rowIndex: 3,
+    frameCount: waveFrameCount,
+    stripPng: encodePng(widePoseStrip),
+    chromaKey: whiteKey,
+    chromaSeedThreshold: 30,
+    chromaSpillThreshold: 40,
+    rowState: "waving"
+  },
+  DEFAULT_ATLAS_CELL
+);
+const wideFrame2 = decodePng(widePoseFrames[2]?.png ?? encodePng(blankImage(1, 1)));
+let wideMinX = wideFrame2.width;
+let wideMaxX = -1;
+for (let y = 0; y < wideFrame2.height; y += 1) {
+  for (let x = 0; x < wideFrame2.width; x += 1) {
+    if (!wideFrame2.data[(y * wideFrame2.width + x) * 4 + 3]) continue;
+    if (x < wideMinX) wideMinX = x;
+    if (x > wideMaxX) wideMaxX = x;
+  }
+}
+wideMaxX >= 0 && wideMinX >= 2 && wideMaxX <= DEFAULT_ATLAS_CELL.width - 3
+  ? ok(`宽 pose 帧主体未贴边：X=${wideMinX}-${wideMaxX}`)
+  : fail(`宽 pose 帧主体贴边/被裁：X=${wideMinX}-${wideMaxX}`);
 
 // ===== 写出样例资产，便于人工肉眼检查 =====
 const outDir = resolve(repoRoot, ".smoke-out", "hatch-pet");

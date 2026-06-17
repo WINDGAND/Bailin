@@ -141,6 +141,7 @@ export function buildHatchPetRowPrompt(input: HatchPetRowInput): string {
     chromaClause(input.chromaKey),
     "Each frame must contain the entire pet sprite, centered, with consistent silhouette, props, palette and lighting.",
     "Keep the character's foot baseline and horizontal center fixed across all frames; only limbs and upper body may move.",
+    "Leave clear empty chroma space between adjacent frames — each pose must stay fully inside its own slot with at least ~8% horizontal margin, never touching slot dividers.",
     "Do not draw motion lines, speed lines, dust, shadows, floating sparkles, text, labels, or any decorative effect outside the body.",
     `Mentally divide the canvas into ${input.frameCount} equal vertical slots; each slot is one animation frame. Do not draw visible borders, guides, numbers, or labels.`,
     "Background must be pure chroma key (or transparent if natively supported)."

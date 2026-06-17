@@ -187,7 +187,7 @@ export function AtlasPet({
           backgroundPosition: `${bgX}px ${bgY}px`,
           backgroundSize: `${bgW}px ${bgH}px`,
           backgroundRepeat: "no-repeat",
-          imageRendering: display.scale === Math.floor(display.scale) ? "pixelated" : "auto"
+          imageRendering: "pixelated"
         }}
       />
     </div>

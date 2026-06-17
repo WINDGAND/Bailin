@@ -169,10 +169,26 @@ export function extractStripFrames(
   strip = applyStripChromaPipeline(strip, slot);
   const alignOpts = buildRowAlignOptions(slot);
 
+  const preferComponent = !stripMatchesEqualSlotLayout(
+    strip,
+    slot.frameCount,
+    cell
+  );
+  if (preferComponent) {
+    const componentFrames = extractComponentFrames(
+      strip,
+      slot.frameCount,
+      cell,
+      alignOpts
+    );
+    if (componentFrames) return componentFrames;
+  }
+
   const slotRawFrames = extractEqualSlotRawFrames(strip, slot);
   const slotUsable =
     slotRawFrames.length === slot.frameCount &&
-    slotRawFrames.every((f) => countOpaquePixels(f) > 24);
+    slotRawFrames.every((f) => countOpaquePixels(f) > 24) &&
+    !rowFramesLookSlotSplit(slotRawFrames);
   if (slotUsable) {
     return finalizeAlignedFrames(slotRawFrames, cell, alignOpts);
   }
@@ -188,13 +204,59 @@ export function extractStripFrames(
   return finalizeAlignedFrames(slotRawFrames, cell, alignOpts);
 }
 
-/** 等宽 slot 切分 + 每格取主导连通块（优先路径，动画帧最稳定）。 */
+/** 等宽 slot 切缝内缩：方图/密排 strip 需要更大 inset 才能隔离邻帧。 */
+function resolveSlotInset(slotWidth: number, override?: number): number {
+  if (override != null) return override;
+  return Math.max(3, Math.min(10, Math.floor(slotWidth * 0.022)));
+}
+
+/**
+ * 判断 strip 是否接近 hatch 约定的 (cell.w × N) × cell.h 布局。
+ * 1024×1024 方图等不匹配尺寸时应优先走连通块裁帧。
+ */
+export function stripMatchesEqualSlotLayout(
+  strip: RawImage,
+  frameCount: number,
+  cell: CellSpec
+): boolean {
+  const expectedW = cell.width * frameCount;
+  const expectedH = cell.height;
+  const wTol = Math.max(16, expectedW * 0.12);
+  const hTol = Math.max(8, expectedH * 0.12);
+  if (Math.abs(strip.width - expectedW) > wTol) return false;
+  if (Math.abs(strip.height - expectedH) > hTol) return false;
+  return !slotBoundariesHeavilyContaminated(strip, frameCount);
+}
+
+function slotBoundariesHeavilyContaminated(
+  strip: RawImage,
+  frameCount: number
+): boolean {
+  if (frameCount <= 1) return false;
+  const slotW = strip.width / frameCount;
+  let bad = 0;
+  for (let i = 1; i < frameCount; i += 1) {
+    const bx = Math.round(i * slotW);
+    let hits = 0;
+    for (let y = 0; y < strip.height; y += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const x = bx + dx;
+        if (x < 0 || x >= strip.width) continue;
+        if (isOpaquePixel(strip, x, y)) hits += 1;
+      }
+    }
+    if (hits > strip.height * 5) bad += 1;
+  }
+  return bad >= Math.max(1, Math.floor(frameCount / 3));
+}
+
+/** 等宽 slot 切分 + 净化 silhouette（优先路径，仅用于 layout 匹配的 strip）。 */
 function extractEqualSlotRawFrames(
   strip: RawImage,
   slot: RowSlot
 ): RawImage[] {
   const slotWidth = strip.width / slot.frameCount;
-  const inset = slot.slotInset ?? 2;
+  const inset = resolveSlotInset(slotWidth, slot.slotInset);
   const frames: RawImage[] = [];
   for (let i = 0; i < slot.frameCount; i += 1) {
     let left = Math.round(i * slotWidth);
@@ -203,10 +265,146 @@ function extractEqualSlotRawFrames(
     if (i < slot.frameCount - 1) right -= inset;
     const width = Math.max(1, right - left);
     let frame = extract(strip, left, 0, width, strip.height);
-    frame = keepDominantComponent(frame);
+    frame = purifyFrameSilhouette(frame);
     frames.push(frame);
   }
   return frames;
+}
+
+/** 等宽切分后若左右半身严重失衡，说明 slot 切到了邻帧。 */
+function rowFramesLookSlotSplit(frames: RawImage[]): boolean {
+  for (const frame of frames) {
+    const bbox = measureOpaqueBBox(frame);
+    if (!bbox) continue;
+    const bodyW = bbox.maxX - bbox.minX + 1;
+    if (bodyW < frame.width * 0.45) continue;
+    const half = Math.floor(frame.width / 2);
+    let left = 0;
+    let right = 0;
+    for (let y = bbox.minY; y <= bbox.maxY; y += 1) {
+      for (let x = bbox.minX; x <= bbox.maxX; x += 1) {
+        if (!isOpaquePixel(frame, x, y)) continue;
+        if (x < half) left += 1;
+        else right += 1;
+      }
+    }
+    const balance = Math.min(left, right) / Math.max(1, Math.max(left, right));
+    if (balance < 0.32) return true;
+  }
+  return false;
+}
+
+function isOpaquePixel(img: RawImage, x: number, y: number): boolean {
+  return (img.data[(y * img.width + x) * 4 + 3] ?? 0) > 0;
+}
+
+interface OpaqueBBox {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+function measureOpaqueBBox(frame: RawImage): OpaqueBBox | null {
+  let minX = frame.width;
+  let minY = frame.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < frame.height; y += 1) {
+    for (let x = 0; x < frame.width; x += 1) {
+      if (!isOpaquePixel(frame, x, y)) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < minX || maxY < minY) return null;
+  return { minX, maxX, minY, maxY };
+}
+
+/** 只保留最大连通块，并去掉贴边的细长 bleed 条。 */
+function purifyFrameSilhouette(frame: RawImage): RawImage {
+  let purified = maskToLargestComponent(frame);
+  purified = removeEdgeSliverComponents(purified);
+  purified = keepDominantComponent(purified);
+  return cropOpaqueBounds(purified, 4);
+}
+
+function maskToLargestComponent(frame: RawImage): RawImage {
+  const components = findConnectedComponents(frame, {
+    minOpaquePixels: Math.max(8, Math.floor(frame.width * frame.height * 0.0005)),
+    minWidth: 2,
+    minHeight: 2
+  });
+  if (components.length <= 1) return frame;
+  const best = components.slice().sort((a, b) => b.opaquePixels - a.opaquePixels)[0];
+  if (!best) return frame;
+  const seedX = Math.floor((best.x0 + best.x1) / 2);
+  const seedY = Math.floor((best.y0 + best.y1) / 2);
+  let sx = seedX;
+  let sy = seedY;
+  if (!isOpaquePixel(frame, sx, sy)) {
+    outer: for (let y = best.y0; y <= best.y1; y += 1) {
+      for (let x = best.x0; x <= best.x1; x += 1) {
+        if (isOpaquePixel(frame, x, y)) {
+          sx = x;
+          sy = y;
+          break outer;
+        }
+      }
+    }
+  }
+  const out = blankImage(frame.width, frame.height);
+  const reachable = new Uint8Array(frame.width * frame.height);
+  floodOpaque(frame, sx, sy, reachable);
+  for (let y = 0; y < frame.height; y += 1) {
+    for (let x = 0; x < frame.width; x += 1) {
+      if (!reachable[y * frame.width + x]) continue;
+      const src = (y * frame.width + x) * 4;
+      const dst = src;
+      out.data[dst] = frame.data[src] ?? 0;
+      out.data[dst + 1] = frame.data[src + 1] ?? 0;
+      out.data[dst + 2] = frame.data[src + 2] ?? 0;
+      out.data[dst + 3] = frame.data[src + 3] ?? 0;
+    }
+  }
+  return out;
+}
+
+function removeEdgeSliverComponents(frame: RawImage): RawImage {
+  const components = findConnectedComponents(frame, {
+    minOpaquePixels: 4,
+    minWidth: 1,
+    minHeight: 4
+  });
+  if (components.length <= 1) return frame;
+  const largest = Math.max(...components.map((c) => c.opaquePixels));
+  const { width, height, data } = frame;
+  for (const c of components) {
+    const w = c.x1 - c.x0 + 1;
+    const h = c.y1 - c.y0 + 1;
+    const touchesEdge = c.x0 <= 0 || c.x1 >= width - 1;
+    if (
+      !touchesEdge ||
+      w > 5 ||
+      h < 6 ||
+      c.opaquePixels >= largest * 0.2
+    ) {
+      continue;
+    }
+    for (let y = c.y0; y <= c.y1; y += 1) {
+      for (let x = c.x0; x <= c.x1; x += 1) {
+        if (!isOpaquePixel(frame, x, y)) continue;
+        const idx = (y * width + x) * 4;
+        data[idx] = 0;
+        data[idx + 1] = 0;
+        data[idx + 2] = 0;
+        data[idx + 3] = 0;
+      }
+    }
+  }
+  return frame;
 }
 
 function finalizeAlignedFrames(
@@ -447,29 +645,63 @@ export function alignRowFramesToCell(
   if (rawFrames.length === 0) return [];
   const padding = opts?.bboxPadding ?? 8;
   const safeMargin = opts?.safeMargin ?? 12;
+  const horizMargin = 4;
   const alignMode = opts?.alignMode ?? "standing";
 
   const prepared = rawFrames.map((raw) => {
-    let frame = keepDominantComponent(raw);
+    let frame = purifyFrameSilhouette(raw);
     frame = cropOpaqueBounds(frame, padding);
     return frame;
   });
 
   let maxW = 1;
   let maxH = 1;
+  let maxContentH = 1;
   for (const frame of prepared) {
     maxW = Math.max(maxW, frame.width);
     maxH = Math.max(maxH, frame.height);
+    const bbox = measureOpaqueBBox(frame);
+    if (bbox) {
+      maxContentH = Math.max(maxContentH, bbox.maxY - bbox.minY + 1);
+    }
   }
 
   const innerTop = safeMargin;
   const innerBottom = cell.height - safeMargin;
   const innerH = Math.max(1, innerBottom - innerTop);
-  const scale = Math.min(cell.width / maxW, innerH / maxH);
   const targetFootCenterX = cell.width / 2;
+  let scale = Math.min(
+    (cell.width - horizMargin * 2) / maxW,
+    innerH / maxContentH
+  );
+
+  for (const frame of prepared) {
+    const bbox = measureOpaqueBBox(frame);
+    if (!bbox) continue;
+    const footX = measureFootCenterX(frame);
+    const relLeft = bbox.minX - footX;
+    const relRight = bbox.maxX - footX;
+    if (relLeft < 0) {
+      const bound = (targetFootCenterX - horizMargin) / -relLeft;
+      if (bound > 0) scale = Math.min(scale, bound);
+    }
+    if (relRight > 0) {
+      const bound = (cell.width - horizMargin - targetFootCenterX) / relRight;
+      if (bound > 0) scale = Math.min(scale, bound);
+    }
+    const relTop = bbox.minY;
+    const relBottom = bbox.maxY;
+    if (alignMode === "standing") {
+      const bodyH = relBottom - relTop + 1;
+      const bound = innerH / bodyH;
+      if (bound > 0) scale = Math.min(scale, bound);
+    }
+  }
+  scale = Math.max(0.05, scale);
 
   return prepared.map((frame) => {
     const footCenterX = measureFootCenterX(frame);
+    const bbox = measureOpaqueBBox(frame);
     const w = Math.max(1, Math.round(frame.width * scale));
     const h = Math.max(1, Math.round(frame.height * scale));
     const resized = resize(frame, w, h);
@@ -477,12 +709,15 @@ export function alignRowFramesToCell(
 
     let pasteX = Math.round(targetFootCenterX - scaledFootX);
     let pasteY =
-      alignMode === "standing"
-        ? Math.round(innerBottom - h)
+      alignMode === "standing" && bbox
+        ? Math.round(
+            innerBottom - Math.round(((bbox.maxY + 0.5) / frame.height) * h)
+          )
         : Math.floor((cell.height - h) / 2);
 
     pasteX = clamp(pasteX, 0, Math.max(0, cell.width - w));
     if (pasteY < innerTop) pasteY = innerTop;
+    if (pasteY + h > cell.height) pasteY = Math.max(innerTop, cell.height - h);
 
     const out = blankImage(cell.width, cell.height);
     paste(out, resized, pasteX, pasteY);
@@ -520,10 +755,25 @@ function measureFootCenterX(frame: RawImage): number {
 
 /**
  * 清除 cell 左右缘孤立竖条（slot 切缝残留 / atlas 邻格 bleed）。
- * 仅当该列 opaque 像素数低于行高 12% 时清除，避免误删手臂。
+ * 从脚底种子 BFS，移除外缘不可达像素；再按列高度兜底清除细边柱。
  */
 function defringeVerticalCellEdges(frame: RawImage): RawImage {
   const { width, height, data } = frame;
+  const reachable = computeReachableFromFoot(frame);
+  const edgeDepth = Math.min(4, Math.max(2, Math.floor(width * 0.025)));
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (x >= edgeDepth && x < width - edgeDepth) continue;
+      const idx = (y * width + x) * 4;
+      if ((data[idx + 3] ?? 0) === 0) continue;
+      if (reachable[y * width + x]) continue;
+      data[idx] = 0;
+      data[idx + 1] = 0;
+      data[idx + 2] = 0;
+      data[idx + 3] = 0;
+    }
+  }
+
   const maxCol = Math.max(4, Math.floor(height * 0.12));
   for (const edgeX of [0, width - 1]) {
     let colCount = 0;
@@ -541,6 +791,59 @@ function defringeVerticalCellEdges(frame: RawImage): RawImage {
     }
   }
   return frame;
+}
+
+function computeReachableFromFoot(frame: RawImage): Uint8Array {
+  const { width, height } = frame;
+  const reachable = new Uint8Array(width * height);
+  const bbox = measureOpaqueBBox(frame);
+  if (!bbox) return reachable;
+
+  const footX = Math.round(measureFootCenterX(frame));
+  const seedY = bbox.maxY;
+  const seedX = clamp(footX, bbox.minX, bbox.maxX);
+  if (!isOpaquePixel(frame, seedX, seedY)) {
+    for (let y = bbox.maxY; y >= bbox.minY; y -= 1) {
+      if (isOpaquePixel(frame, seedX, y)) {
+        floodOpaque(frame, seedX, y, reachable);
+        return reachable;
+      }
+    }
+    return reachable;
+  }
+  floodOpaque(frame, seedX, seedY, reachable);
+  return reachable;
+}
+
+function floodOpaque(
+  frame: RawImage,
+  seedX: number,
+  seedY: number,
+  reachable: Uint8Array
+): void {
+  const { width, height } = frame;
+  const queueX = [seedX];
+  const queueY = [seedY];
+  let head = 0;
+  reachable[seedY * width + seedX] = 1;
+  while (head < queueX.length) {
+    const x = queueX[head]!;
+    const y = queueY[head]!;
+    head += 1;
+    for (const [nx, ny] of [
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1]
+    ] as const) {
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const idx = ny * width + nx;
+      if (reachable[idx] || !isOpaquePixel(frame, nx, ny)) continue;
+      reachable[idx] = 1;
+      queueX.push(nx);
+      queueY.push(ny);
+    }
+  }
 }
 
 interface FrameAnchorMetrics {
@@ -797,6 +1100,19 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
               `row ${row} frame ${col} 头顶 Y=${anchor.headTopY} < ${safeMargin - 2}，可能被削顶`
             );
           }
+          const bbox = measureOpaqueBBox(frame);
+          if (bbox) {
+            if (bbox.minX < 2) {
+              issues.push(
+                `row ${row} frame ${col} 主体左缘 X=${bbox.minX} < 2，可能被裁切或 slot bleed`
+              );
+            }
+            if (bbox.maxX > cell.width - 3) {
+              issues.push(
+                `row ${row} frame ${col} 主体右缘 X=${bbox.maxX} > ${cell.width - 3}，可能被裁切`
+              );
+            }
+          }
         }
       } else if (count > 0) {
         trailingTransparent = false;
@@ -807,9 +1123,13 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
     }
     if (footCenterXs.length >= 2) {
       const footCxRange = Math.max(...footCenterXs) - Math.min(...footCenterXs);
-      if (footCxRange > maxCentroidXRange) {
+      const rowState = input.rowStates?.[row];
+      const standingRow =
+        rowState == null || resolveRowAlignMode(rowState) === "standing";
+      const maxFootCxRange = standingRow ? maxCentroidXRange : maxCentroidXRange * 5;
+      if (footCxRange > maxFootCxRange) {
         issues.push(
-          `row ${row} footCenter X 极差 ${footCxRange.toFixed(1)} > max ${maxCentroidXRange}，动画可能左右漂移`
+          `row ${row} footCenter X 极差 ${footCxRange.toFixed(1)} > max ${maxFootCxRange}，动画可能左右漂移`
         );
       }
     }
