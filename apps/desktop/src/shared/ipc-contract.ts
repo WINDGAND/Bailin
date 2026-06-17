@@ -523,5 +523,6 @@ export const IPC = {
   EventPetSummon: "nuwa.event.petSummon",
   EventProactiveWhisper: "nuwa.event.proactiveWhisper",
   EventAmbientSignal: "nuwa.event.ambientSignal",
-  EventDistillationProgress: "nuwa.event.distillationProgress"
+  EventDistillationProgress: "nuwa.event.distillationProgress",
+  EventLocaleChanged: "nuwa.event.localeChanged"
 } as const;

@@ -36,6 +36,7 @@ function interpolate(template: string, params?: TranslationParams): string {
 export interface I18nContextValue {
   locale: Locale;
   setLocale: (next: Locale) => Promise<void>;
+  resyncLocale: () => Promise<void>;
   t: (key: string, params?: TranslationParams) => string;
   ready: boolean;
 }
@@ -47,33 +48,57 @@ export function I18nProvider({ children }: { children: ReactNode }): JSX.Element
   const [locale, setLocaleState] = useState<Locale>("zh");
   const [ready, setReady] = useState(false);
 
+  const applyLocale = useCallback((next: Locale) => {
+    setLocaleState(next);
+    localStorage.setItem(STORAGE_KEY, next);
+    document.documentElement.lang = next === "zh" ? "zh-CN" : "en";
+  }, []);
+
   useEffect(() => {
     void (async () => {
       try {
         const stored = await nuwa.app.getLocale();
-        setLocaleState(stored);
+        applyLocale(stored);
       } catch {
         const fallback = localStorage.getItem(STORAGE_KEY);
-        if (fallback === "en" || fallback === "zh") setLocaleState(fallback);
+        if (fallback === "en" || fallback === "zh") applyLocale(fallback);
       } finally {
         setReady(true);
       }
     })();
-  }, [nuwa]);
+  }, [nuwa, applyLocale]);
+
+  useEffect(() => {
+    const off = nuwa.on.localeChanged((next) => {
+      applyLocale(next);
+    });
+    return off;
+  }, [nuwa, applyLocale]);
+
+  const resyncLocale = useCallback(async () => {
+    try {
+      applyLocale(await nuwa.app.getLocale());
+    } catch {
+      const fallback = localStorage.getItem(STORAGE_KEY);
+      if (fallback === "en" || fallback === "zh") applyLocale(fallback);
+    }
+  }, [nuwa, applyLocale]);
+
+  useEffect(() => {
+    const resync = () => {
+      void resyncLocale();
+    };
+    window.addEventListener("focus", resync);
+    return () => window.removeEventListener("focus", resync);
+  }, [resyncLocale]);
 
   const setLocale = useCallback(
     async (next: Locale) => {
       await nuwa.app.setLocale(next);
-      localStorage.setItem(STORAGE_KEY, next);
-      setLocaleState(next);
-      document.documentElement.lang = next === "zh" ? "zh-CN" : "en";
+      applyLocale(next);
     },
-    [nuwa]
+    [nuwa, applyLocale]
   );
-
-  useEffect(() => {
-    document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
-  }, [locale]);
 
   const t = useCallback(
     (key: string, params?: TranslationParams) => {
@@ -84,8 +109,8 @@ export function I18nProvider({ children }: { children: ReactNode }): JSX.Element
   );
 
   const value = useMemo(
-    () => ({ locale, setLocale, t, ready }),
-    [locale, setLocale, t, ready]
+    () => ({ locale, setLocale, resyncLocale, t, ready }),
+    [locale, setLocale, resyncLocale, t, ready]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

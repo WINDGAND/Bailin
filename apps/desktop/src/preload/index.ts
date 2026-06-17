@@ -125,6 +125,11 @@ const api = {
       const listener = (_e: unknown, p: unknown) => handler(p);
       ipcRenderer.on(IPC.EventDistillationProgress, listener);
       return () => ipcRenderer.removeListener(IPC.EventDistillationProgress, listener);
+    },
+    localeChanged(handler: (locale: "zh" | "en") => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p as "zh" | "en");
+      ipcRenderer.on(IPC.EventLocaleChanged, listener);
+      return () => ipcRenderer.removeListener(IPC.EventLocaleChanged, listener);
     }
   }
 };

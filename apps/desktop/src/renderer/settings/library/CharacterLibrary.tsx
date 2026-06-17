@@ -266,47 +266,11 @@ export function CharacterLibrary({
     }
   }
 
-  async function regenerateAppearanceReuse(id: string): Promise<void> {
-    const ok = await confirm({
-      title: t("library.confirmReuseTitle"),
-      body: t("library.confirmReuseBody"),
-      confirmLabel: t("library.confirmReuseConfirm"),
-      cancelLabel: t("common.cancel")
-    });
-    if (!ok) return;
-    setRegenerating(true);
-    try {
-      const r = await nuwa.characters.regenerateAppearance({ characterId: id });
-      const warnTail =
-        r.warnings && r.warnings.length > 0
-          ? t("library.warningsSuffix", { count: r.warnings.length })
-          : "";
-      if (!r.ok) {
-        showToast({
-          kind: "error",
-          text: t("library.toastRegenerateFailed", {
-            error: r.error ?? t("common.unknownError")
-          })
-        });
-      } else {
-        showToast({ kind: "success", text: t("library.toastSpriteRegenerated", { warnings: warnTail }) });
-        const next = await nuwa.characters.get(id);
-        setSelected(next);
-        setThumbnails((prev) => ({
-          ...prev,
-          [id]: next?.sprite ?? null
-        }));
-      }
-    } finally {
-      setRegenerating(false);
-    }
-  }
-
   async function regenerateSprite(id: string): Promise<void> {
     const ok = await confirm({
       title: t("library.confirmSpriteTitle"),
       body: t("library.confirmSpriteBody"),
-      confirmLabel: t("library.confirmReuseConfirm"),
+      confirmLabel: t("library.confirmSpriteConfirm"),
       cancelLabel: t("common.cancel")
     });
     if (!ok) return;
@@ -640,18 +604,6 @@ export function CharacterLibrary({
                 >
                   {t("library.newReference")}
                 </button>
-                {(selected.card.meta.appearance?.referenceImages?.length ?? 0) > 0 ? (
-                  <button
-                    className="btn btn--ghost"
-                    onClick={() =>
-                      void regenerateAppearanceReuse(selected.card.id)
-                    }
-                    disabled={anyBusy}
-                    data-hint={t("library.reuseReferenceHint")}
-                  >
-                    {t("library.reuseReference")}
-                  </button>
-                ) : null}
                 <input
                   ref={newRefFileInput}
                   type="file"

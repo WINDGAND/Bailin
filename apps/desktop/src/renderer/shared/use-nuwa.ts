@@ -123,6 +123,7 @@ interface NuwaWindow {
       proactiveWhisper(h: (evt: ProactiveWhisperEvent) => void): () => void;
       ambientSignal(h: (evt: AmbientSignal) => void): () => void;
       distillationProgress(h: (evt: DistillationProgressEvent) => void): () => void;
+      localeChanged(h: (locale: "zh" | "en") => void): () => void;
     };
   };
 }
@@ -165,6 +166,7 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       },
       setLocale: async (locale: "zh" | "en") => {
         localStorage.setItem("bailin.locale", locale);
+        window.dispatchEvent(new CustomEvent("bailin-locale", { detail: locale }));
       }
     },
     llm: {
@@ -298,7 +300,24 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       petSummon: noopOff,
       proactiveWhisper: noopOff,
       ambientSignal: noopOff,
-      distillationProgress: noopOff
+      distillationProgress: noopOff,
+      localeChanged: (h) => {
+        const onStorage = (e: StorageEvent) => {
+          if (e.key === "bailin.locale" && (e.newValue === "zh" || e.newValue === "en")) {
+            h(e.newValue);
+          }
+        };
+        const onCustom = (e: Event) => {
+          const next = (e as CustomEvent<"zh" | "en">).detail;
+          if (next === "zh" || next === "en") h(next);
+        };
+        window.addEventListener("storage", onStorage);
+        window.addEventListener("bailin-locale", onCustom);
+        return () => {
+          window.removeEventListener("storage", onStorage);
+          window.removeEventListener("bailin-locale", onCustom);
+        };
+      }
     }
   };
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SpriteEvent } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
-import { useT } from "../shared/i18n/index.js";
+import { useT, useI18n } from "../shared/i18n/index.js";
 
 interface Starter {
   id: string;
@@ -27,6 +27,7 @@ const PET_SLOT_WIDTH = 240;
 
 export function PetApp(): JSX.Element {
   const t = useT();
+  const { resyncLocale } = useI18n();
   const { bundle } = useActiveCharacter();
   const nuwa = useNuwa();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -181,6 +182,7 @@ export function PetApp(): JSX.Element {
   const onPetContextMenu = useCallback(
     async (e: React.MouseEvent) => {
       e.preventDefault();
+      await resyncLocale();
       const [list, st, chatOpen] = await Promise.all([
         nuwa.characters.list(),
         nuwa.characters.listStarters(),
@@ -192,7 +194,7 @@ export function PetApp(): JSX.Element {
       setCharacters(list);
       setStarters(st);
     },
-    [nuwa]
+    [nuwa, resyncLocale]
   );
 
   const closeMenu = useCallback(() => {

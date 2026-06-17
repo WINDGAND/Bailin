@@ -107,8 +107,10 @@ export function registerIpc(deps: IpcDeps): void {
     return raw === "en" ? "en" : "zh";
   });
   ipcMain.handle(IPC.AppSetLocale, (_evt, locale: string) => {
-    vault.setSetting(SETTING_LOCALE, locale === "en" ? "en" : "zh");
+    const next = locale === "en" ? "en" : "zh";
+    vault.setSetting(SETTING_LOCALE, next);
     deps.onLocaleChanged?.();
+    broadcast(IPC.EventLocaleChanged, next);
   });
 
   // ===== LLM =====
