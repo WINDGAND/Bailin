@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { useConfirm, useToast } from "../../shared/feedback.js";
 import { useDirtyTracker } from "../app/dirty-context.js";
+import { useT } from "../../shared/i18n/index.js";
 
 interface Profile {
   preferredName?: string;
@@ -28,6 +29,7 @@ function profileKey(p: Profile): string {
 }
 
 export function MemoryPanel(): JSX.Element {
+  const t = useT();
   const nuwa = useNuwa();
   const confirm = useConfirm();
   const { showToast } = useToast();
@@ -45,7 +47,9 @@ export function MemoryPanel(): JSX.Element {
     } catch (e) {
       showToast({
         kind: "error",
-        text: `读取画像失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("memory.toastLoadFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
     } finally {
       setLoaded(true);
@@ -75,11 +79,13 @@ export function MemoryPanel(): JSX.Element {
       await nuwa.memory.updateProfile(clean);
       setProfile(clean);
       setInitial(clean);
-      showToast({ kind: "success", text: "画像已保存，下次对话立刻生效" });
+      showToast({ kind: "success", text: t("memory.toastSaved") });
     } catch (e) {
       showToast({
         kind: "error",
-        text: `保存失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("memory.toastSaveFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
     } finally {
       setSaving(false);
@@ -92,17 +98,17 @@ export function MemoryPanel(): JSX.Element {
 
   async function clearProfile(): Promise<void> {
     const ok = await confirm({
-      title: "清空用户画像？",
+      title: t("memory.clearProfileTitle"),
       body: (
         <span>
-          清空后，角色对你的称呼、知道的目标 / 烦恼 / 禁忌都会消失。
+          {t("memory.clearProfileBody")}
           <p style={{ marginTop: 8, color: "var(--ink-soft)" }}>
-            角色仓库与对话历史不受影响。
+            {t("memory.clearProfileNote")}
           </p>
         </span>
       ),
-      confirmLabel: "清空画像",
-      cancelLabel: "再想想",
+      confirmLabel: t("memory.clearProfileConfirm"),
+      cancelLabel: t("common.thinkAgain"),
       danger: true
     });
     if (!ok) return;
@@ -111,11 +117,13 @@ export function MemoryPanel(): JSX.Element {
       await nuwa.memory.clearProfile();
       setProfile(EMPTY);
       setInitial(EMPTY);
-      showToast({ kind: "info", text: "画像已清空" });
+      showToast({ kind: "info", text: t("memory.toastProfileCleared") });
     } catch (e) {
       showToast({
         kind: "error",
-        text: `清空失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("memory.toastClearFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
     } finally {
       setClearing(false);
@@ -124,20 +132,20 @@ export function MemoryPanel(): JSX.Element {
 
   async function clearAll(): Promise<void> {
     const ok = await confirm({
-      title: "清空全部本地数据？",
+      title: t("memory.clearAllTitle"),
       body: (
         <span>
-          这会同时删除：
+          {t("memory.clearAllIntro")}
           <ul style={{ margin: "6px 0 0 18px", padding: 0, color: "var(--ink-soft)" }}>
-            <li>所有角色 / 像素桌宠 / 调研档案</li>
-            <li>用户画像 / 对话历史</li>
-            <li>设置 / API Key 引用 / 蒸馏任务记录</li>
+            <li>{t("memory.clearAllItemCharacters")}</li>
+            <li>{t("memory.clearAllItemMemory")}</li>
+            <li>{t("memory.clearAllItemSettings")}</li>
           </ul>
-          <p style={{ marginTop: 8 }}>该操作不可恢复。</p>
+          <p style={{ marginTop: 8 }}>{t("memory.clearAllIrreversible")}</p>
         </span>
       ),
-      confirmLabel: "清空全部",
-      cancelLabel: "再想想",
+      confirmLabel: t("memory.clearAllConfirm"),
+      cancelLabel: t("common.thinkAgain"),
       danger: true,
       requireText: "DELETE"
     });
@@ -147,11 +155,13 @@ export function MemoryPanel(): JSX.Element {
       await nuwa.memory.clearAll();
       setProfile(EMPTY);
       setInitial(EMPTY);
-      showToast({ kind: "info", text: "已清空全部本地数据" });
+      showToast({ kind: "info", text: t("memory.toastAllCleared") });
     } catch (e) {
       showToast({
         kind: "error",
-        text: `清空失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("memory.toastClearFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
     } finally {
       setClearing(false);
@@ -161,32 +171,29 @@ export function MemoryPanel(): JSX.Element {
   return (
     <div>
       <div style={{ marginBottom: 26 }}>
-        <div className="eyebrow">Memory</div>
-        <div className="display display--page">用户画像</div>
-        <p className="apple-page-subtitle">
-          这些偏好会轻轻进入每次对话，让角色更像是在和“你”说话。
-        </p>
+        <div className="eyebrow">{t("memory.eyebrow")}</div>
+        <div className="display display--page">{t("memory.title")}</div>
+        <p className="apple-page-subtitle">{t("memory.subtitle")}</p>
       </div>
 
       <div style={{ maxWidth: 760 }}>
         <div className="row row--between gap-3" style={{ alignItems: "flex-start", marginBottom: 24 }}>
           <p className="body-md" style={{ margin: 0, maxWidth: 480 }}>
-            建议至少填一下“称呼”。其余内容可以以后慢慢加，角色会在对话里自然参考。
+            {t("memory.introHint")}
           </p>
           <div className="row gap-2 row--wrap" style={{ justifyContent: "flex-end" }}>
-            <span className="bl-tag">称呼</span>
-            <span className="bl-tag">目标</span>
-            <span className="bl-tag">避讳</span>
+            <span className="bl-tag">{t("memory.tagName")}</span>
+            <span className="bl-tag">{t("memory.tagGoals")}</span>
+            <span className="bl-tag">{t("memory.tagTaboo")}</span>
           </div>
         </div>
 
-        {/* —————— 称呼（hero 字段） —————— */}
         <div style={{ marginBottom: 26 }}>
           <label htmlFor="memory-name" className="bl-field-label bl-field-label--with-hint">
-            称呼
+            {t("memory.nameLabel")}
           </label>
           <p className="bl-field-hint" style={{ marginTop: 0, marginBottom: 8 }}>
-            角色每次对话都会这样叫你
+            {t("memory.nameHint")}
           </p>
           <input
             id="memory-name"
@@ -195,42 +202,40 @@ export function MemoryPanel(): JSX.Element {
             onChange={(e) =>
               setProfile({ ...profile, preferredName: e.target.value })
             }
-            placeholder="小明 / 老王 / 同学"
+            placeholder={t("memory.namePlaceholder")}
             maxLength={MAX_NAME + 10}
             style={{ fontSize: "clamp(22px, 2.4vw, 28px)" }}
           />
         </div>
 
-        {/* —————— 三组列表字段 —————— */}
         <div className="apple-list-group">
           <ListField
-            label="当前目标"
-            hint="桌宠会在意你最近在做什么。对话 prompt 仅使用前 3 条。"
-            emptyHint="还没记下任何目标"
-            placeholder="例如：找下一份工作 / 跑半马"
+            label={t("memory.goalsLabel")}
+            hint={t("memory.goalsHint")}
+            emptyHint={t("memory.goalsEmpty")}
+            placeholder={t("memory.goalsPlaceholder")}
             values={profile.currentGoals}
             onChange={(v) => setProfile({ ...profile, currentGoals: v })}
           />
           <ListField
-            label="长期烦恼"
-            hint="桌宠在你低落时会更柔软地回应。对话 prompt 仅使用前 3 条。"
-            emptyHint="还没记下任何烦恼"
-            placeholder="例如：跟父母关系紧张 / 失眠"
+            label={t("memory.concernsLabel")}
+            hint={t("memory.concernsHint")}
+            emptyHint={t("memory.concernsEmpty")}
+            placeholder={t("memory.concernsPlaceholder")}
             values={profile.ongoingConcerns}
             onChange={(v) => setProfile({ ...profile, ongoingConcerns: v })}
           />
           <ListField
-            label="禁忌话题"
-            hint="角色会尽量避开这些话题（软约束，不保证 100% 遵守）。"
-            emptyHint="还没标注禁忌话题"
-            placeholder="例如：抑郁症 / 前任"
+            label={t("memory.tabooLabel")}
+            hint={t("memory.tabooHint")}
+            emptyHint={t("memory.tabooEmpty")}
+            placeholder={t("memory.tabooPlaceholder")}
             values={profile.tabooTopics}
             onChange={(v) => setProfile({ ...profile, tabooTopics: v })}
             tone="caution"
           />
         </div>
 
-        {/* —————— action bar —————— */}
         <div className="bl-action-bar">
           <div className="bl-action-bar__left">
             <button
@@ -239,7 +244,7 @@ export function MemoryPanel(): JSX.Element {
               onClick={() => void clearProfile()}
               disabled={clearing}
             >
-              清空画像
+              {t("memory.clearProfile")}
             </button>
             <button
               type="button"
@@ -247,11 +252,11 @@ export function MemoryPanel(): JSX.Element {
               onClick={() => void clearAll()}
               disabled={clearing}
             >
-              全部数据…
+              {t("memory.clearAllData")}
             </button>
           </div>
           <div className="bl-action-bar__right">
-            {dirty ? <span className="bl-dirty-dot">未保存</span> : null}
+            {dirty ? <span className="bl-dirty-dot">{t("memory.unsaved")}</span> : null}
             {dirty ? (
               <button
                 type="button"
@@ -259,7 +264,7 @@ export function MemoryPanel(): JSX.Element {
                 onClick={discard}
                 disabled={saving}
               >
-                放弃
+                {t("memory.discard")}
               </button>
             ) : null}
             {dirty ? (
@@ -269,11 +274,11 @@ export function MemoryPanel(): JSX.Element {
                 onClick={() => void save()}
                 disabled={saving}
               >
-                {saving ? "保存中…" : "保存修改"}
+                {saving ? t("memory.saving") : t("memory.save")}
               </button>
             ) : (
               <span className="body-sm" style={{ color: "var(--ink-faint)" }}>
-                已同步
+                {t("memory.synced")}
               </span>
             )}
           </div>
@@ -300,6 +305,7 @@ function ListField({
   onChange(v: string[]): void;
   tone?: "default" | "caution";
 }) {
+  const t = useT();
   const isCaution = tone === "caution";
   return (
     <div className="apple-list-row">
@@ -310,7 +316,7 @@ function ListField({
             className="bl-tag"
             style={{ marginLeft: 8, fontSize: 10.5, padding: "2px 7px" }}
           >
-            软约束
+            {t("memory.softConstraint")}
           </span>
         ) : null}
       </label>
@@ -347,7 +353,7 @@ function ListField({
           style={{ alignSelf: "flex-start", marginTop: 4 }}
           onClick={() => onChange([...values, ""])}
         >
-          + 添加一条
+          {t("memory.addRow")}
         </button>
       </div>
     </div>
@@ -365,6 +371,7 @@ function ListRow({
   onRemove: () => void;
   placeholder?: string;
 }) {
+  const t = useT();
   const [hover, setHover] = useState(false);
   return (
     <div
@@ -383,8 +390,8 @@ function ListRow({
         type="button"
         className="btn btn--icon"
         onClick={onRemove}
-        aria-label="删除此条"
-        data-hint="删除"
+        aria-label={t("memory.removeRow")}
+        data-hint={t("memory.removeHint")}
         style={{
           opacity: hover ? 1 : 0.45,
           transition: "opacity var(--motion-fast) var(--ease-out)"

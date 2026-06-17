@@ -61,6 +61,7 @@ export interface IpcDeps {
 }
 
 const SETTING_FIRST_RUN_DONE = "first_run_done";
+const SETTING_LOCALE = "ui.locale";
 const SETTING_ACTIVE_CHARACTER = "active_character_id";
 const SETTING_LLM_PROVIDER = "llm_provider_json";
 const SETTING_LLM_API_KEY = "llm_api_key_enc";
@@ -99,6 +100,13 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.AppCompleteFirstRun, () => vault.setSetting(SETTING_FIRST_RUN_DONE, "1"));
   ipcMain.handle(IPC.AppQuit, () => {
     setTimeout(() => process.exit(0), 50);
+  });
+  ipcMain.handle(IPC.AppGetLocale, () => {
+    const raw = vault.getSetting(SETTING_LOCALE);
+    return raw === "en" ? "en" : "zh";
+  });
+  ipcMain.handle(IPC.AppSetLocale, (_evt, locale: string) => {
+    vault.setSetting(SETTING_LOCALE, locale === "en" ? "en" : "zh");
   });
 
   // ===== LLM =====

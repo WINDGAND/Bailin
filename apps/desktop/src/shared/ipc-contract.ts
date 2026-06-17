@@ -12,12 +12,16 @@ import type {
  * Preload 暴露给渲染进程一个 `window.nuwa` 对象，下方所有方法都通过 ipcRenderer.invoke。
  */
 
+export type AppLocale = "zh" | "en";
+
 export interface BailinApi {
   // ===== 系统 / 首启 =====
   app: {
     isFirstRun(): Promise<boolean>;
     completeFirstRun(): Promise<void>;
     quit(): Promise<void>;
+    getLocale(): Promise<AppLocale>;
+    setLocale(locale: AppLocale): Promise<void>;
   };
 
   // ===== LLM 提供商 =====
@@ -440,6 +444,8 @@ export const IPC = {
   AppIsFirstRun: "nuwa.app.isFirstRun",
   AppCompleteFirstRun: "nuwa.app.completeFirstRun",
   AppQuit: "nuwa.app.quit",
+  AppGetLocale: "nuwa.app.getLocale",
+  AppSetLocale: "nuwa.app.setLocale",
 
   LlmSetProvider: "nuwa.llm.setProvider",
   LlmGetProvider: "nuwa.llm.getProvider",

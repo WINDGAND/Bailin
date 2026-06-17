@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { DistillationProgress } from "../progress/DistillationProgress.js";
 import { useToast } from "../../shared/feedback.js";
+import { useT } from "../../shared/i18n/index.js";
 
 type Mode = "deep" | "quick";
 type SourceType = "public-figure" | "fictional" | "original";
@@ -14,15 +15,21 @@ const MAX_REFERENCE_IMAGES = 4;
 /** 单图大小上限（base64 字符长度，对应约 3MB 原图）。 */
 const MAX_REFERENCE_IMAGE_BYTES = 4 * 1024 * 1024;
 
-const SOURCE_OPTIONS: Array<{ id: SourceType; label: string }> = [
-  { id: "public-figure", label: "公众人物" },
-  { id: "fictional", label: "虚构角色" },
-  { id: "original", label: "原创角色" }
+const SOURCE_OPTIONS: Array<{
+  id: SourceType;
+  labelKey: "forge.sourcePublicFigure" | "forge.sourceFictional" | "forge.sourceOriginal";
+}> = [
+  { id: "public-figure", labelKey: "forge.sourcePublicFigure" },
+  { id: "fictional", labelKey: "forge.sourceFictional" },
+  { id: "original", labelKey: "forge.sourceOriginal" }
 ];
 
-const TRACK_OPTIONS: Array<{ id: Track; label: string }> = [
-  { id: "utility", label: "思维顾问" },
-  { id: "companion", label: "情感陪伴" }
+const TRACK_OPTIONS: Array<{
+  id: Track;
+  labelKey: "library.trackUtility" | "library.trackCompanion";
+}> = [
+  { id: "utility", labelKey: "library.trackUtility" },
+  { id: "companion", labelKey: "library.trackCompanion" }
 ];
 
 interface ReferenceImage {
@@ -34,6 +41,7 @@ interface ReferenceImage {
 }
 
 export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element {
+  const t = useT();
   const nuwa = useNuwa();
   const { showToast } = useToast();
 
@@ -79,7 +87,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         if (prev.length >= MAX_REFERENCE_IMAGES) {
           showToast({
             kind: "warn",
-            text: `最多上传 ${MAX_REFERENCE_IMAGES} 张参考图`
+            text: t("forge.toastMaxRefs", { max: MAX_REFERENCE_IMAGES })
           });
           return prev;
         }
@@ -90,7 +98,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         ];
       });
     },
-    [showToast]
+    [showToast, t]
   );
 
   const removeReferenceImage = useCallback((id: string) => {
@@ -118,13 +126,16 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       const file = files.item(i);
       if (!file) continue;
       if (!/^image\//.test(file.type)) {
-        showToast({ kind: "warn", text: `${file.name} 不是图片，已跳过` });
+        showToast({ kind: "warn", text: t("forge.toastNotImage", { name: file.name }) });
         continue;
       }
       if (file.size > MAX_REFERENCE_IMAGE_BYTES) {
         showToast({
           kind: "warn",
-          text: `${file.name} 超过 ${Math.round(MAX_REFERENCE_IMAGE_BYTES / 1024 / 1024)}MB，已跳过`
+          text: t("forge.toastFileTooLarge", {
+            name: file.name,
+            max: Math.round(MAX_REFERENCE_IMAGE_BYTES / 1024 / 1024)
+          })
         });
         continue;
       }
@@ -141,7 +152,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     const url = urlDraft.trim();
     if (!url) return;
     if (!/^https?:\/\//.test(url)) {
-      showToast({ kind: "warn", text: "请填入 http(s):// 开头的图片 URL" });
+      showToast({ kind: "warn", text: t("forge.toastInvalidUrl") });
       return;
     }
     addReferenceImage({ url, source: "web", label: shortLabelFromUrl(url) });
@@ -167,24 +178,22 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     });
     setBusy(false);
     if (!r.ok) {
-      showToast({ kind: "error", text: r.error ?? "创建失败" });
+      showToast({ kind: "error", text: r.error ?? t("forge.toastCreateFailed") });
       return;
     }
     const ws = r.warnings ?? [];
     if (r.isSkeleton) {
-      setSkeletonNote(
-        "3 步全部失败，已落地为骨架角色。请检查模型 / 网络后在角色仓库中点「重新生成形象」。"
-      );
+      setSkeletonNote(t("forge.skeletonNote"));
     }
     if (ws.length > 0) {
       setWarnings(ws);
       showToast({
         kind: "warn",
-        text: `创建完成，但有 ${ws.length} 条警告`
+        text: t("forge.toastWarnings", { count: ws.length })
       });
       return;
     }
-    showToast({ kind: "success", text: "角色已上桌" });
+    showToast({ kind: "success", text: t("forge.toastSuccess") });
     onDone();
   }
 
@@ -200,7 +209,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     });
     setBusy(false);
     if (!r.ok || !r.jobId) {
-      showToast({ kind: "error", text: r.error ?? "深度蒸馏启动失败" });
+      showToast({ kind: "error", text: r.error ?? t("forge.toastDeepFailed") });
       return;
     }
     setRunningJobId(r.jobId);
@@ -241,28 +250,26 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   }
 
   const submitLabel = busy
-    ? "启动中…"
+    ? t("forge.submitStarting")
     : mode === "deep"
-      ? "开始造人"
-      : "试做一只";
+      ? t("forge.submitDeep")
+      : t("forge.submitQuick");
 
   const actionsHint =
     trimmedName.length > 0
       ? mode === "deep"
-        ? `准备为「${trimmedName}」造一只完整桌宠。大约 5-15 分钟，期间你会确认两次。`
-        : `先为「${trimmedName}」试做一只，约 1 分钟。喜欢的话之后再升级完整版。`
+        ? t("forge.hintDeepNamed", { name: trimmedName })
+        : t("forge.hintQuickNamed", { name: trimmedName })
       : mode === "deep"
-        ? "大约 5-15 分钟。期间你会确认两次：调研后、提炼后。"
-        : "约 1 分钟。先上桌看看，回到角色仓库随时可以重生。";
+        ? t("forge.hintDeepEmpty")
+        : t("forge.hintQuickEmpty");
 
   return (
     <div>
       <div style={{ marginBottom: 26 }}>
-        <div className="eyebrow">Forge</div>
-        <div className="display display--page">造一个角色</div>
-        <p className="apple-page-subtitle">
-          填一个名字，选择它的来源和用途。其余细节可以之后慢慢补。
-        </p>
+        <div className="eyebrow">{t("forge.eyebrow")}</div>
+        <div className="display display--page">{t("forge.title")}</div>
+        <p className="apple-page-subtitle">{t("forge.subtitle")}</p>
       </div>
 
       <form
@@ -276,7 +283,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         <div className="forge-field-name">
           <div className="forge-field-name__label-row">
             <label className="bl-field-label" htmlFor="forge-name">
-              角色名
+              {t("forge.nameLabel")}
             </label>
             <span
               className={`char-count ${name.length > MAX_NAME ? "char-count--danger" : ""}`}
@@ -289,18 +296,18 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             className="forge-field-name__input"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="芒格 / 张小龙 / 绫波丽"
+            placeholder={t("forge.namePlaceholder")}
             autoFocus
             maxLength={MAX_NAME + 20}
           />
-          <div className="forge-field-name__hint">建议中文 2-6 字 / 英文 ≤ 30 字</div>
+          <div className="forge-field-name__hint">{t("forge.nameHint")}</div>
         </div>
 
         {/* —————— 来源 / 定位 chips —————— */}
         <div className="forge-meta-row">
           <div className="forge-chip-group">
-            <span className="bl-field-label">来源</span>
-            <div className="forge-chips" role="radiogroup" aria-label="角色来源类型">
+            <span className="bl-field-label">{t("forge.sourceLabel")}</span>
+            <div className="forge-chips" role="radiogroup" aria-label={t("forge.sourceAria")}>
               {SOURCE_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
@@ -310,14 +317,14 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                   className={`forge-chip ${sourceType === opt.id ? "is-active" : ""}`}
                   onClick={() => setSourceType(opt.id)}
                 >
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </button>
               ))}
             </div>
           </div>
           <div className="forge-chip-group">
-            <span className="bl-field-label">定位</span>
-            <div className="forge-chips" role="radiogroup" aria-label="角色定位">
+            <span className="bl-field-label">{t("forge.trackLabel")}</span>
+            <div className="forge-chips" role="radiogroup" aria-label={t("forge.trackAria")}>
               {TRACK_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
@@ -327,7 +334,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                   className={`forge-chip ${track === opt.id ? "is-active" : ""}`}
                   onClick={() => setTrack(opt.id)}
                 >
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </button>
               ))}
             </div>
@@ -337,7 +344,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         {/* —————— 蒸馏模式 —————— */}
         <div className="forge-section">
           <div className="forge-section__head">
-            <span className="bl-field-label">造人方式</span>
+            <span className="bl-field-label">{t("forge.modeLabel")}</span>
           </div>
           <div className="forge-mode">
             <button
@@ -346,30 +353,26 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
               className={`forge-mode__card ${mode === "deep" ? "is-active" : ""}`}
               onClick={() => !deepDisabled && setMode("deep")}
             >
-              <div className="forge-mode__title">完整版</div>
-              <div className="forge-mode__caption">
-                联网调研 + 框架提炼 + 你来确认两次
-              </div>
-              <div className="forge-mode__hint">5–15 min · 推荐</div>
+              <div className="forge-mode__title">{t("forge.modeDeepTitle")}</div>
+              <div className="forge-mode__caption">{t("forge.modeDeepCaption")}</div>
+              <div className="forge-mode__hint">{t("forge.modeDeepHint")}</div>
             </button>
             <button
               type="button"
               className={`forge-mode__card ${mode === "quick" ? "is-active" : ""}`}
               onClick={() => setMode("quick")}
             >
-              <div className="forge-mode__title">试做版</div>
-              <div className="forge-mode__caption">
-                凭模型训练知识快速出一只，先上桌看看
-              </div>
-              <div className="forge-mode__hint">~1 min</div>
+              <div className="forge-mode__title">{t("forge.modeQuickTitle")}</div>
+              <div className="forge-mode__caption">{t("forge.modeQuickCaption")}</div>
+              <div className="forge-mode__hint">{t("forge.modeQuickHint")}</div>
             </button>
           </div>
           {deepDisabled ? (
             <div className="bl-status-strip is-warn">
               <div className="bl-status-strip__body">
-                <div className="bl-status-strip__title">完整版需要联网调研</div>
+                <div className="bl-status-strip__title">{t("forge.deepDisabledTitle")}</div>
                 <div className="bl-status-strip__detail">
-                  当前模型不支持联网。可以先用试做版上桌，或在
+                  {t("forge.deepDisabledBodyBefore")}
                   <a
                     href="#"
                     style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}
@@ -378,9 +381,9 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                       nuwa.pet.openSettings();
                     }}
                   >
-                    模型与 API Key
+                    {t("nav.key")}
                   </a>
-                  切到 OpenAI / Anthropic 直连。
+                  {t("forge.deepDisabledBodyAfter")}
                 </div>
               </div>
             </div>
@@ -402,16 +405,14 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
           }}
         >
           <div className="forge-section__head">
-            <span className="bl-field-label">参考图 · 可选</span>
-            <span className="forge-section__lede">
-              一张图比文字描述准 10 倍
-            </span>
+            <span className="bl-field-label">{t("forge.referenceLabel")}</span>
+            <span className="forge-section__lede">{t("forge.referenceLede")}</span>
           </div>
           <div className="apple-dropzone">
             <div style={{ marginBottom: 10 }}>
-              <div className="apple-dropzone__title">拖拽图片到这里</div>
+              <div className="apple-dropzone__title">{t("forge.dropzoneTitle")}</div>
               <div className="apple-dropzone__hint">
-                或选择文件 / 粘贴图片 URL。最多 {MAX_REFERENCE_IMAGES} 张。
+                {t("forge.dropzoneHint", { max: MAX_REFERENCE_IMAGES })}
               </div>
             </div>
             <div className="forge-ref-controls">
@@ -421,7 +422,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
               onClick={() => fileInputRef.current?.click()}
               disabled={referenceImages.length >= MAX_REFERENCE_IMAGES}
             >
-              选择文件
+              {t("forge.chooseFile")}
             </button>
             <input
               ref={fileInputRef}
@@ -433,7 +434,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             />
             <input
               className="input"
-              placeholder="或粘贴图片 URL"
+              placeholder={t("forge.urlPlaceholder")}
               value={urlDraft}
               onChange={(e) => setUrlDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -453,7 +454,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                 referenceImages.length >= MAX_REFERENCE_IMAGES
               }
             >
-              添加
+              {t("forge.addUrl")}
             </button>
             </div>
           </div>
@@ -472,9 +473,9 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
           {visionUnavailable && hasUploadedRefs ? (
             <div className="bl-status-strip is-warn">
               <div className="bl-status-strip__body">
-                <div className="bl-status-strip__title">视觉读图模型不可用</div>
+                <div className="bl-status-strip__title">{t("forge.visionUnavailableTitle")}</div>
                 <div className="bl-status-strip__detail">
-                  上传的图会被忽略。可在
+                  {t("forge.visionUnavailableBodyBefore")}
                   <a
                     href="#"
                     style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}
@@ -483,9 +484,9 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                       nuwa.pet.openSettings();
                     }}
                   >
-                    模型与 API Key
+                    {t("nav.key")}
                   </a>
-                  配置支持读图的模型。
+                  {t("forge.visionUnavailableBodyAfter")}
                 </div>
               </div>
             </div>
@@ -494,23 +495,23 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
 
         {/* —————— 折叠：补充素材 —————— */}
         <details className="forge-disclosure">
-          <summary>补充素材（可选）</summary>
+          <summary>{t("forge.extraMaterial")}</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <CountedField
-              label="一句话外貌"
-              hint="比模型猜的更准，例如：短发 / 黑色高领 / 红领带"
+              label={t("forge.appearanceHintLabel")}
+              hint={t("forge.appearanceHintHint")}
               value={userHint}
               onChange={setUserHint}
               max={MAX_USER_HINT}
-              placeholder="一句话即可"
+              placeholder={t("forge.appearanceHintPlaceholder")}
             />
             <CountedTextarea
-              label="文本素材"
-              hint="一段访谈、博客、设定集摘录都行。仅用于这次造人，不上传。"
+              label={t("forge.textMaterialLabel")}
+              hint={t("forge.textMaterialHint")}
               value={userMaterial}
               onChange={setUserMaterial}
               max={MAX_USER_MATERIAL}
-              placeholder="粘贴 ≤ 2000 字…"
+              placeholder={t("forge.textMaterialPlaceholder")}
             />
           </div>
         </details>
@@ -527,7 +528,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             }}
           >
             <strong style={{ color: "var(--magenta)", fontFamily: "var(--font-display)" }}>
-              骨架角色
+              {t("forge.skeletonTitle")}
             </strong>
             <p className="body-sm" style={{ margin: "4px 0 0", color: "var(--ink-soft)" }}>
               {skeletonNote}
@@ -546,7 +547,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             }}
           >
             <summary className="eyebrow" style={{ cursor: "pointer" }}>
-              蒸馏过程的 {warnings.length} 条警告
+              {t("forge.warningsSummary", { count: warnings.length })}
             </summary>
             <ul className="body-sm" style={{ margin: "8px 0 0 16px", padding: 0 }}>
               {warnings.map((w, i) => (
@@ -561,7 +562,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                 className="btn btn--ghost btn--sm"
                 onClick={() => onDone()}
               >
-                进角色仓库
+                {t("forge.goToLibrary")}
               </button>
             </div>
           </details>
@@ -637,6 +638,7 @@ function ReferenceThumb({
   onRemove: () => void;
   onSetPrimary: () => void;
 }) {
+  const t = useT();
   const isPrimary = img.role === "primary";
   return (
     <div
@@ -680,7 +682,7 @@ function ReferenceThumb({
         }}
       >
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {isPrimary ? "主图" : img.source === "user-upload" ? "本地" : "URL"}
+          {isPrimary ? t("forge.refPrimary") : img.source === "user-upload" ? t("forge.refLocal") : "URL"}
         </span>
         {!isPrimary ? (
           <button
@@ -694,7 +696,7 @@ function ReferenceThumb({
               cursor: "pointer",
               fontSize: 10
             }}
-            title="设为主图"
+            title={t("forge.refSetPrimary")}
           >
             ★
           </button>
@@ -711,7 +713,7 @@ function ReferenceThumb({
             fontSize: 12,
             lineHeight: 1
           }}
-          title="移除"
+          title={t("forge.refRemove")}
         >
           ×
         </button>

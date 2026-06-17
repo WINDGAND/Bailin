@@ -5,7 +5,9 @@ const api = {
   app: {
     isFirstRun: () => ipcRenderer.invoke(IPC.AppIsFirstRun),
     completeFirstRun: () => ipcRenderer.invoke(IPC.AppCompleteFirstRun),
-    quit: () => ipcRenderer.invoke(IPC.AppQuit)
+    quit: () => ipcRenderer.invoke(IPC.AppQuit),
+    getLocale: () => ipcRenderer.invoke(IPC.AppGetLocale),
+    setLocale: (locale: "zh" | "en") => ipcRenderer.invoke(IPC.AppSetLocale, locale)
   },
   llm: {
     setProvider: (input: unknown) => ipcRenderer.invoke(IPC.LlmSetProvider, input),

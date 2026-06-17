@@ -15,6 +15,10 @@ import type {
 } from "../../../shared/ipc-contract.js";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { CopyButton, Spinner } from "../../shared/feedback.js";
+import { useI18n, useT } from "../../shared/i18n/index.js";
+import type { Locale } from "../../shared/i18n/types.js";
+
+type TFn = (key: string, params?: Record<string, string | number>) => string;
 
 interface AgentCardState {
   agentId: ResearchAgentId;
@@ -29,21 +33,69 @@ interface AgentCardState {
 }
 
 const INITIAL_AGENTS: AgentCardState[] = [
-  { agentId: 1, agentName: "著作 / 系统思考", status: "pending" },
-  { agentId: 2, agentName: "对话 / 即兴", status: "pending" },
-  { agentId: 3, agentName: "表达 DNA", status: "pending" },
-  { agentId: 4, agentName: "他者视角", status: "pending" },
-  { agentId: 5, agentName: "决策 / 行动", status: "pending" },
-  { agentId: 6, agentName: "时间线", status: "pending" }
+  { agentId: 1, agentName: "", status: "pending" },
+  { agentId: 2, agentName: "", status: "pending" },
+  { agentId: 3, agentName: "", status: "pending" },
+  { agentId: 4, agentName: "", status: "pending" },
+  { agentId: 5, agentName: "", status: "pending" },
+  { agentId: 6, agentName: "", status: "pending" }
 ];
 
-const ACTIVITY_HINTS = [
-  "正在分头查资料，不需要停在这个窗口等。",
-  "如果某一路资料慢一点，系统会用其他结果继续推进。",
-  "调研阶段最耗时；后面会进入提炼、外貌和像素形象。",
-  "正在把碎片资料整理成角色的表达 DNA。",
-  "这不是卡住了，下面的卡片会随 agent 完成陆续更新。"
-];
+const ACTIVITY_HINT_KEYS = [
+  "distill.hint0",
+  "distill.hint1",
+  "distill.hint2",
+  "distill.hint3",
+  "distill.hint4"
+] as const;
+
+const PHASE_EXACT: Record<string, string> = {
+  "启动中…": "distill.phaseStarting",
+  "已启动": "distill.phaseStarted",
+  "完成": "distill.phaseComplete",
+  "启动 6 路并行调研…": "distill.phaseResearchStart",
+  "正在用调研结果提炼心智模型与表达 DNA…": "distill.phaseSynthesizing",
+  "提炼完成，等待你确认": "distill.phaseAwaitSynth",
+  "装配人格卡…": "distill.phaseBuildingCard",
+  "深度外貌调研：vision 读图 → 结构化 → 视觉自检…": "distill.phaseAppearanceDeep",
+  "正在画桌宠的 hatch-pet 精灵图…": "distill.phaseBuildingSprite",
+  "运行质量自检…": "distill.phaseQualityCheck"
+};
+
+function agentNameKey(id: ResearchAgentId): string {
+  return `distill.agent${id}`;
+}
+
+function translatePhaseMessage(raw: string, t: TFn, locale: Locale): string {
+  const exact = PHASE_EXACT[raw];
+  if (exact) return t(exact);
+
+  const researchDone = raw.match(/^调研完成（成功 (\d+)\/6，失败 (\d+)），等待你确认$/);
+  if (researchDone) {
+    return t("distill.phaseResearchDone", {
+      ok: researchDone[1]!,
+      failed: researchDone[2]!
+    });
+  }
+
+  const locked = raw.match(/^已锁定调研对象：(.+)$/);
+  if (locked) {
+    const rest = locked[1]!;
+    const parsed = rest.match(/^(.+?)(?: \/ ([^（]+))?(?:（(.+)）)?$/);
+    const name = parsed?.[1] ?? rest;
+    const english = parsed?.[2];
+    const context = parsed?.[3];
+    const englishPart = english ? ` / ${english}` : "";
+    const contextPart = context
+      ? locale === "zh"
+        ? `（${context}）`
+        : ` (${context})`
+      : "";
+    return t("distill.phaseLockedTarget", { name, english: englishPart, context: contextPart });
+  }
+
+  return raw;
+}
 
 interface Props {
   jobId: string;
@@ -58,6 +110,8 @@ export function DistillationProgress({
   onComplete,
   onCancel
 }: Props): JSX.Element {
+  const t = useT();
+  const { locale } = useI18n();
   const nuwa = useNuwa();
   const [agents, setAgents] = useState<AgentCardState[]>(INITIAL_AGENTS);
   const [progress, setProgress] = useState(0);
@@ -139,7 +193,7 @@ export function DistillationProgress({
           setHatchState((prev) => reduceHatch(prev, evt.event));
           break;
         case "warning":
-          setWarnings((p) => [...p, userFacingProcessMessage(evt.message)]);
+          setWarnings((p) => [...p, evt.message]);
           break;
         case "done":
           setProgress(100);
@@ -151,7 +205,7 @@ export function DistillationProgress({
           });
           break;
         case "failed":
-          setFinalState({ kind: "failed", reason: userFacingProcessMessage(evt.reason) });
+          setFinalState({ kind: "failed", reason: evt.reason });
           break;
         case "cancelled":
           setFinalState({ kind: "cancelled" });
@@ -171,26 +225,28 @@ export function DistillationProgress({
   useEffect(() => {
     if (!running) return;
     const id = window.setInterval(() => {
-      setHintIndex((i) => (i + 1) % ACTIVITY_HINTS.length);
+      setHintIndex((i) => (i + 1) % ACTIVITY_HINT_KEYS.length);
     }, 4200);
     return () => window.clearInterval(id);
   }, [running]);
 
+  const displayPhase = translatePhaseMessage(phaseLabel, t, locale);
+
   return (
     <div>
-      <div className="eyebrow">Distillation</div>
+      <div className="eyebrow">{t("distill.eyebrow")}</div>
       <div className="display display--page" style={{ marginBottom: 6 }}>
-        正在为「{characterName}」造人
+        {t("distill.title", { name: characterName })}
       </div>
       <p className="body-sm" style={{ margin: "0 0 16px" }}>
-        {phaseLabel}
+        {displayPhase}
       </p>
 
       {running ? (
         <div className="bl-status-strip is-running" style={{ marginBottom: 16 }}>
           <div className="bl-status-strip__body">
-            <div className="bl-status-strip__title">百灵正在工作</div>
-            <div className="bl-status-strip__detail">{ACTIVITY_HINTS[hintIndex]}</div>
+            <div className="bl-status-strip__title">{t("distill.workingTitle")}</div>
+            <div className="bl-status-strip__detail">{t(ACTIVITY_HINT_KEYS[hintIndex]!)}</div>
           </div>
           <div className="bl-status-strip__action">
             <Spinner magenta />
@@ -205,7 +261,7 @@ export function DistillationProgress({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progress}
-          aria-label="蒸馏进度"
+          aria-label={t("distill.progressAria")}
         >
           <div className="progress__fill" style={{ width: `${progress}%` }} />
         </div>
@@ -219,7 +275,7 @@ export function DistillationProgress({
 
       <div className="card" style={{ padding: 18, marginBottom: 16 }}>
         <div className="eyebrow" style={{ marginBottom: 12 }}>
-          Phase 1 · 6 路并行调研
+          {t("distill.phase1Title")}
         </div>
         <div
           style={{
@@ -237,11 +293,14 @@ export function DistillationProgress({
       {researchSummary ? (
         <div className="card fade-in" style={{ padding: 14, marginBottom: 16 }}>
           <div className="eyebrow" style={{ marginBottom: 6 }}>
-            调研汇总
+            {t("distill.researchSummary")}
           </div>
           <p className="body-sm" style={{ margin: 0 }}>
-            成功 {researchSummary.okCount}/6，失败 {researchSummary.failedCount}，
-            总用时 {Math.round(researchSummary.totalDurationMs / 1000)} 秒
+            {t("distill.researchSummaryStats", {
+              ok: researchSummary.okCount,
+              failed: researchSummary.failedCount,
+              seconds: Math.round(researchSummary.totalDurationMs / 1000)
+            })}
           </p>
         </div>
       ) : null}
@@ -249,7 +308,7 @@ export function DistillationProgress({
       {synthSummary ? (
         <div className="card fade-in" style={{ padding: 14, marginBottom: 16 }}>
           <div className="eyebrow" style={{ marginBottom: 8 }}>
-            Phase 2 · 提炼摘要
+            {t("distill.phase2Title")}
           </div>
           <SummaryGrid summary={synthSummary} />
         </div>
@@ -264,7 +323,7 @@ export function DistillationProgress({
             background: "rgba(31,58,58,0.04)"
           }}
         >
-          <span className="body-sm">外貌已生成（深度三步：搜图 → 结构化 → 自我批评）</span>
+          <span className="body-sm">{t("distill.appearanceReady")}</span>
         </div>
       ) : null}
 
@@ -273,7 +332,7 @@ export function DistillationProgress({
       {qualityReport ? <QualityReportCard report={qualityReport} /> : null}
 
       {(() => {
-        const notes = filterUserVisibleNotes(warnings);
+        const notes = filterUserVisibleNotes(warnings, t);
         if (notes.length === 0) return null;
         return (
           <details
@@ -289,7 +348,7 @@ export function DistillationProgress({
               className="eyebrow"
               style={{ cursor: "pointer", color: "var(--ink-soft)" }}
             >
-              {notes.length} 条流程笔记
+              {t("distill.processNotes", { count: notes.length })}
             </summary>
             <ul className="body-sm" style={{ margin: "8px 0 0 16px", padding: 0 }}>
               {notes.map((w, i) => (
@@ -305,14 +364,14 @@ export function DistillationProgress({
           {finalState.kind === "done" ? (
             <>
               <div className="display display--section" style={{ marginBottom: 8 }}>
-                {finalState.isSkeleton ? "已落地为骨架角色" : "深度蒸馏完成"}
+                {finalState.isSkeleton ? t("distill.doneSkeleton") : t("distill.doneComplete")}
               </div>
               <p className="body-md" style={{ margin: "0 0 12px" }}>
-                调研档案已存到本机，可在「角色仓库」详情查看完整 Markdown 和质量报告。
+                {t("distill.doneBody")}
               </p>
               <div className="row row--end gap-2">
                 <button className="btn btn--magenta" onClick={() => onComplete()}>
-                  进角色仓库
+                  {t("distill.goToLibrary")}
                 </button>
               </div>
             </>
@@ -322,30 +381,30 @@ export function DistillationProgress({
                 className="display display--section"
                 style={{ marginBottom: 8, color: "var(--magenta)" }}
               >
-                蒸馏失败
+                {t("distill.failedTitle")}
               </div>
               <p className="body-md" style={{ margin: "0 0 12px" }}>
-                {userFacingProcessMessage(finalState.reason)}
+                {userFacingProcessMessage(finalState.reason, t)}
               </p>
               <div className="row row--end gap-2">
                 <CopyButton
                   small
-                  text={buildErrorReport(jobId, characterName, finalState.reason, warnings)}
-                  label="复制错误日志"
+                  text={buildErrorReport(jobId, characterName, finalState.reason, warnings, t)}
+                  label={t("distill.copyErrorLog")}
                 />
                 <button className="btn btn--ghost" onClick={() => onCancel()}>
-                  返回
+                  {t("distill.back")}
                 </button>
               </div>
             </>
           ) : (
             <>
               <div className="display display--section" style={{ marginBottom: 8 }}>
-                已取消
+                {t("distill.cancelledTitle")}
               </div>
               <div className="row row--end gap-2">
                 <button className="btn btn--ghost" onClick={() => onCancel()}>
-                  返回
+                  {t("distill.back")}
                 </button>
               </div>
             </>
@@ -354,7 +413,7 @@ export function DistillationProgress({
       ) : (
         <div className="row row--end gap-2">
           <button className="btn btn--ghost" onClick={() => onCancel()}>
-            取消蒸馏
+            {t("distill.cancelDistillation")}
           </button>
         </div>
       )}
@@ -379,26 +438,32 @@ function buildErrorReport(
   jobId: string,
   characterName: string,
   reason: string,
-  warnings: string[]
+  warnings: string[],
+  t: TFn
 ): string {
   const lines = [
-    `# 百灵 Bailin · 深度蒸馏错误日志`,
+    t("distill.errorReportTitle"),
     ``,
-    `- 角色：${characterName}`,
-    `- Job ID：${jobId}`,
-    `- 时间：${new Date().toISOString()}`,
+    t("distill.errorReportCharacter", { name: characterName }),
+    t("distill.errorReportJobId", { jobId }),
+    t("distill.errorReportTime", { time: new Date().toISOString() }),
     ``,
-    `## 失败原因`,
-    reason,
+    t("distill.errorReportReason"),
+    userFacingProcessMessage(reason, t),
     ``
   ];
   if (warnings.length > 0) {
-    lines.push(`## 过程警告（${warnings.length}）`, ...warnings.map((w) => `- ${w}`));
+    lines.push(
+      t("distill.errorReportWarnings", { count: warnings.length }),
+      ...filterUserVisibleNotes(warnings, t).map((w) => `- ${w}`)
+    );
   }
   return lines.join("\n");
 }
 
 function AgentCard({ state }: { state: AgentCardState }): JSX.Element {
+  const t = useT();
+  const displayName = t(agentNameKey(state.agentId)) || state.agentName;
   const color = useMemo(() => {
     switch (state.status) {
       case "pending":
@@ -429,24 +494,28 @@ function AgentCard({ state }: { state: AgentCardState }): JSX.Element {
     >
       <div className="row row--between" style={{ marginBottom: 6 }}>
         <strong style={{ color, fontSize: 13 }}>
-          #{state.agentId} {state.agentName}
+          #{state.agentId} {displayName}
         </strong>
         <span className="row gap-2" style={{ color, fontSize: 12 }}>
           {state.status === "running" ? <Spinner /> : null}
-          {labelOf(state.status)}
+          {labelOf(state.status, t)}
         </span>
       </div>
       <div className="body-sm" style={{ color: "var(--ink-faint)", minHeight: 18 }}>
-        {state.status === "running" ? "调用 LLM 中…" : null}
+        {state.status === "running" ? t("distill.agentCallingLlm") : null}
         {state.status === "ok" || state.status === "timeout" || state.status === "error" ? (
           <>
-            用时 {Math.round((state.durationMs ?? 0) / 1000)} 秒
-            {state.webSearchUsed ? " · 已拿到来源" : " · 来源待验证"}
+            {t("distill.agentDuration", {
+              seconds: Math.round((state.durationMs ?? 0) / 1000)
+            })}
+            {state.webSearchUsed ? t("distill.agentSourcesOk") : t("distill.agentSourcesPending")}
             {state.confidence ? ` · ${state.confidence}` : ""}
-            {state.sourcesCount != null ? ` · ${state.sourcesCount} 引用` : ""}
+            {state.sourcesCount != null
+              ? t("distill.agentSourcesCount", { count: state.sourcesCount })
+              : ""}
           </>
         ) : null}
-        {state.status === "pending" ? "排队中…" : null}
+        {state.status === "pending" ? t("distill.agentPending") : null}
       </div>
       {state.errorMessage ? (
         <p
@@ -456,7 +525,7 @@ function AgentCard({ state }: { state: AgentCardState }): JSX.Element {
             color: state.status === "ok" ? "var(--ink-faint)" : "var(--magenta)"
           }}
         >
-          {userFacingProcessMessage(state.errorMessage)}
+          {userFacingProcessMessage(state.errorMessage, t)}
         </p>
       ) : null}
     </div>
@@ -469,15 +538,13 @@ function AgentCard({ state }: { state: AgentCardState }): JSX.Element {
  *   - 丢弃纯英文堆栈、纯技术词
  *   - 同义合并：联网类的几条只保留最后一条，避免刷屏
  */
-function filterUserVisibleNotes(raw: string[]): string[] {
+function filterUserVisibleNotes(raw: string[], t: TFn): string[] {
   const out: string[] = [];
   let seenWebSearchNote = false;
   for (const r of raw) {
     const text = r.trim();
     if (!text) continue;
-    // 丢弃明显的开发者诊断
     if (/^\[(step|phase|hatch|name|quote|programmatic|debug)/i.test(text)) continue;
-    // 联网类同义合并
     if (
       /search-preview|web_search|annotations|citation|url_citation|web_search_options|baseUrl|联网|网页来源/i.test(
         text
@@ -486,70 +553,70 @@ function filterUserVisibleNotes(raw: string[]): string[] {
       if (seenWebSearchNote) continue;
       seenWebSearchNote = true;
     }
-    const friendly = userFacingProcessMessage(text);
+    const friendly = userFacingProcessMessage(text, t);
     if (friendly && !out.includes(friendly)) out.push(friendly);
   }
   return out;
 }
 
-/**
- * 把任何上游错误文本翻译成"用户能看得懂、不会觉得产品坏掉"的一句话。
- * 关键原则：
- *   - 不暴露 search-preview / annotations / web_search_options / baseUrl 这种内部技术词
- *   - 不要求用户"去某某面板做某某操作"——除非真的没有别的路可走
- *   - 默认偏向"还在尝试中"而不是"已失败"
- */
-function userFacingProcessMessage(raw: string): string {
+function userFacingProcessMessage(raw: string, t: TFn): string {
   const text = raw.trim();
   if (
     /search-preview|web_search|annotations|citation|url_citation|web_search_options|baseUrl/i.test(
       text
     )
   ) {
-    return "这一路没有拿到额外的网页来源，已用其他材料继续。";
+    return t("distill.msgNoWebSources");
   }
   if (/401|403|unauthorized|invalid api key|AUTH_FAILED/i.test(text)) {
-    return "模型 Key 暂时被拒了，可以稍后再试一次。";
+    return t("distill.msgAuthFailed");
   }
   if (/429|rate limit|RATE_LIMITED/i.test(text)) {
-    return "模型这一刻在限流，自动稍候再试一次就好。";
+    return t("distill.msgRateLimited");
   }
   if (/abort|timeout|timed out|超时/i.test(text)) {
-    return "这一步响应较慢，系统已尽量继续推进。";
+    return t("distill.msgTimeout");
   }
-  // 兜底：不要把英文堆栈 / JSON 错误片段直接糊到 UI 上
   if (/[{}<>]|stack|Error:|TypeError|\bcode\b/i.test(text)) {
-    return "这一步有个小插曲，系统已继续推进。";
+    return t("distill.msgGeneric");
   }
   return text.length > 140 ? text.slice(0, 140) + "…" : text;
 }
 
-function labelOf(s: AgentCardState["status"]): string {
+function labelOf(s: AgentCardState["status"], t: TFn): string {
   switch (s) {
     case "pending":
-      return "排队";
+      return t("distill.statusPending");
     case "running":
-      return "研究中";
+      return t("distill.statusRunning");
     case "ok":
-      return "完成";
+      return t("distill.statusOk");
     case "timeout":
-      return "超时";
+      return t("distill.statusTimeout");
     case "error":
-      return "失败";
+      return t("distill.statusError");
     case "skipped":
-      return "跳过";
+      return t("distill.statusSkipped");
   }
 }
 
 function SummaryGrid({ summary }: { summary: SynthesisSummaryPayload }): JSX.Element {
+  const t = useT();
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <SummaryRow label="心智模型" items={summary.mentalModelNames} />
-      <div className="body-sm">决策启发式 {summary.heuristicsCount} 条</div>
-      <SummaryRow label="签名词" items={summary.expressionSignatures} />
-      <SummaryRow label="禁忌词" items={summary.expressionForbidden} muted />
-      <SummaryRow label="内在张力" items={summary.tensions} />
-      <SummaryRow label="诚实边界" items={summary.honestyNotes} muted />
+      <SummaryRow label={t("distill.summaryMentalModels")} items={summary.mentalModelNames} t={t} />
+      <div className="body-sm">
+        {t("distill.summaryHeuristics", { count: summary.heuristicsCount })}
+      </div>
+      <SummaryRow label={t("distill.summarySignatures")} items={summary.expressionSignatures} t={t} />
+      <SummaryRow
+        label={t("distill.summaryForbidden")}
+        items={summary.expressionForbidden}
+        muted
+        t={t}
+      />
+      <SummaryRow label={t("distill.summaryTensions")} items={summary.tensions} t={t} />
+      <SummaryRow label={t("distill.summaryHonesty")} items={summary.honestyNotes} muted t={t} />
     </div>
   );
 }
@@ -557,11 +624,13 @@ function SummaryGrid({ summary }: { summary: SynthesisSummaryPayload }): JSX.Ele
 function SummaryRow({
   label,
   items,
-  muted
+  muted,
+  t
 }: {
   label: string;
   items: string[];
   muted?: boolean;
+  t: TFn;
 }): JSX.Element {
   return (
     <div>
@@ -572,13 +641,14 @@ function SummaryRow({
         className="body-sm"
         style={{ color: muted ? "var(--ink-faint)" : "var(--ink-soft)" }}
       >
-        {items.length === 0 ? "（无）" : items.join(" · ")}
+        {items.length === 0 ? t("distill.summaryEmpty") : items.join(" · ")}
       </span>
     </div>
   );
 }
 
 function QualityReportCard({ report }: { report: QualityReport }): JSX.Element {
+  const t = useT();
   const verdictColor =
     report.verdict === "pass"
       ? "var(--emerald)"
@@ -588,9 +658,10 @@ function QualityReportCard({ report }: { report: QualityReport }): JSX.Element {
   return (
     <div className="card fade-in" style={{ padding: 14, marginBottom: 16 }}>
       <div className="row row--between" style={{ marginBottom: 8 }}>
-        <div className="eyebrow">Phase 4 · 质量自检</div>
+        <div className="eyebrow">{t("distill.phase4Title")}</div>
         <span style={{ color: verdictColor, fontWeight: 600 }}>
-          {report.verdict.toUpperCase()} · 总分 {(report.overallScore * 100).toFixed(0)}/100
+          {report.verdict.toUpperCase()}
+          {t("distill.phase4Score", { score: (report.overallScore * 100).toFixed(0) })}
         </span>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -603,7 +674,7 @@ function QualityReportCard({ report }: { report: QualityReport }): JSX.Element {
       {report.voiceTest ? (
         <details style={{ marginTop: 10 }}>
           <summary className="eyebrow" style={{ cursor: "pointer" }}>
-            风格测试样本（评分 {report.voiceTest.score}/10）
+            {t("distill.voiceTestSummary", { score: report.voiceTest.score })}
           </summary>
           <blockquote
             className="body-sm"
@@ -617,7 +688,7 @@ function QualityReportCard({ report }: { report: QualityReport }): JSX.Element {
             {report.voiceTest.sample}
           </blockquote>
           <p className="body-sm" style={{ color: "var(--ink-soft)" }}>
-            点评：{report.voiceTest.critique}
+            {t("distill.voiceCritique", { text: report.voiceTest.critique })}
           </p>
         </details>
       ) : null}
@@ -652,6 +723,7 @@ function CheckpointDialog(props: {
   onApprove: () => void;
   onCancel: () => void;
 }): JSX.Element {
+  const t = useT();
   const { phase, researchSummary, synthSummary, onApprove, onCancel } = props;
   const approveRef = useRef<HTMLButtonElement | null>(null);
 
@@ -683,26 +755,34 @@ function CheckpointDialog(props: {
     >
       <div className="modal" style={{ width: 540 }}>
         <div className="eyebrow" style={{ marginBottom: 8 }}>
-          {phase === "research" ? "Checkpoint 1 · 调研质量" : "Checkpoint 2 · 提炼确认"}
+          {phase === "research" ? t("distill.checkpoint1Eyebrow") : t("distill.checkpoint2Eyebrow")}
         </div>
         <div
           id="checkpoint-title"
           className="display display--section"
           style={{ marginBottom: 12 }}
         >
-          {phase === "research" ? "调研完成，请确认" : "提炼完成，请确认"}
+          {phase === "research" ? t("distill.checkpoint1Title") : t("distill.checkpoint2Title")}
         </div>
         {phase === "research" && researchSummary ? (
           <div style={{ marginBottom: 14 }}>
             <p className="body-sm" style={{ margin: 0 }}>
-              成功 {researchSummary.okCount}/6，失败 {researchSummary.failedCount}，
-              用时 {Math.round(researchSummary.totalDurationMs / 1000)} 秒。
+              {t("distill.checkpointResearchStats", {
+                ok: researchSummary.okCount,
+                failed: researchSummary.failedCount,
+                seconds: Math.round(researchSummary.totalDurationMs / 1000)
+              })}
             </p>
             <ul className="body-sm" style={{ marginTop: 8 }}>
               {researchSummary.docs.map((d) => (
                 <li key={d.agentId}>
-                  #{d.agentId} {d.agentName} — {d.status}（{d.confidence}） ·{" "}
-                  {d.sources.length} 引用
+                  {t("distill.checkpointDocLine", {
+                    id: d.agentId,
+                    name: t(agentNameKey(d.agentId as ResearchAgentId)) || d.agentName,
+                    status: d.status,
+                    confidence: d.confidence,
+                    sources: d.sources.length
+                  })}
                 </li>
               ))}
             </ul>
@@ -720,7 +800,7 @@ function CheckpointDialog(props: {
             onClick={() => onCancel()}
             data-hint="Esc"
           >
-            取消
+            {t("distill.checkpointCancel")}
           </button>
           <button
             type="button"
@@ -729,7 +809,7 @@ function CheckpointDialog(props: {
             onClick={() => onApprove()}
             data-hint="Enter"
           >
-            确认，继续下一阶段
+            {t("distill.checkpointApprove")}
           </button>
         </div>
       </div>
@@ -764,17 +844,17 @@ interface HatchPanelState {
   jobs: Record<string, HatchJobState>;
 }
 
-const HATCH_LABELS: Record<HatchPetRowState | "base", string> = {
-  base: "Base 立绘",
-  idle: "idle 待机",
-  "running-right": "running-right 右走",
-  "running-left": "running-left 左走",
-  waving: "waving 招手",
-  jumping: "jumping 跳跃",
-  failed: "failed 沮丧",
-  waiting: "waiting 等待",
-  running: "running 工作",
-  review: "review 审阅"
+const HATCH_LABEL_KEYS: Record<HatchPetRowState | "base", string> = {
+  base: "distill.hatchBase",
+  idle: "distill.hatchIdle",
+  "running-right": "distill.hatchRunningRight",
+  "running-left": "distill.hatchRunningLeft",
+  waving: "distill.hatchWaving",
+  jumping: "distill.hatchJumping",
+  failed: "distill.hatchFailedAnim",
+  waiting: "distill.hatchWaiting",
+  running: "distill.hatchRunningAnim",
+  review: "distill.hatchReview"
 };
 
 function reduceHatch(
@@ -873,6 +953,7 @@ function reduceHatch(
 }
 
 function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
+  const t = useT();
   const total = state.jobsCount ?? 10;
   const done = Object.values(state.jobs).filter(
     (j) => j.status === "done" || j.status === "mirrored"
@@ -895,19 +976,24 @@ function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
   return (
     <div className="card fade-in" style={{ padding: 16, marginBottom: 16 }}>
       <div className="row row--between" style={{ marginBottom: 10 }}>
-        <div className="eyebrow">Phase 3 · Hatch-pet 精灵图集</div>
+        <div className="eyebrow">{t("distill.phase3Title")}</div>
         <div className="body-sm" style={{ color: "var(--ink-faint)" }}>
-          完成 {done}/{total}
-          {failed > 0 ? ` · 失败 ${failed}` : ""}
-          {remaining > 0 ? ` · 待生成 ${remaining}` : ""}
+          {t("distill.hatchProgress", {
+            done,
+            total,
+            failed: failed > 0 ? t("distill.hatchFailed", { count: failed }) : "",
+            remaining: remaining > 0 ? t("distill.hatchRemaining", { count: remaining }) : ""
+          })}
         </div>
       </div>
       <div
         className="body-sm"
         style={{ color: "var(--ink-faint)", marginBottom: 10 }}
       >
-        预估成本 ${state.estimatedCostUsd.toFixed(2)} · 当前累计 $
-        {state.totalCostUsd.toFixed(3)}
+        {t("distill.hatchCost", {
+          estimated: state.estimatedCostUsd.toFixed(2),
+          total: state.totalCostUsd.toFixed(3)
+        })}
       </div>
       <div
         style={{
@@ -929,8 +1015,8 @@ function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
           }}
         >
           {state.atlasOk
-            ? "atlas 已拼装 ✓"
-            : `atlas 已拼装但有 ${state.atlasIssues?.length ?? 0} 项警告`}
+            ? t("distill.hatchAtlasOk")
+            : t("distill.hatchAtlasWarn", { count: state.atlasIssues?.length ?? 0 })}
           {state.atlasIssues && state.atlasIssues.length > 0 ? (
             <ul style={{ marginTop: 4, fontFamily: "var(--font-mono)" }}>
               {state.atlasIssues.slice(0, 4).map((issue, i) => (
@@ -942,7 +1028,7 @@ function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
       ) : null}
       {state.contactSheetPath ? (
         <div className="body-sm" style={{ marginTop: 10 }}>
-          QA 资产已落盘：
+          {t("distill.hatchQaSaved")}
           <code style={{ fontSize: 11 }}>{state.atlasPath}</code>
         </div>
       ) : null}
@@ -951,6 +1037,7 @@ function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
 }
 
 function HatchJobCard({ job }: { job: HatchJobState }): JSX.Element {
+  const t = useT();
   const color = (() => {
     switch (job.status) {
       case "pending":
@@ -979,11 +1066,11 @@ function HatchJobCard({ job }: { job: HatchJobState }): JSX.Element {
     >
       <div className="row row--between" style={{ marginBottom: 4 }}>
         <strong style={{ color, fontSize: 12 }}>
-          {HATCH_LABELS[job.rowState] ?? job.jobId}
+          {t(HATCH_LABEL_KEYS[job.rowState] ?? job.jobId)}
         </strong>
         <span style={{ color, fontSize: 11 }} className="row gap-2">
           {job.status === "running" ? <Spinner /> : null}
-          {labelForHatchStatus(job.status)}
+          {labelForHatchStatus(job.status, t)}
         </span>
       </div>
       <div
@@ -991,33 +1078,33 @@ function HatchJobCard({ job }: { job: HatchJobState }): JSX.Element {
         style={{ color: "var(--ink-faint)", minHeight: 14, fontSize: 11 }}
       >
         {job.status === "running"
-          ? "正在生成…"
+          ? t("distill.hatchGenerating")
           : job.status === "done"
             ? `${((job.durationMs ?? 0) / 1000).toFixed(1)}s${
                 job.costUsd != null ? ` · $${job.costUsd.toFixed(3)}` : ""
               }`
             : job.status === "mirrored"
-              ? `镜像自 ${job.mirroredFrom ?? "—"}`
+              ? t("distill.hatchMirroredFrom", { from: job.mirroredFrom ?? "—" })
               : job.status === "failed"
-                ? job.reason ?? "失败"
-                : "排队中"}
+                ? job.reason ?? t("distill.hatchFailedStatus")
+                : t("distill.hatchQueued")}
       </div>
     </div>
   );
 }
 
-function labelForHatchStatus(s: HatchJobStatus): string {
+function labelForHatchStatus(s: HatchJobStatus, t: TFn): string {
   switch (s) {
     case "pending":
-      return "排队";
+      return t("distill.hatchPending");
     case "running":
-      return "绘制中";
+      return t("distill.hatchRunning");
     case "done":
-      return "完成";
+      return t("distill.hatchDone");
     case "mirrored":
-      return "镜像";
+      return t("distill.hatchMirrored");
     case "failed":
-      return "失败";
+      return t("distill.hatchFailedStatus");
   }
 }
 

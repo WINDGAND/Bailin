@@ -17,7 +17,7 @@ import type {
 
 interface NuwaWindow {
   nuwa: {
-    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void> };
+    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void> };
     llm: {
       setProvider(input: unknown): Promise<{ ok: boolean; error?: string }>;
       getProvider(): Promise<unknown>;
@@ -158,7 +158,14 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
     app: {
       isFirstRun: async () => false,
       completeFirstRun: async () => undefined,
-      quit: async () => undefined
+      quit: async () => undefined,
+      getLocale: async () => {
+        const v = localStorage.getItem("bailin.locale");
+        return v === "en" ? "en" : "zh";
+      },
+      setLocale: async (locale: "zh" | "en") => {
+        localStorage.setItem("bailin.locale", locale);
+      }
     },
     llm: {
       setProvider: async () => ({ ok: false, error: "stub" }),

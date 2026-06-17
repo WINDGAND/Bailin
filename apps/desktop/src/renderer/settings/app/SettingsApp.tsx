@@ -8,26 +8,30 @@ import { CreateCharacter } from "../create/CreateCharacter.js";
 import { MemoryPanel } from "../memory/MemoryPanel.js";
 import { ApiKeyPanel } from "../provider/ApiKeyPanel.js";
 import { DesktopBehaviorPanel } from "../desktop/DesktopBehaviorPanel.js";
+import { LanguagePanel } from "../language/LanguagePanel.js";
 import { DirtyContext, type DirtyContextValue } from "./dirty-context.js";
+import { useI18n } from "../../shared/i18n/index.js";
 
-type Tab = "library" | "create" | "memory" | "desktop" | "key";
+type Tab = "library" | "create" | "memory" | "desktop" | "key" | "language";
 
 interface TabDef {
   id: Tab;
-  label: string;
+  labelKey: "nav.library" | "nav.create" | "nav.memory" | "nav.desktop" | "nav.key" | "nav.language";
   icon: (props: { size?: number }) => JSX.Element;
 }
 
 const TABS: TabDef[] = [
-  { id: "library", label: "角色仓库", icon: LibraryIcon },
-  { id: "create", label: "造一个角色", icon: ForgeIcon },
-  { id: "memory", label: "记忆 / 用户画像", icon: MemoryIcon },
-  { id: "desktop", label: "桌宠与陪伴", icon: CompanionIcon },
-  { id: "key", label: "模型与 API Key", icon: KeyIcon }
+  { id: "library", labelKey: "nav.library", icon: LibraryIcon },
+  { id: "create", labelKey: "nav.create", icon: ForgeIcon },
+  { id: "memory", labelKey: "nav.memory", icon: MemoryIcon },
+  { id: "desktop", labelKey: "nav.desktop", icon: CompanionIcon },
+  { id: "key", labelKey: "nav.key", icon: KeyIcon },
+  { id: "language", labelKey: "nav.language", icon: LanguageIcon }
 ];
 
 export function SettingsApp(): JSX.Element {
   const nuwa = useNuwa();
+  const { t, ready: i18nReady } = useI18n();
   const kb = useKeyboard();
   const confirm = useConfirm();
   const [firstRun, setFirstRun] = useState<boolean | null>(null);
@@ -52,10 +56,10 @@ export function SettingsApp(): JSX.Element {
       if (next === tab) return;
       if (dirtyRef.current) {
         const ok = await confirm({
-          title: "丢弃未保存的修改？",
-          body: "当前页有未保存的修改。切换后这些修改会丢失。",
-          confirmLabel: "丢弃并切换",
-          cancelLabel: "继续编辑",
+          title: t("common.discardTitle"),
+          body: t("common.discardBody"),
+          confirmLabel: t("common.discardConfirm"),
+          cancelLabel: t("common.discardCancel"),
           danger: true
         });
         if (!ok) return;
@@ -63,43 +67,50 @@ export function SettingsApp(): JSX.Element {
       }
       setTab(next);
     },
-    [tab, confirm]
+    [tab, confirm, t]
   );
 
   useShortcut({
     id: "tab-1",
     combo: "1",
     scope: "Settings",
-    label: "切到 角色仓库",
+    label: t("nav.library"),
     handler: () => void tryGoTab("library")
   });
   useShortcut({
     id: "tab-2",
     combo: "2",
     scope: "Settings",
-    label: "切到 造一个角色",
+    label: t("nav.create"),
     handler: () => void tryGoTab("create")
   });
   useShortcut({
     id: "tab-3",
     combo: "3",
     scope: "Settings",
-    label: "切到 记忆 / 用户画像",
+    label: t("nav.memory"),
     handler: () => void tryGoTab("memory")
   });
   useShortcut({
     id: "tab-4",
     combo: "4",
     scope: "Settings",
-    label: "切到 桌宠与陪伴",
+    label: t("nav.desktop"),
     handler: () => void tryGoTab("desktop")
   });
   useShortcut({
     id: "tab-5",
     combo: "5",
     scope: "Settings",
-    label: "切到 模型与 API Key",
+    label: t("nav.key"),
     handler: () => void tryGoTab("key")
+  });
+  useShortcut({
+    id: "tab-6",
+    combo: "6",
+    scope: "Settings",
+    label: t("nav.language"),
+    handler: () => void tryGoTab("language")
   });
   useShortcut({
     id: "help",
@@ -109,10 +120,10 @@ export function SettingsApp(): JSX.Element {
     handler: () => kb.openHelp()
   });
 
-  if (firstRun === null) {
+  if (firstRun === null || !i18nReady) {
     return (
       <div style={{ padding: 40 }}>
-        <div className="display display--page">加载中…</div>
+        <div className="display display--page">{t("common.loading")}</div>
       </div>
     );
   }
@@ -131,7 +142,7 @@ export function SettingsApp(): JSX.Element {
   return (
     <DirtyContext.Provider value={dirtyCtx}>
       <div className="settings-shell">
-        <aside className="settings-sidebar" aria-label="设置侧边栏">
+        <aside className="settings-sidebar" aria-label={t("common.settingsSidebar")}>
           <div className="settings-brand">
             <div className="eyebrow">Bailin · 0.0.1</div>
             <div className="display display--section" style={{ marginTop: 4 }}>
@@ -139,17 +150,17 @@ export function SettingsApp(): JSX.Element {
             </div>
           </div>
 
-          <nav className="settings-nav" aria-label="设置导航">
-            {TABS.map((t) => (
+          <nav className="settings-nav" aria-label={t("common.settingsNav")}>
+            {TABS.map((tabDef) => (
               <button
-                key={t.id}
+                key={tabDef.id}
                 type="button"
-                className={tab === t.id ? "settings-nav__item is-active" : "settings-nav__item"}
-                onClick={() => void tryGoTab(t.id)}
-                aria-current={tab === t.id ? "page" : undefined}
+                className={tab === tabDef.id ? "settings-nav__item is-active" : "settings-nav__item"}
+                onClick={() => void tryGoTab(tabDef.id)}
+                aria-current={tab === tabDef.id ? "page" : undefined}
               >
-                <t.icon size={17} />
-                <span>{t.label}</span>
+                <tabDef.icon size={17} />
+                <span>{t(tabDef.labelKey)}</span>
               </button>
             ))}
           </nav>
@@ -161,6 +172,7 @@ export function SettingsApp(): JSX.Element {
             {tab === "memory" ? <MemoryPanel /> : null}
             {tab === "desktop" ? <DesktopBehaviorPanel /> : null}
             {tab === "key" ? <ApiKeyPanel /> : null}
+            {tab === "language" ? <LanguagePanel /> : null}
           </div>
         </main>
       </div>
@@ -289,6 +301,26 @@ function KeyIcon({ size = 18 }: IconProps): JSX.Element {
       <path d="M12 12h9" />
       <path d="M17 12v3" />
       <path d="M20 12v2" />
+    </svg>
+  );
+}
+
+function LanguageIcon({ size = 18 }: IconProps): JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3a15 15 0 0 1 4 9 15 15 0 0 1-4 9 15 15 0 0 1-4-9 15 15 0 0 1 4-9z" />
     </svg>
   );
 }

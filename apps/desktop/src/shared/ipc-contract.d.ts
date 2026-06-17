@@ -8,6 +8,8 @@ export interface BailinApi {
         isFirstRun(): Promise<boolean>;
         completeFirstRun(): Promise<void>;
         quit(): Promise<void>;
+        getLocale(): Promise<"zh" | "en">;
+        setLocale(locale: "zh" | "en"): Promise<void>;
     };
     llm: {
         setProvider(input: LLMProviderConfig): Promise<{

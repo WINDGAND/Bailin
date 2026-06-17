@@ -15,6 +15,7 @@ import type {
   ResearchDoc,
   SpriteProgram
 } from "@nuwa-pet/character-protocol";
+import { useT } from "../../shared/i18n/index.js";
 
 interface LibraryItem {
   id: string;
@@ -25,9 +26,9 @@ interface LibraryItem {
   isActive: boolean;
 }
 
-const TRACK_LABEL: Record<LibraryItem["track"], string> = {
-  utility: "思维顾问",
-  companion: "情感陪伴"
+const TRACK_KEYS: Record<LibraryItem["track"], "library.trackUtility" | "library.trackCompanion"> = {
+  utility: "library.trackUtility",
+  companion: "library.trackCompanion"
 };
 
 export function CharacterLibrary({
@@ -35,6 +36,7 @@ export function CharacterLibrary({
 }: {
   onNewClick: () => void;
 }): JSX.Element {
+  const t = useT();
   const nuwa = useNuwa();
   const confirm = useConfirm();
   const { showToast } = useToast();
@@ -55,7 +57,7 @@ export function CharacterLibrary({
     try {
       const b = await nuwa.characters.get(id);
       if (!b) {
-        showToast({ kind: "warn", text: "角色不存在或已损坏" });
+        showToast({ kind: "warn", text: t("library.toastNotFound") });
         setSelected(null);
         return;
       }
@@ -66,7 +68,9 @@ export function CharacterLibrary({
     } catch (e) {
       showToast({
         kind: "error",
-        text: `读取失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("library.toastReadFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
     }
   }
@@ -78,7 +82,9 @@ export function CharacterLibrary({
     } catch (e) {
       showToast({
         kind: "error",
-        text: `读取角色列表失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("library.toastListFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
       setItems([]);
       return;
@@ -131,15 +137,17 @@ export function CharacterLibrary({
     try {
       const r = await nuwa.characters.activate(id);
       if (!r.ok) {
-        showToast({ kind: "error", text: "切换桌宠失败：角色可能已被删除" });
+        showToast({ kind: "error", text: t("library.toastActivateFailed") });
         return;
       }
-      showToast({ kind: "success", text: "已设为当前桌宠" });
+      showToast({ kind: "success", text: t("library.toastActivated") });
       void refreshList(true);
     } catch (e) {
       showToast({
         kind: "error",
-        text: `切换失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("library.toastActivateError", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
     } finally {
       setActivating(false);
@@ -148,34 +156,36 @@ export function CharacterLibrary({
 
   async function remove(id: string, name: string): Promise<void> {
     const ok = await confirm({
-      title: `删除「${name}」？`,
+      title: t("library.deleteTitle", { name }),
       body: (
         <span>
-          删除此角色将一并清除：
+          {t("library.deleteBodyIntro")}
           <ul style={{ margin: "6px 0 0 18px", padding: 0, color: "var(--ink-soft)" }}>
-            <li>它的角色卡 / 像素桌宠</li>
-            <li>它对你保留的备注</li>
-            <li>它的对话历史</li>
+            <li>{t("library.deleteBodyItemCard")}</li>
+            <li>{t("library.deleteBodyItemNotes")}</li>
+            <li>{t("library.deleteBodyItemChat")}</li>
           </ul>
-          <p style={{ marginTop: 8 }}>该操作不可恢复。</p>
+          <p style={{ marginTop: 8 }}>{t("library.deleteBodyIrreversible")}</p>
         </span>
       ),
-      confirmLabel: "确认删除",
-      cancelLabel: "再想想",
+      confirmLabel: t("common.confirmDelete"),
+      cancelLabel: t("common.thinkAgain"),
       danger: true,
       requireText: "DELETE"
     });
     if (!ok) return;
     try {
       await nuwa.characters.delete(id);
-      showToast({ kind: "info", text: `已删除「${name}」` });
+      showToast({ kind: "info", text: t("library.toastDeleted", { name }) });
       // 不立即清空 selected——等 refreshList 自动选下一个
       setSelectedId(null);
       void refreshList(false);
     } catch (e) {
       showToast({
         kind: "error",
-        text: `删除失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("library.toastDeleteFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
     }
   }
@@ -189,16 +199,17 @@ export function CharacterLibrary({
     if (file.size > 4 * 1024 * 1024) {
       showToast({
         kind: "warn",
-        text: `参考图超过 4MB（${(file.size / 1024 / 1024).toFixed(1)}MB），请压缩后再上传`
+        text: t("library.toastImageTooLarge", {
+          size: (file.size / 1024 / 1024).toFixed(1)
+        })
       });
       return;
     }
     const ok = await confirm({
-      title: "用这张参考图重新画形象？",
-      body:
-        "会基于新参考图重跑外貌管道并覆盖现有形象。原 sprite 不会保留。",
-      confirmLabel: "重新画",
-      cancelLabel: "不了"
+      title: t("library.confirmNewRefTitle"),
+      body: t("library.confirmNewRefBody"),
+      confirmLabel: t("library.confirmNewRefConfirm"),
+      cancelLabel: t("common.cancel")
     });
     if (!ok) return;
     setRegenerating(true);
@@ -222,17 +233,19 @@ export function CharacterLibrary({
       });
       const warnTail =
         r.warnings && r.warnings.length > 0
-          ? `（${r.warnings.length} 条警告）`
+          ? t("library.warningsSuffix", { count: r.warnings.length })
           : "";
       if (!r.ok) {
         showToast({
           kind: "error",
-          text: `形象重新生成失败：${r.error ?? "未知错误"}`
+          text: t("library.toastRegenerateFailed", {
+            error: r.error ?? t("common.unknownError")
+          })
         });
       } else {
         showToast({
           kind: "success",
-          text: `形象已基于新参考图重生${warnTail}`
+          text: t("library.toastRegenerateSuccess", { warnings: warnTail })
         });
         const next = await nuwa.characters.get(id);
         setSelected(next);
@@ -244,7 +257,9 @@ export function CharacterLibrary({
     } catch (e) {
       showToast({
         kind: "error",
-        text: `重新生成失败：${e instanceof Error ? e.message : "未知错误"}`
+        text: t("library.toastRegenerateFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
       });
     } finally {
       setRegenerating(false);
@@ -253,10 +268,10 @@ export function CharacterLibrary({
 
   async function regenerateAppearanceReuse(id: string): Promise<void> {
     const ok = await confirm({
-      title: "用旧参考图重画形象？",
-      body: "会重跑一次外貌管道。原 sprite 会被覆盖。",
-      confirmLabel: "重画",
-      cancelLabel: "不了"
+      title: t("library.confirmReuseTitle"),
+      body: t("library.confirmReuseBody"),
+      confirmLabel: t("library.confirmReuseConfirm"),
+      cancelLabel: t("common.cancel")
     });
     if (!ok) return;
     setRegenerating(true);
@@ -264,15 +279,17 @@ export function CharacterLibrary({
       const r = await nuwa.characters.regenerateAppearance({ characterId: id });
       const warnTail =
         r.warnings && r.warnings.length > 0
-          ? `（${r.warnings.length} 条警告）`
+          ? t("library.warningsSuffix", { count: r.warnings.length })
           : "";
       if (!r.ok) {
         showToast({
           kind: "error",
-          text: `形象重新生成失败：${r.error ?? "未知错误"}`
+          text: t("library.toastRegenerateFailed", {
+            error: r.error ?? t("common.unknownError")
+          })
         });
       } else {
-        showToast({ kind: "success", text: `形象已重生${warnTail}` });
+        showToast({ kind: "success", text: t("library.toastSpriteRegenerated", { warnings: warnTail }) });
         const next = await nuwa.characters.get(id);
         setSelected(next);
         setThumbnails((prev) => ({
@@ -287,10 +304,10 @@ export function CharacterLibrary({
 
   async function regenerateSprite(id: string): Promise<void> {
     const ok = await confirm({
-      title: "重新生成像素形象？",
-      body: "会基于现有外貌调研重画 sprite，原形象不保留。",
-      confirmLabel: "重画",
-      cancelLabel: "不了"
+      title: t("library.confirmSpriteTitle"),
+      body: t("library.confirmSpriteBody"),
+      confirmLabel: t("library.confirmReuseConfirm"),
+      cancelLabel: t("common.cancel")
     });
     if (!ok) return;
     setRegenerating(true);
@@ -298,15 +315,17 @@ export function CharacterLibrary({
       const r = await nuwa.characters.regenerateSprite(id);
       const warnTail =
         r.warnings && r.warnings.length > 0
-          ? `（${r.warnings.length} 条警告）`
+          ? t("library.warningsSuffix", { count: r.warnings.length })
           : "";
       if (!r.ok) {
         showToast({
           kind: "error",
-          text: `形象生成失败：${r.error ?? "未知错误"}`
+          text: t("library.toastSpriteRegenerateFailed", {
+            error: r.error ?? t("common.unknownError")
+          })
         });
       } else {
-        showToast({ kind: "success", text: `形象已更新${warnTail}` });
+        showToast({ kind: "success", text: t("library.toastSpriteUpdated", { warnings: warnTail }) });
         const next = await nuwa.characters.get(id);
         setSelected(next);
         setThumbnails((prev) => ({
@@ -320,8 +339,8 @@ export function CharacterLibrary({
   }
 
   const qualityWarning = useMemo<{ severity: "warn" | "error"; text: string } | null>(
-    () => deriveQualityWarning(qualityReport, selected?.researchDocs),
-    [qualityReport, selected]
+    () => deriveQualityWarning(qualityReport, selected?.researchDocs, t),
+    [qualityReport, selected, t]
   );
 
   const selectedDisplayName = useMemo(
@@ -343,14 +362,12 @@ export function CharacterLibrary({
     <div>
       <div className="row row--between" style={{ marginBottom: 26 }}>
         <div>
-          <div className="eyebrow">Library</div>
-          <div className="display display--page">角色仓库</div>
-          <p className="apple-page-subtitle">
-            管理已经上桌的角色。这里不是数据库，是你的桌面生命管理台。
-          </p>
+          <div className="eyebrow">{t("library.eyebrow")}</div>
+          <div className="display display--page">{t("library.title")}</div>
+          <p className="apple-page-subtitle">{t("library.subtitle")}</p>
         </div>
         <button className="btn btn--magenta" onClick={onNewClick}>
-          + 造一个新角色
+          {t("library.newCharacter")}
         </button>
       </div>
       <div className="apple-two-column">
@@ -368,7 +385,7 @@ export function CharacterLibrary({
               ))}
             </>
           ) : items.length === 0 ? (
-            <EmptyLibrary onNew={onNewClick} />
+            <EmptyLibrary onNew={onNewClick} t={t} />
           ) : (
             items.map((c, i) => {
               const displayName = getCharacterDisplayNames({
@@ -433,7 +450,7 @@ export function CharacterLibrary({
                       {c.isActive ? (
                         <span className="bl-tag bl-tag--active" style={{ transform: "scale(0.92)" }}>
                           <span className="bl-tag__dot" />
-                          当前
+                          {t("library.current")}
                         </span>
                       ) : null}
                     </div>
@@ -447,7 +464,7 @@ export function CharacterLibrary({
                           minWidth: 0
                         }}
                       >
-                        {displayName.englishName || "—"}
+                        {displayName.englishName || t("library.noEnglishName")}
                       </span>
                       <span
                         className={
@@ -457,14 +474,14 @@ export function CharacterLibrary({
                         }
                         style={{ flexShrink: 0, opacity: 0.78 }}
                       >
-                        {TRACK_LABEL[c.track]}
+                        {t(TRACK_KEYS[c.track])}
                       </span>
                       {c.isSkeleton ? (
                         <span
                           className="bl-tag bl-tag--skeleton"
                           style={{ flexShrink: 0, opacity: 0.72 }}
                         >
-                          待完善
+                          {t("library.skeleton")}
                         </span>
                       ) : null}
                     </div>
@@ -478,7 +495,7 @@ export function CharacterLibrary({
         {/* —————— 详情 —————— */}
         <div className="bl-card" style={{ minHeight: 380 }}>
           {!selected ? (
-            <EmptyDetail />
+            <EmptyDetail t={t} />
           ) : (
             <div className="stack stack--lg fade-in">
               <div className="row gap-3 row--start-top">
@@ -503,17 +520,17 @@ export function CharacterLibrary({
                             : "bl-tag bl-tag--companion"
                         }
                       >
-                        {TRACK_LABEL[selectedItem.track]}
+                        {t(TRACK_KEYS[selectedItem.track])}
                       </span>
                     ) : null}
                     {isSelectedActive ? (
                       <span className="bl-tag bl-tag--active">
                         <span className="bl-tag__dot" />
-                        已在桌面
+                        {t("library.onDesktop")}
                       </span>
                     ) : null}
                     {selectedItem?.isSkeleton ? (
-                      <span className="bl-tag bl-tag--skeleton">待完善</span>
+                      <span className="bl-tag bl-tag--skeleton">{t("library.skeleton")}</span>
                     ) : null}
                   </div>
                   <div
@@ -548,7 +565,7 @@ export function CharacterLibrary({
                   }
                 >
                   <div className="bl-status-strip__body">
-                    <div className="bl-status-strip__title">可信度提示</div>
+                    <div className="bl-status-strip__title">{t("library.trustHintTitle")}</div>
                     <div className="bl-status-strip__detail">{qualityWarning.text}</div>
                   </div>
                 </div>
@@ -575,9 +592,11 @@ export function CharacterLibrary({
 
               <section className="bl-section">
                 <header className="bl-section__head">
-                  <span className="bl-section__title">心智模型</span>
+                  <span className="bl-section__title">{t("library.mentalModels")}</span>
                   <span className="bl-section__caption">
-                    {selected.card.mentalModels.length} 条 · 决定它怎么思考
+                    {t("library.mentalModelsCaption", {
+                      count: selected.card.mentalModels.length
+                    })}
                   </span>
                 </header>
                 <div className="stack stack--sm">
@@ -597,9 +616,9 @@ export function CharacterLibrary({
                   className="btn btn--magenta"
                   onClick={() => void activate(selected.card.id)}
                   disabled={isSelectedActive || anyBusy}
-                  data-hint={isSelectedActive ? "已是当前桌宠" : ""}
+                  data-hint={isSelectedActive ? t("library.alreadyActiveHint") : ""}
                 >
-                  {activating ? <><Spinner /> 切换中…</> : "设为当前桌宠"}
+                  {activating ? <><Spinner /> {t("library.activating")}</> : t("library.setActive")}
                 </button>
                 <button
                   className="btn btn--ghost"
@@ -607,19 +626,19 @@ export function CharacterLibrary({
                   disabled={anyBusy}
                   data-hint={
                     selected.card.meta.appearance
-                      ? "基于现有外貌重画像素形象"
-                      : "缺少外貌调研，将回退骨架形象"
+                      ? t("library.regenerateSpriteHintWithAppearance")
+                      : t("library.regenerateSpriteHintSkeleton")
                   }
                 >
-                  {regenerating ? <><Spinner /> 处理中…</> : "重画形象"}
+                  {regenerating ? <><Spinner /> {t("library.processing")}</> : t("library.regenerateSprite")}
                 </button>
                 <button
                   className="btn btn--ghost"
                   onClick={() => newRefFileInput.current?.click()}
                   disabled={anyBusy}
-                  data-hint="上传一张新参考图，重新生成外貌 + 形象"
+                  data-hint={t("library.newReferenceHint")}
                 >
-                  换张参考图
+                  {t("library.newReference")}
                 </button>
                 {(selected.card.meta.appearance?.referenceImages?.length ?? 0) > 0 ? (
                   <button
@@ -628,9 +647,9 @@ export function CharacterLibrary({
                       void regenerateAppearanceReuse(selected.card.id)
                     }
                     disabled={anyBusy}
-                    data-hint="不换图，用上次的参考图再算一次外貌"
+                    data-hint={t("library.reuseReferenceHint")}
                   >
-                    用旧图重算
+                    {t("library.reuseReference")}
                   </button>
                 ) : null}
                 <input
@@ -651,7 +670,7 @@ export function CharacterLibrary({
                   onClick={() => void remove(selected.card.id, selected.card.meta.name)}
                   disabled={anyBusy}
                 >
-                  删除角色
+                  {t("library.delete")}
                 </button>
               </div>
 
@@ -669,12 +688,12 @@ export function CharacterLibrary({
                       padding: "8px 0"
                     }}
                   >
-                    调研档案 · {researchDocs.length} 篇
+                    {t("library.researchArchive", { count: researchDocs.length })}
                     <span
                       className="body-sm"
                       style={{ marginLeft: 8, fontWeight: 400 }}
                     >
-                      女娲深度蒸馏的原始素材，可展开查看与复制
+                      {t("library.researchArchiveHint")}
                     </span>
                   </summary>
                   <div className="stack" style={{ marginTop: 8 }}>
@@ -701,7 +720,7 @@ export function CharacterLibrary({
                                   : "var(--magenta)"
                             }}
                           >
-                            {d.status === "ok" ? "完成" : "失败"} · {d.sources.length} 引用
+                            {d.status === "ok" ? t("library.researchDone") : t("library.researchFailed")} · {t("library.researchSources", { count: d.sources.length })}
                           </span>
                         </div>
                         <div
@@ -716,9 +735,9 @@ export function CharacterLibrary({
                               )
                             }
                           >
-                            {openedAgentId === d.agentId ? "收起" : "查看 Markdown"}
+                            {openedAgentId === d.agentId ? t("library.collapse") : t("library.viewMarkdown")}
                           </button>
-                          <CopyButton small text={d.markdown} label="复制全文" />
+                          <CopyButton small text={d.markdown} label={t("library.copyFull")} />
                         </div>
                         {openedAgentId === d.agentId ? (
                           <pre
@@ -761,13 +780,13 @@ export function CharacterLibrary({
                       padding: "6px 0"
                     }}
                   >
-                    蒸馏过程指标（debug）
+                    {t("library.debugMetrics")}
                   </summary>
                   <p
                     className="body-sm"
                     style={{ margin: "6px 0", color: "var(--ink-faint)" }}
                   >
-                    女娲流程的内部指标，仅供你判断"这次蒸馏到底有多扎实"。
+                    {t("library.debugMetricsHint")}
                   </p>
                   <div
                     className="row gap-2"
@@ -781,7 +800,11 @@ export function CharacterLibrary({
                     >
                       {qualityReport.verdict.toUpperCase()}
                     </span>
-                    <span>· 总分 {(qualityReport.overallScore * 100).toFixed(0)}/100</span>
+                    <span>
+                      {t("library.debugScore", {
+                        score: (qualityReport.overallScore * 100).toFixed(0)
+                      })}
+                    </span>
                   </div>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <tbody>
@@ -819,7 +842,7 @@ export function CharacterLibrary({
                           marginBottom: 4
                         }}
                       >
-                        风格测试样本 · {qualityReport.voiceTest.score}/10
+                        {t("library.voiceTestSample", { score: qualityReport.voiceTest.score })}
                       </div>
                       <blockquote
                         className="body-sm"
@@ -844,15 +867,21 @@ export function CharacterLibrary({
   );
 }
 
-function EmptyLibrary({ onNew }: { onNew: () => void }): JSX.Element {
+function EmptyLibrary({
+  onNew,
+  t
+}: {
+  onNew: () => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}): JSX.Element {
   return (
     <div className="bl-card fade-in-up" style={{ padding: 22 }}>
       <div className="empty">
-        <div className="empty__title">仓库还是空的</div>
-        <p className="empty__body">立刻造一只，让它上桌陪你。</p>
+        <div className="empty__title">{t("library.emptyTitle")}</div>
+        <p className="empty__body">{t("library.emptyBody")}</p>
         <div className="row gap-2" style={{ marginTop: 6 }}>
           <button className="btn btn--magenta btn--sm" onClick={onNew}>
-            造一个角色
+            {t("library.emptyCta")}
           </button>
         </div>
       </div>
@@ -860,13 +889,15 @@ function EmptyLibrary({ onNew }: { onNew: () => void }): JSX.Element {
   );
 }
 
-function EmptyDetail(): JSX.Element {
+function EmptyDetail({
+  t
+}: {
+  t: (key: string, params?: Record<string, string | number>) => string;
+}): JSX.Element {
   return (
     <div className="empty">
-      <div className="empty__title">选一个角色查看详情</div>
-      <p className="empty__body">
-        从左侧点选，能看到它的金句、心智模型和"重画形象"等操作。
-      </p>
+      <div className="empty__title">{t("library.detailEmptyTitle")}</div>
+      <p className="empty__body">{t("library.detailEmptyBody")}</p>
     </div>
   );
 }
@@ -883,25 +914,24 @@ function verdictColor(v: QualityReport["verdict"]): string {
  */
 function deriveQualityWarning(
   report: QualityReport | undefined,
-  researchDocs: ReadonlyArray<ResearchDoc> | undefined
+  researchDocs: ReadonlyArray<ResearchDoc> | undefined,
+  t: (key: string, params?: Record<string, string | number>) => string
 ): { severity: "warn" | "error"; text: string } | null {
   if (!report) return null;
   const docs = researchDocs ?? [];
   if (docs.length > 0) {
     const realWebUsed = docs.filter((d) => d.webSearchUsed).length;
-    // 全员都没拿到来源时，给一个温和的"可信度偏低"提示——不再标红 error。
-    // 真要修，用户可以在「重生角色」时贴文本素材，自然会比联网更可靠。
     if (realWebUsed === 0) {
       return {
         severity: "warn",
-        text: "这次调研主要靠模型已有知识。如果想更贴近原型，可以在「造一个角色」里贴一段他的真实文本再造一次。"
+        text: t("library.qualityNoWeb")
       };
     }
   }
   if (report.voiceTest && report.voiceTest.score < 5) {
     return {
       severity: "warn",
-      text: `风格相似度 ${report.voiceTest.score}/10，还有空间。可以在「造一个角色」里粘贴一段该角色的真实文本作为补充素材，再造一次会更像。`
+      text: t("library.qualityLowVoice", { score: report.voiceTest.score })
     };
   }
   return null;
