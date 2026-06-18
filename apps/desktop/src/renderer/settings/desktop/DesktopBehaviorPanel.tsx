@@ -1,5 +1,15 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { ProactiveSettings, ProactiveStatus } from "../../../shared/ipc-contract.js";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import type {
+  CompanionFrequency,
+  ProactiveSettings,
+  ProactiveStatus
+} from "../../../shared/ipc-contract.js";
+import {
+  COMPANION_FREQUENCIES,
+  DEFAULT_SCENARIO_TOGGLES,
+  frequencySupportsSmartScreenshot,
+  frequencyToMaxPerHour
+} from "../../../shared/proactive-companion.js";
 import {
   clampPetDisplayScale,
   PET_DISPLAY_SCALE_DEFAULT,
@@ -10,7 +20,7 @@ import {
   resolveDslPetPixelSize
 } from "../../../shared/pet-display-scale.js";
 import { useNuwa, useActiveCharacter } from "../../shared/use-nuwa.js";
-import { useToast } from "../../shared/feedback.js";
+import { useConfirm, useToast } from "../../shared/feedback.js";
 import { BlSelect } from "../../shared/BlSelect.js";
 import { PetPreview } from "../../shared/pet-preview.js";
 import { useI18n } from "../../shared/i18n/index.js";
@@ -19,6 +29,8 @@ const DEFAULT_SETTINGS: ProactiveSettings = {
   enabled: true,
   intensity: "light",
   maxPerHour: 1,
+  companionFrequency: "light",
+  scenarioToggles: { ...DEFAULT_SCENARIO_TOGGLES },
   defaultHushMinutes: 30,
   quietHoursEnabled: false,
   quietHoursStart: "22:00",
@@ -28,18 +40,45 @@ const DEFAULT_SETTINGS: ProactiveSettings = {
 };
 
 const HUSH_MINUTES = [15, 30, 60] as const;
-const MAX_PER_HOUR = [0, 1, 2] as const;
+
+const FREQUENCY_HINT_KEYS: Record<CompanionFrequency, string> = {
+  off: "desktop.frequencyHint_off",
+  light: "desktop.frequencyHint_light",
+  standard: "desktop.frequencyHint_standard",
+  active: "desktop.frequencyHint_active",
+  intense: "desktop.frequencyHint_intense"
+};
 
 const TRIGGER_REASON_KEYS: Record<string, string> = {
   disabled: "desktop.triggerReasonDisabled",
   "quiet-hours": "desktop.triggerReasonQuietHours",
   hushed: "desktop.triggerReasonHushed",
+  "focus-mode": "desktop.triggerReasonFocusMode",
   "chat-visible": "desktop.triggerReasonChatVisible",
   locked: "desktop.triggerReasonLocked",
   "quota-disabled": "desktop.triggerReasonQuotaDisabled",
   "hourly-quota": "desktop.triggerReasonHourlyQuota",
   "no-active-character": "desktop.triggerReasonNoActiveCharacter",
-  "character-not-found": "desktop.triggerReasonCharacterNotFound"
+  "character-not-found": "desktop.triggerReasonCharacterNotFound",
+  "scenario-disabled": "desktop.triggerReasonScenarioDisabled",
+  "llm-screenshots-off": "desktop.triggerReasonLlmScreenshotsOff",
+  "llm-no-vision": "desktop.triggerReasonLlmNoVision",
+  "llm-capture-failed": "desktop.triggerReasonLlmCaptureFailed",
+  "llm-unavailable": "desktop.triggerReasonLlmUnavailable",
+  "llm-empty": "desktop.triggerReasonLlmEmpty",
+  "llm-not-standard": "desktop.triggerReasonLlmNotStandard",
+  "llm-interval": "desktop.triggerReasonLlmInterval",
+  "llm-error": "desktop.triggerReasonLlmEmpty"
+};
+
+const LAST_REASON_KEYS: Record<string, string> = {
+  long_active: "desktop.lastReasonLongActive",
+  idle: "desktop.lastReasonIdle",
+  active: "desktop.lastReasonReturn",
+  unlock: "desktop.lastReasonUnlock",
+  resume: "desktop.lastReasonUnlock",
+  manual: "desktop.lastReasonManual",
+  llm: "desktop.lastReasonLlm"
 };
 
 export function DesktopBehaviorPanel(): JSX.Element {
@@ -47,20 +86,33 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const nuwa = useNuwa();
   const { bundle } = useActiveCharacter();
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const [settings, setSettings] = useState<ProactiveSettings>(DEFAULT_SETTINGS);
   const [status, setStatus] = useState<ProactiveStatus | null>(null);
+  const [visionAvailable, setVisionAvailable] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
+  const [llmTesting, setLlmTesting] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+
+  const refreshStatus = useCallback(async () => {
+    setStatus(await nuwa.proactive.getStatus());
+  }, [nuwa]);
 
   useEffect(() => {
     void (async () => {
-      const [s, st] = await Promise.all([
+      const [s, st, vision] = await Promise.all([
         nuwa.proactive.getSettings(),
-        nuwa.proactive.getStatus()
+        nuwa.proactive.getStatus(),
+        nuwa.characters.detectVisionCapability().catch(() => null)
       ]);
       setSettings(s);
       setStatus(st);
+      setVisionAvailable(vision?.vision ?? null);
     })();
-  }, [nuwa]);
+    const timer = window.setInterval(() => void refreshStatus(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [nuwa, refreshStatus]);
 
   async function save(next: ProactiveSettings, opts?: { silent?: boolean }): Promise<void> {
     setSettings(next);
@@ -68,7 +120,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
     try {
       const saved = await nuwa.proactive.setSettings(next);
       setSettings(saved);
-      setStatus(await nuwa.proactive.getStatus());
+      await refreshStatus();
       if (!opts?.silent) {
         showToast({ kind: "success", text: t("desktop.toastSaved") });
       }
@@ -77,16 +129,42 @@ export function DesktopBehaviorPanel(): JSX.Element {
     }
   }
 
+  function setFrequency(companionFrequency: CompanionFrequency): void {
+    void save({
+      ...settings,
+      companionFrequency,
+      intensity: companionFrequency,
+      enabled: companionFrequency !== "off",
+      maxPerHour: frequencyToMaxPerHour(companionFrequency)
+    });
+  }
+
+  async function setSmartScreenshot(enabled: boolean): Promise<void> {
+    if (enabled) {
+      const ok = await confirm({
+        title: t("desktop.smartScreenshotConfirmTitle"),
+        body: t("desktop.smartScreenshotConfirmBody"),
+        confirmLabel: t("desktop.smartScreenshotConfirmOk"),
+        cancelLabel: t("common.discardCancel")
+      });
+      if (!ok) return;
+    }
+    void save({
+      ...settings,
+      screenAwareness: enabled ? "screenshots" : "off"
+    });
+  }
+
   function translateTriggerReason(reason: string | undefined): string {
     if (!reason) return t("common.unknownError");
     const key = TRIGGER_REASON_KEYS[reason];
     return key ? t(key) : reason;
   }
 
-  function screenAwarenessLabel(value: ProactiveSettings["screenAwareness"]): string {
-    if (value === "signals") return t("desktop.screenLabelSignals");
-    if (value === "screenshots") return t("desktop.screenLabelScreenshots");
-    return t("desktop.screenLabelOff");
+  function lastReasonLabel(reason: string | undefined): string {
+    if (!reason) return t("desktop.lastReasonNone");
+    const key = LAST_REASON_KEYS[reason];
+    return key ? t(key) : reason;
   }
 
   const timeLocale = locale === "zh" ? "zh-CN" : "en-US";
@@ -106,15 +184,63 @@ export function DesktopBehaviorPanel(): JSX.Element {
   }, [bundle?.sprite, settings.petDisplayScale]);
 
   const scalePercent = Math.round((settings.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT) * 100);
+  const frequency = settings.companionFrequency;
+  const screenshotsOn = settings.screenAwareness === "screenshots";
+
+  const frequencyHint = t(FREQUENCY_HINT_KEYS[frequency] as "desktop.frequencyHint_off");
+  const trackHint =
+    bundle?.card.meta.track === "companion"
+      ? t("desktop.trackHintCompanion")
+      : bundle?.card.meta.track === "utility"
+        ? t("desktop.trackHintUtility")
+        : null;
+
+  const statusSummary = useMemo(() => {
+    const count = status?.utterancesThisHour ?? 0;
+    const max = status?.maxPerHour ?? settings.maxPerHour;
+    if (status?.focusModeUntil && status.focusModeUntil > Date.now()) {
+      return t("desktop.statusSummaryFocus", {
+        time: new Date(status.focusModeUntil).toLocaleTimeString(timeLocale),
+        count,
+        max
+      });
+    }
+    if (status?.hushUntil && status.hushUntil > Date.now()) {
+      return t("desktop.statusSummaryHush", {
+        time: new Date(status.hushUntil).toLocaleTimeString(timeLocale),
+        count,
+        max
+      });
+    }
+    return t("desktop.statusSummaryReady", { count, max });
+  }, [status, settings.maxPerHour, t, timeLocale]);
+
+  const screenshotStatusLine = useMemo(() => {
+    if (!screenshotsOn) return null;
+    const parts: string[] = [];
+    if (status?.lastScreenshotAt) {
+      parts.push(
+        t("desktop.smartScreenshotLastAt", {
+          time: new Date(status.lastScreenshotAt).toLocaleString(timeLocale)
+        })
+      );
+    }
+    if (!frequencySupportsSmartScreenshot(frequency)) {
+      parts.push(t("desktop.smartScreenshotRequiresStandard"));
+    } else if (visionAvailable === false) {
+      parts.push(t("desktop.smartScreenshotRequiresVision"));
+    }
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }, [screenshotsOn, status?.lastScreenshotAt, frequency, visionAvailable, t, timeLocale]);
 
   return (
     <div className="stack" style={{ maxWidth: 760 }}>
       <div>
         <div className="eyebrow">{t("desktop.eyebrow")}</div>
-        <h1 className="display display--page" style={{ margin: "6px 0 8px" }}>
+        <h1 className="display display--page" style={{ margin: "6px 0 0" }}>
           {t("desktop.title")}
         </h1>
-        <p className="body-md" style={{ maxWidth: 620 }}>
+        <p className="body-sm" style={{ maxWidth: 520, margin: "8px 0 0", opacity: 0.72 }}>
           {t("desktop.subtitle")}
         </p>
       </div>
@@ -148,10 +274,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
             <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
               {t("desktop.petSizeTitle")}
             </h2>
-            <p className="body-sm" style={{ margin: "6px 0 14px" }}>
-              {t("desktop.petSizeHint")}
-            </p>
-            <label className="stack" style={{ gap: 8 }}>
+            <label className="stack" style={{ gap: 8, marginTop: 14 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <span className="body-sm">{t("desktop.petSizeLabel")}</span>
                 <span className="body-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -187,155 +310,227 @@ export function DesktopBehaviorPanel(): JSX.Element {
       </section>
 
       <section className="card" style={{ padding: 18 }}>
-        <div className="row" style={{ justifyContent: "space-between", gap: 16 }}>
-          <div>
-            <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
-              {t("desktop.proactiveTitle")}
-            </h2>
-            <p className="body-sm" style={{ margin: "6px 0 0" }}>
-              {t("desktop.proactiveHint")}
-            </p>
+        <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
+          {t("desktop.proactiveTitle")}
+        </h2>
+
+        <Field label={t("desktop.frequencyLabel")} style={{ marginTop: 16 }}>
+          <BlSelect
+            value={frequency}
+            onChange={(companionFrequency) => setFrequency(companionFrequency)}
+            options={COMPANION_FREQUENCIES.map((f) => ({
+              value: f,
+              label: t(`desktop.frequency_${f}` as "desktop.frequency_off")
+            }))}
+          />
+          <p className="body-sm" style={{ margin: "6px 0 0", opacity: 0.72, lineHeight: 1.5 }}>
+            {frequencyHint}
+            {trackHint ? ` ${trackHint}` : null}
+          </p>
+        </Field>
+
+        {frequencySupportsSmartScreenshot(frequency) ? (
+          <div
+            className="stack"
+            style={{
+              marginTop: 14,
+              padding: "12px 14px",
+              borderRadius: 12,
+              background: "var(--bl-surface-muted, rgba(0, 0, 0, 0.03))"
+            }}
+          >
+            <label className="row gap-2" style={{ cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={screenshotsOn}
+                onChange={(e) => void setSmartScreenshot(e.currentTarget.checked)}
+              />
+              <span className="body-sm">{t("desktop.smartScreenshotEnable")}</span>
+            </label>
+            {screenshotsOn ? (
+              <>
+                {screenshotStatusLine ? (
+                  <p className="body-sm" style={{ margin: 0, opacity: 0.72 }}>
+                    {screenshotStatusLine}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn--magenta"
+                  style={{ alignSelf: "flex-start" }}
+                  disabled={llmTesting || saving}
+                  onClick={async () => {
+                    setLlmTesting(true);
+                    try {
+                      const r = await nuwa.proactive.triggerLlmScreenshot();
+                      showToast({
+                        kind: r.ok ? "success" : "info",
+                        text: r.ok
+                          ? t("desktop.toastLlmTriggered")
+                          : t("desktop.toastTriggerFailed", {
+                              reason: translateTriggerReason(r.reason)
+                            })
+                      });
+                      await refreshStatus();
+                    } finally {
+                      setLlmTesting(false);
+                    }
+                  }}
+                >
+                  {llmTesting ? t("common.loading") : t("desktop.smartScreenshotTryButton")}
+                </button>
+              </>
+            ) : null}
           </div>
-          <label className="row gap-2" style={{ cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={settings.enabled}
-              onChange={(e) =>
-                void save({
-                  ...settings,
-                  enabled: e.currentTarget.checked,
-                  intensity: e.currentTarget.checked ? "light" : "off"
-                })
-              }
-            />
-            <span>{settings.enabled ? t("desktop.toggleOn") : t("desktop.toggleOff")}</span>
-          </label>
-        </div>
+        ) : null}
 
-        <div className="stack stack--lg" style={{ marginTop: 18 }}>
-          <Field label={t("desktop.intensityLabel")}>
-            <BlSelect
-              value={settings.intensity}
-              onChange={(intensity) =>
-                void save({
-                  ...settings,
-                  intensity,
-                  enabled: intensity !== "off"
-                })
-              }
-              options={[
-                { value: "off", label: t("desktop.intensityOff") },
-                { value: "light", label: t("desktop.intensityLight") },
-                { value: "standard", label: t("desktop.intensityStandard") }
-              ]}
-            />
-          </Field>
-          <Field label={t("desktop.maxPerHourLabel")}>
-            <BlSelect
-              value={String(settings.maxPerHour)}
-              onChange={(raw) =>
-                void save({
-                  ...settings,
-                  maxPerHour: Number(raw) as ProactiveSettings["maxPerHour"]
-                })
-              }
-              options={MAX_PER_HOUR.map((n) => ({
-                value: String(n),
-                label: t("desktop.timesPerHour", { count: n })
-              }))}
-            />
-          </Field>
-          <Field label={t("desktop.defaultHushLabel")}>
-            <BlSelect
-              value={String(settings.defaultHushMinutes)}
-              onChange={(raw) =>
-                void save({
-                  ...settings,
-                  defaultHushMinutes: Number(raw) as ProactiveSettings["defaultHushMinutes"]
-                })
-              }
-              options={HUSH_MINUTES.map((n) => ({
-                value: String(n),
-                label: t("desktop.minutes", { count: n })
-              }))}
-            />
-          </Field>
-          <Field label={t("desktop.screenAwarenessLabel")}>
-            <BlSelect
-              value={settings.screenAwareness}
-              onChange={(screenAwareness) =>
-                void save({
-                  ...settings,
-                  screenAwareness
-                })
-              }
-              options={[
-                { value: "off", label: t("desktop.screenOptionOff") },
-                { value: "signals", label: t("desktop.screenOptionSignals") },
-                { value: "screenshots", label: t("desktop.screenOptionScreenshots") }
-              ]}
-            />
-          </Field>
-        </div>
+        <details
+          style={{ marginTop: 18 }}
+          open={advancedOpen}
+          onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}
+        >
+          <summary className="body-sm" style={{ cursor: "pointer", userSelect: "none" }}>
+            {t("desktop.advancedTitle")}
+          </summary>
+          <div className="stack stack--lg" style={{ marginTop: 14 }}>
+            <div className="stack" style={{ gap: 10 }}>
+              <span className="body-sm" style={{ opacity: 0.85 }}>
+                {t("desktop.scenariosTitle")}
+              </span>
+              <ScenarioToggle
+                label={t("desktop.scenarioLongActive")}
+                checked={settings.scenarioToggles.longActive}
+                onChange={(longActive) =>
+                  void save({
+                    ...settings,
+                    scenarioToggles: { ...settings.scenarioToggles, longActive }
+                  })
+                }
+              />
+              <ScenarioToggle
+                label={t("desktop.scenarioIdle")}
+                checked={settings.scenarioToggles.idle}
+                onChange={(idle) =>
+                  void save({
+                    ...settings,
+                    scenarioToggles: { ...settings.scenarioToggles, idle }
+                  })
+                }
+              />
+              <ScenarioToggle
+                label={t("desktop.scenarioReturn")}
+                checked={settings.scenarioToggles.returnActive}
+                onChange={(returnActive) =>
+                  void save({
+                    ...settings,
+                    scenarioToggles: { ...settings.scenarioToggles, returnActive }
+                  })
+                }
+              />
+              <ScenarioToggle
+                label={t("desktop.scenarioUnlock")}
+                checked={settings.scenarioToggles.unlock}
+                onChange={(unlock) =>
+                  void save({
+                    ...settings,
+                    scenarioToggles: { ...settings.scenarioToggles, unlock }
+                  })
+                }
+              />
+            </div>
+
+            <Field label={t("desktop.quietHoursTitle")}>
+              <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+                <label className="row gap-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.quietHoursEnabled}
+                    onChange={(e) =>
+                      void save({ ...settings, quietHoursEnabled: e.currentTarget.checked })
+                    }
+                  />
+                  <span className="body-sm">{t("desktop.quietHoursEnable")}</span>
+                </label>
+                <input
+                  className="input"
+                  type="time"
+                  value={settings.quietHoursStart}
+                  onChange={(e) => void save({ ...settings, quietHoursStart: e.currentTarget.value })}
+                  style={{ maxWidth: 140 }}
+                  disabled={!settings.quietHoursEnabled}
+                />
+                <span className="body-sm">{t("desktop.quietHoursTo")}</span>
+                <input
+                  className="input"
+                  type="time"
+                  value={settings.quietHoursEnd}
+                  onChange={(e) => void save({ ...settings, quietHoursEnd: e.currentTarget.value })}
+                  style={{ maxWidth: 140 }}
+                  disabled={!settings.quietHoursEnabled}
+                />
+              </div>
+            </Field>
+
+            <Field label={t("desktop.hushDurationLabel")}>
+              <BlSelect
+                value={String(settings.defaultHushMinutes)}
+                onChange={(raw) =>
+                  void save({
+                    ...settings,
+                    defaultHushMinutes: Number(raw) as ProactiveSettings["defaultHushMinutes"]
+                  })
+                }
+                options={HUSH_MINUTES.map((n) => ({
+                  value: String(n),
+                  label: t("desktop.minutes", { count: n })
+                }))}
+              />
+            </Field>
+          </div>
+        </details>
       </section>
 
-      <section className="card" style={{ padding: 18 }}>
-        <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
-          {t("desktop.quietHoursTitle")}
-        </h2>
-        <div className="row gap-2" style={{ marginTop: 12 }}>
-          <label className="row gap-2">
-            <input
-              type="checkbox"
-              checked={settings.quietHoursEnabled}
-              onChange={(e) =>
-                void save({ ...settings, quietHoursEnabled: e.currentTarget.checked })
-              }
-            />
-            <span>{t("desktop.quietHoursEnable")}</span>
-          </label>
-          <input
-            className="input"
-            type="time"
-            value={settings.quietHoursStart}
-            onChange={(e) => void save({ ...settings, quietHoursStart: e.currentTarget.value })}
-            style={{ maxWidth: 140 }}
-          />
-          <span className="body-sm">{t("desktop.quietHoursTo")}</span>
-          <input
-            className="input"
-            type="time"
-            value={settings.quietHoursEnd}
-            onChange={(e) => void save({ ...settings, quietHoursEnd: e.currentTarget.value })}
-            style={{ maxWidth: 140 }}
-          />
-        </div>
-      </section>
+      <details
+        className="card"
+        style={{ padding: 18 }}
+        open={statusOpen}
+        onToggle={(e) => setStatusOpen((e.target as HTMLDetailsElement).open)}
+      >
+        <summary
+          className="body-sm"
+          style={{ cursor: "pointer", userSelect: "none" }}
+        >
+          <span className="display display--section" style={{ fontSize: 20 }}>
+            {t("desktop.statusAdvancedTitle")}
+          </span>
+          <span className="body-sm" style={{ display: "block", marginTop: 6, opacity: 0.72 }}>
+            {statusSummary}
+          </span>
+        </summary>
 
-      <section className="card" style={{ padding: 18 }}>
-        <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
-          {t("desktop.statusTitle")}
-        </h2>
-        <div className="body-md" style={{ marginTop: 10 }}>
-          {status?.hushUntil && status.hushUntil > Date.now()
-            ? t("desktop.statusHushedUntil", {
-                time: new Date(status.hushUntil).toLocaleTimeString(timeLocale)
+        <div className="body-sm" style={{ marginTop: 14, lineHeight: 1.6, opacity: 0.85 }}>
+          {status?.lastAt
+            ? t("desktop.statusLastTrigger", {
+                reason: lastReasonLabel(status.lastReason),
+                time: new Date(status.lastAt).toLocaleTimeString(timeLocale)
               })
-            : t("desktop.statusNoHush")}
-          <br />
-          {t("desktop.statusUtterances", { count: status?.utterancesThisHour ?? 0 })}
-          <br />
-          {t("desktop.statusScreenAwareness", {
-            label: screenAwarenessLabel(settings.screenAwareness)
-          })}
+            : t("desktop.statusNoLastTrigger")}
         </div>
-        <div className="row gap-2" style={{ marginTop: 14 }}>
+
+        <div className="row gap-2" style={{ marginTop: 14, flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn btn--ghost"
             onClick={() => void nuwa.pet.hush(settings.defaultHushMinutes * 60 * 1000)}
           >
             {t("desktop.hushButton", { minutes: settings.defaultHushMinutes })}
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => void nuwa.proactive.focusMode(25 * 60 * 1000)}
+          >
+            {t("desktop.focusButton")}
           </button>
           <button
             type="button"
@@ -351,22 +546,51 @@ export function DesktopBehaviorPanel(): JSX.Element {
                       reason: translateTriggerReason(r.reason)
                     })
               });
-              setStatus(await nuwa.proactive.getStatus());
+              await refreshStatus();
             }}
           >
             {t("desktop.triggerButton")}
           </button>
         </div>
-      </section>
+      </details>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }): JSX.Element {
+function Field({
+  label,
+  children,
+  style
+}: {
+  label: string;
+  children: ReactNode;
+  style?: React.CSSProperties;
+}): JSX.Element {
   return (
-    <div className="stack" style={{ gap: 8 }}>
+    <div className="stack" style={{ gap: 8, ...style }}>
       <span className="body-sm">{label}</span>
       {children}
     </div>
+  );
+}
+
+function ScenarioToggle({
+  label,
+  checked,
+  onChange
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}): JSX.Element {
+  return (
+    <label className="row gap-2" style={{ cursor: "pointer" }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.currentTarget.checked)}
+      />
+      <span className="body-sm">{label}</span>
+    </label>
   );
 }

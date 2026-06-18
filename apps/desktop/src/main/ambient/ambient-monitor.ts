@@ -1,5 +1,6 @@
 import { powerMonitor } from "electron";
 import type { AmbientSignal } from "../../shared/ipc-contract.js";
+import { ActiveSessionTracker } from "./active-session-tracker.js";
 
 export type AmbientSignalHandler = (signal: AmbientSignal) => void;
 
@@ -7,12 +8,29 @@ export class AmbientMonitor {
   private timer: NodeJS.Timeout | null = null;
   private wasIdle = false;
   private readonly handlers = new Set<AmbientSignalHandler>();
+  private readonly activeTracker = new ActiveSessionTracker();
 
   constructor(private readonly idleThresholdSeconds = 10 * 60) {}
 
   onSignal(handler: AmbientSignalHandler): () => void {
     this.handlers.add(handler);
     return () => this.handlers.delete(handler);
+  }
+
+  setLongActiveThresholdMinutes(minutes: number): void {
+    this.activeTracker.setThresholdMinutes(minutes);
+  }
+
+  getActiveMinutes(): number {
+    return this.activeTracker.getActiveMinutes();
+  }
+
+  getMinutesUntilLongActive(): number | null {
+    return this.activeTracker.getMinutesUntilThreshold();
+  }
+
+  resetActiveSessionAfterWhisper(): void {
+    this.activeTracker.resetAfterWhisper();
   }
 
   start(): void {
@@ -39,6 +57,11 @@ export class AmbientMonitor {
   }
 
   private checkIdle(): void {
+    const longActive = this.activeTracker.tick();
+    if (longActive) {
+      this.emit(longActive);
+    }
+
     const idleSeconds = powerMonitor.getSystemIdleTime();
     if (idleSeconds >= this.idleThresholdSeconds && !this.wasIdle) {
       this.wasIdle = true;

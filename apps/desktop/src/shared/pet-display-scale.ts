@@ -6,6 +6,9 @@ export const PET_DISPLAY_SCALE_MAX = 1;
 export const PET_DISPLAY_SCALE_DEFAULT = 0.9;
 export const PET_DISPLAY_SCALE_STEP = 0.05;
 
+/** 主动陪伴气泡占用的高度（窗口动态扩展量）。 */
+export const PROACTIVE_BUBBLE_EXTRA_HEIGHT = 100;
+
 export function clampPetDisplayScale(value: unknown): number {
   const n =
     typeof value === "number" && Number.isFinite(value)

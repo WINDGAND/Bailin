@@ -169,6 +169,8 @@ export interface BailinApi {
     dragMove(): Promise<void>;
     /** 拖动结束：清理拖动状态并保存最终位置。*/
     dragEnd(): Promise<void>;
+    /** 为悄悄话气泡扩展/恢复窗口高度；null 表示关闭。 */
+    setProactiveBubbleLayout(placement: ProactiveBubblePlacement | null): Promise<void>;
   };
 
   // ===== 主动陪伴 / 屏幕感知 =====
@@ -177,6 +179,8 @@ export interface BailinApi {
     setSettings(input: ProactiveSettings): Promise<ProactiveSettings>;
     getStatus(): Promise<ProactiveStatus>;
     triggerNow(reason?: AmbientSignal["kind"]): Promise<{ ok: boolean; reason?: string }>;
+    triggerLlmScreenshot(): Promise<{ ok: boolean; reason?: string }>;
+    focusMode(durationMs: number): Promise<void>;
   };
 
   // ===== 事件订阅（主→渲染）=====
@@ -195,6 +199,8 @@ export interface BailinApi {
     navigateSettings(handler: (evt: NavigateSettingsEvent) => void): () => void;
   };
 }
+
+export type ProactiveBubblePlacement = "above" | "below";
 
 export type SettingsTab = "library" | "create" | "memory" | "desktop" | "key" | "settings";
 
@@ -545,10 +551,23 @@ export interface ProfileExtractionDiff {
   };
 }
 
+export interface ProactiveScenarioToggles {
+  longActive: boolean;
+  idle: boolean;
+  returnActive: boolean;
+  unlock: boolean;
+}
+
+export type CompanionFrequency = "off" | "light" | "standard" | "active" | "intense";
+
 export interface ProactiveSettings {
   enabled: boolean;
-  intensity: "off" | "light" | "standard";
-  maxPerHour: 0 | 1 | 2;
+  /** @deprecated 使用 companionFrequency；写入时仍同步 */
+  intensity: CompanionFrequency;
+  /** @deprecated 由 companionFrequency 推导；写入时仍同步 */
+  maxPerHour: 0 | 1 | 2 | 3 | 4;
+  companionFrequency: CompanionFrequency;
+  scenarioToggles: ProactiveScenarioToggles;
   defaultHushMinutes: 15 | 30 | 60;
   quietHoursEnabled: boolean;
   quietHoursStart: string;
@@ -560,16 +579,24 @@ export interface ProactiveSettings {
 
 export interface ProactiveStatus {
   enabled: boolean;
+  companionFrequency: CompanionFrequency;
+  maxPerHour: number;
   hushUntil?: number;
+  focusModeUntil?: number;
   utterancesThisHour: number;
   screenAwareness: ProactiveSettings["screenAwareness"];
-  lastReason?: AmbientSignal["kind"];
+  lastReason?: AmbientSignal["kind"] | "long_active" | "llm";
   lastAt?: number;
+  activeMinutes: number;
+  longActiveThresholdMinutes: number;
+  minutesUntilLongActive: number | null;
+  lastScreenshotAt?: number;
 }
 
 export type AmbientSignal =
   | { kind: "idle"; idleSeconds: number; at: number }
   | { kind: "active"; idleSeconds: number; at: number }
+  | { kind: "long_active"; activeMinutes: number; at: number }
   | { kind: "lock"; at: number }
   | { kind: "unlock"; at: number }
   | { kind: "resume"; at: number }
@@ -579,7 +606,8 @@ export interface ProactiveWhisperEvent {
   id: string;
   characterId: string;
   text: string;
-  reason: AmbientSignal["kind"];
+  reason: AmbientSignal["kind"] | "long_active" | "llm";
+  layer: "template" | "llm";
   createdAt: number;
 }
 
@@ -661,11 +689,14 @@ export const IPC = {
   PetDragStart: "nuwa.pet.dragStart",
   PetDragMove: "nuwa.pet.dragMove",
   PetDragEnd: "nuwa.pet.dragEnd",
+  PetSetProactiveBubbleLayout: "nuwa.pet.setProactiveBubbleLayout",
 
   ProactiveGetSettings: "nuwa.proactive.getSettings",
   ProactiveSetSettings: "nuwa.proactive.setSettings",
   ProactiveGetStatus: "nuwa.proactive.getStatus",
   ProactiveTriggerNow: "nuwa.proactive.triggerNow",
+  ProactiveTriggerLlmScreenshot: "nuwa.proactive.triggerLlmScreenshot",
+  ProactiveFocusMode: "nuwa.proactive.focusMode",
 
   EventChatStream: "nuwa.event.chatStream",
   EventChatVisibility: "nuwa.event.chatVisibility",

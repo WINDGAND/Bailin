@@ -119,12 +119,14 @@ interface NuwaWindow {
       getRecentChanges(limit?: number): Promise<import("../../shared/ipc-contract.js").ProfileChangeRecord[]>;
       undoLastChange(): Promise<{ ok: boolean; profile?: import("../../shared/ipc-contract.js").UserProfile; reason?: string }>;
     };
-    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(tab?: import("../../shared/ipc-contract.js").SettingsTab): Promise<void>; hide(): Promise<void>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
+    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(tab?: import("../../shared/ipc-contract.js").SettingsTab): Promise<void>; hide(): Promise<void>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>; setProactiveBubbleLayout(placement: import("../../shared/ipc-contract.js").ProactiveBubblePlacement | null): Promise<void>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
     proactive: {
       getSettings(): Promise<ProactiveSettings>;
       setSettings(input: ProactiveSettings): Promise<ProactiveSettings>;
       getStatus(): Promise<ProactiveStatus>;
       triggerNow(reason?: AmbientSignal["kind"]): Promise<{ ok: boolean; reason?: string }>;
+      triggerLlmScreenshot(): Promise<{ ok: boolean; reason?: string }>;
+      focusMode(durationMs: number): Promise<void>;
     };
     on: {
       chatStream(h: (chunk: ChatStreamChunk) => void): () => void;
@@ -299,26 +301,42 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       setContextMenuOpen: async () => null,
       dragStart: async () => undefined,
       dragMove: async () => undefined,
-      dragEnd: async () => undefined
+      dragEnd: async () => undefined,
+      setProactiveBubbleLayout: async () => undefined
     },
     proactive: {
       getSettings: async () => ({
         enabled: false,
-        intensity: "off",
-        maxPerHour: 0,
-        defaultHushMinutes: 30,
+        intensity: "off" as const,
+        maxPerHour: 0 as const,
+        companionFrequency: "off" as const,
+        scenarioToggles: {
+          longActive: true,
+          idle: true,
+          returnActive: true,
+          unlock: false
+        },
+        defaultHushMinutes: 30 as const,
         quietHoursEnabled: false,
         quietHoursStart: "22:00",
         quietHoursEnd: "08:00",
-        screenAwareness: "off"
+        screenAwareness: "off" as const,
+        petDisplayScale: 0.9
       }),
       setSettings: async (input) => input,
       getStatus: async () => ({
         enabled: false,
+        companionFrequency: "off" as const,
+        maxPerHour: 0,
         utterancesThisHour: 0,
-        screenAwareness: "off"
+        screenAwareness: "off" as const,
+        activeMinutes: 0,
+        longActiveThresholdMinutes: 60,
+        minutesUntilLongActive: null
       }),
-      triggerNow: async () => ({ ok: false, reason: "stub" })
+      triggerNow: async () => ({ ok: false, reason: "stub" }),
+      triggerLlmScreenshot: async () => ({ ok: false, reason: "stub" }),
+      focusMode: async () => undefined
     },
     on: {
       chatStream: noopOff,

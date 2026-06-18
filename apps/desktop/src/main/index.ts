@@ -46,8 +46,8 @@ import {
   resolvePetMenuSide,
   type PetMenuSide
 } from "./windows/pet-window.js";
-import { getPetWindowSize } from "../shared/pet-display-scale.js";
-import { readProactiveSettings } from "./proactive/proactive-settings.js";
+import { getPetWindowSize, PROACTIVE_BUBBLE_EXTRA_HEIGHT } from "../shared/pet-display-scale.js";
+import { readProactiveSettings, getLongActiveThreshold } from "./proactive/proactive-settings.js";
 import { clampPetWindow, clampRectToDisplayBounds } from "./windows/window-bounds.js";
 import {
   CHAT_WINDOW_DEFAULT_SIZE,
@@ -60,7 +60,8 @@ import {
 import { createSettingsWindow } from "./windows/settings-window.js";
 import { AmbientMonitor } from "./ambient/ambient-monitor.js";
 import { ProactiveOrchestrator } from "./proactive/proactive-orchestrator.js";
-import { IPC, type LLMProviderConfig, type SettingsTab } from "../shared/ipc-contract.js";
+import { ScreenCaptureService } from "./capture/screen-capture.js";
+import { IPC, type LLMProviderConfig, type ProactiveBubblePlacement, type SettingsTab } from "../shared/ipc-contract.js";
 
 log.initialize();
 log.info("[main] Bailin starting...");
@@ -78,6 +79,13 @@ let settingsWin: BrowserWindow | null = null;
 let activeCharacterId: string | null = null;
 let isQuitting = false;
 let ambientMonitor: AmbientMonitor | null = null;
+let llmProactiveTimer: NodeJS.Timeout | null = null;
+
+function syncProactiveAmbient(vault: LocalVault): void {
+  if (!ambientMonitor) return;
+  const settings = readProactiveSettings(vault);
+  ambientMonitor.setLongActiveThresholdMinutes(getLongActiveThreshold(settings));
+}
 
 /** 拖动时光标相对窗口原点的偏移量（主进程坐标系，物理/逻辑像素与 screen API 一致）。 */
 let dragCursorOffset: { dx: number; dy: number } | null = null;
@@ -89,6 +97,10 @@ let chatRepositioning = false;
 let petContextMenuOpen = false;
 /** 打开右键菜单前的窗口 bounds，关闭时原样恢复。 */
 let petBoundsBeforeMenu: { x: number; y: number; width: number; height: number } | null = null;
+/** 主动陪伴气泡展开时的方位；null 表示未展开。 */
+let proactiveBubbleLayout: ProactiveBubblePlacement | null = null;
+/** 未展开气泡时桌宠窗口左上角（持久化位置也以此为准）。 */
+let petBaseOrigin: { x: number; y: number } | null = null;
 
 const devUrl = process.env.VITE_DEV_SERVER || undefined;
 
@@ -135,10 +147,9 @@ function getPetWindowSizeNow(): { width: number; height: number } {
 function applyPetDisplayScale(nextScale?: number): void {
   const pet = petWin;
   if (!pet || pet.isDestroyed() || petContextMenuOpen) return;
-  const { width, height } = getPetWindowSize(nextScale ?? getPetDisplayScale());
-  const content = pet.getContentBounds();
-  const clamped = clampRectToDisplayBounds({ x: content.x, y: content.y, width, height });
-  pet.setContentBounds({ x: clamped.x, y: clamped.y, width, height });
+  void nextScale;
+  const base = derivePetBaseOrigin(pet);
+  applyPetWindowAtBase(base);
   syncChatNearPetIfVisible();
 }
 
@@ -176,8 +187,83 @@ function getPetGeometry(pet: BrowserWindow): { x: number; y: number; width: numb
   if (petContextMenuOpen && petBoundsBeforeMenu) {
     return { x: petBoundsBeforeMenu.x, y: petBoundsBeforeMenu.y, width, height };
   }
+  if (proactiveBubbleLayout && petBaseOrigin) {
+    return { x: petBaseOrigin.x, y: petBaseOrigin.y, width, height };
+  }
   const content = pet.getContentBounds();
   return { x: content.x, y: content.y, width, height };
+}
+
+function syncPetBaseOriginFromExpandedWindow(pet: BrowserWindow): void {
+  if (!proactiveBubbleLayout) return;
+  const content = pet.getContentBounds();
+  const extra = PROACTIVE_BUBBLE_EXTRA_HEIGHT;
+  petBaseOrigin =
+    proactiveBubbleLayout === "above"
+      ? { x: content.x, y: content.y + extra }
+      : { x: content.x, y: content.y };
+}
+
+function derivePetBaseOrigin(pet: BrowserWindow): { x: number; y: number } {
+  if (petBaseOrigin && proactiveBubbleLayout) {
+    return { ...petBaseOrigin };
+  }
+  const content = pet.getContentBounds();
+  const baseSize = getPetWindowSizeNow();
+  const extra = PROACTIVE_BUBBLE_EXTRA_HEIGHT;
+  if (content.height > baseSize.height + 2) {
+    return proactiveBubbleLayout === "below"
+      ? { x: content.x, y: content.y }
+      : { x: content.x, y: content.y + extra };
+  }
+  return { x: content.x, y: content.y };
+}
+
+function applyPetWindowAtBase(base: { x: number; y: number }): { x: number; y: number } {
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return base;
+  const baseSize = getPetWindowSizeNow();
+  const extra = PROACTIVE_BUBBLE_EXTRA_HEIGHT;
+
+  if (!proactiveBubbleLayout) {
+    const clamped = clampRectToDisplayBounds(
+      { x: base.x, y: base.y, width: baseSize.width, height: baseSize.height },
+      0
+    );
+    pet.setContentBounds({
+      x: clamped.x,
+      y: clamped.y,
+      width: baseSize.width,
+      height: baseSize.height
+    });
+    petBaseOrigin = { x: clamped.x, y: clamped.y };
+    return petBaseOrigin;
+  }
+
+  const newH = baseSize.height + extra;
+  const expanded =
+    proactiveBubbleLayout === "above"
+      ? { x: base.x, y: base.y - extra, width: baseSize.width, height: newH }
+      : { x: base.x, y: base.y, width: baseSize.width, height: newH };
+  const clamped = clampRectToDisplayBounds(expanded, 0);
+  pet.setContentBounds({
+    x: clamped.x,
+    y: clamped.y,
+    width: baseSize.width,
+    height: newH
+  });
+  syncPetBaseOriginFromExpandedWindow(pet);
+  return petBaseOrigin ?? base;
+}
+
+function getPetSavedPosition(): { x: number; y: number } {
+  if (petBaseOrigin) {
+    return { ...petBaseOrigin };
+  }
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return { x: 0, y: 0 };
+  const content = pet.getContentBounds();
+  return { x: content.x, y: content.y };
 }
 
 /**
@@ -339,6 +425,67 @@ function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
   return side;
 }
 
+function setProactiveBubbleLayout(placement: ProactiveBubblePlacement | null): void {
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return;
+  if (petContextMenuOpen) return;
+
+  const baseSize = getPetWindowSizeNow();
+  const extra = PROACTIVE_BUBBLE_EXTRA_HEIGHT;
+
+  if (!placement) {
+    if (proactiveBubbleLayout) {
+      const base = derivePetBaseOrigin(pet);
+      pet.setContentBounds({
+        x: base.x,
+        y: base.y,
+        width: baseSize.width,
+        height: baseSize.height
+      });
+      clampPetWindow(pet, { width: baseSize.width, height: baseSize.height });
+      petBaseOrigin = { x: base.x, y: base.y };
+    }
+    proactiveBubbleLayout = null;
+    return;
+  }
+
+  if (proactiveBubbleLayout === placement) {
+    return;
+  }
+
+  const before = pet.getContentBounds();
+  const base = derivePetBaseOrigin(pet);
+  petBaseOrigin = base;
+  proactiveBubbleLayout = placement;
+
+  const newH = baseSize.height + extra;
+  if (placement === "above") {
+    pet.setContentBounds({
+      x: base.x,
+      y: base.y - extra,
+      width: baseSize.width,
+      height: newH
+    });
+  } else {
+    pet.setContentBounds({
+      x: base.x,
+      y: base.y,
+      width: baseSize.width,
+      height: newH
+    });
+  }
+  clampPetWindow(pet, { width: baseSize.width, height: newH });
+  syncPetBaseOriginFromExpandedWindow(pet);
+
+  if (dragCursorOffset) {
+    const after = pet.getContentBounds();
+    dragCursorOffset = {
+      dx: dragCursorOffset.dx + (before.x - after.x),
+      dy: dragCursorOffset.dy + (before.y - after.y)
+    };
+  }
+}
+
 function getChatWindowSize(): ChatWindowSize {
   return { ...chatWindowSize };
 }
@@ -372,10 +519,7 @@ function hidePet(): void {
  * 一条线上"。
  */
 function setPetContentOrigin(pet: BrowserWindow, x: number, y: number): { x: number; y: number } {
-  const { width, height } = getPetWindowSizeNow();
-  const clamped = clampRectToDisplayBounds({ x, y, width, height });
-  pet.setContentBounds({ x: clamped.x, y: clamped.y, width, height });
-  return clamped;
+  return applyPetWindowAtBase({ x, y });
 }
 
 function movePet(x: number, y: number): { x: number; y: number } {
@@ -396,9 +540,18 @@ function positionPetAtPrimaryBottomRight(margin = 24): void {
   setPetContentOrigin(pet, Math.round(x), Math.round(y));
 }
 
+function getPetWindowBoundsSize(): { width: number; height: number } {
+  const baseSize = getPetWindowSizeNow();
+  const extra = proactiveBubbleLayout ? PROACTIVE_BUBBLE_EXTRA_HEIGHT : 0;
+  return { width: baseSize.width, height: baseSize.height + extra };
+}
+
 function ensurePetOnScreen(): void {
   const pet = ensurePetWindow();
-  clampPetWindow(pet, getPetWindowSizeNow());
+  clampPetWindow(pet, getPetWindowBoundsSize());
+  if (proactiveBubbleLayout) {
+    syncPetBaseOriginFromExpandedWindow(pet);
+  }
   syncChatNearPetIfVisible();
   if (!pet.isVisible()) pet.show();
 }
@@ -429,22 +582,26 @@ function petDragMove(): void {
   const pet = petWin;
   if (!pet || pet.isDestroyed()) return;
   const cursor = screen.getCursorScreenPoint();
-  const { width, height } = getPetWindowSizeNow();
+  const baseSize = getPetWindowSizeNow();
+  const extra = proactiveBubbleLayout ? PROACTIVE_BUBBLE_EXTRA_HEIGHT : 0;
+  const width = baseSize.width;
+  const height = baseSize.height + extra;
   const newX = cursor.x - dragCursorOffset.dx;
   const newY = cursor.y - dragCursorOffset.dy;
   const clamped = clampRectToDisplayBounds({ x: newX, y: newY, width, height });
   pet.setContentBounds({ x: clamped.x, y: clamped.y, width, height });
 
-  // 关键：当窗口被 clamp 在屏幕边缘时，光标可能已经"溢出"到桌宠 sprite
-  // 之外（cursor.x 仍在递增，但 newX 一直被 clamp 到 maxX）。如果不处理，
-  // 用户把光标拉回时需要先把光标走过整个"溢出量"，桌宠才会重新跟手——
-  // 这就是用户感觉到的"桌宠在某个轴上被卡死，只能沿另一个轴移动"。
-  // 这里在 clamp 发生时同步重锚 offset，保持 cursor 与桌宠之间始终是有效绑定。
   if (clamped.x !== newX) {
     dragCursorOffset.dx = cursor.x - clamped.x;
   }
   if (clamped.y !== newY) {
     dragCursorOffset.dy = cursor.y - clamped.y;
+  }
+
+  if (proactiveBubbleLayout) {
+    syncPetBaseOriginFromExpandedWindow(pet);
+  } else {
+    petBaseOrigin = { x: clamped.x, y: clamped.y };
   }
 
   syncChatNearPetIfVisible();
@@ -453,8 +610,7 @@ function petDragMove(): void {
 function petDragEnd(): { x: number; y: number } | null {
   dragCursorOffset = null;
   if (!petWin || petWin.isDestroyed()) return null;
-  const content = petWin.getContentBounds();
-  return { x: content.x, y: content.y };
+  return getPetSavedPosition();
 }
 
 void app.whenReady().then(() => {
@@ -495,22 +651,28 @@ void app.whenReady().then(() => {
     }
   );
   const orchestrator = new NuwaOrchestrator(llm, { imageGen, vault });
+  const screenCapture = new ScreenCaptureService();
+  ambientMonitor = new AmbientMonitor();
   const proactive = new ProactiveOrchestrator({
     vault,
     getActiveCharacterId: () => activeCharacterId,
     isChatVisible,
     broadcast: broadcastToAllWindows,
-    // 删了独立气泡窗后，主动 whisper 暂时不弹任何 UI（仍然 broadcast 事件，
-    // 方便未来按"系统通知"等更轻量的方式接入）。
-    onWhisperPublished: () => {
-      // intentionally noop —— see proactive intensity / hush settings to fully disable
-    }
+    getActiveMinutes: () => ambientMonitor?.getActiveMinutes() ?? 0,
+    getMinutesUntilLongActive: () => ambientMonitor?.getMinutesUntilLongActive() ?? null,
+    resetActiveSessionAfterWhisper: () => ambientMonitor?.resetActiveSessionAfterWhisper(),
+    llm,
+    memory,
+    screenCapture
   });
-  ambientMonitor = new AmbientMonitor();
   ambientMonitor.onSignal((signal) => {
     void proactive.handleSignal(signal);
   });
   ambientMonitor.start();
+  syncProactiveAmbient(vault);
+  llmProactiveTimer = setInterval(() => {
+    void proactive.tickLlmWhisper();
+  }, 5 * 60_000);
 
   activeCharacterId = vault.getSetting("active_character_id") || null;
 
@@ -537,12 +699,14 @@ void app.whenReady().then(() => {
       return { x: content.x, y: content.y, width, height };
     },
     applyPetDisplayScale,
+    syncProactiveAmbient: () => syncProactiveAmbient(vault),
     summonPetBubble,
     showChatNearPet,
     hideChat,
     isChatVisible,
     hidePet,
     setPetContextMenuOpen,
+    setProactiveBubbleLayout,
     movePet,
     ensurePetOnScreen,
     ensureSettingsWindow,
@@ -608,6 +772,10 @@ void app.whenReady().then(() => {
 });
 
 app.on("will-quit", () => {
+  if (llmProactiveTimer) {
+    clearInterval(llmProactiveTimer);
+    llmProactiveTimer = null;
+  }
   ambientMonitor?.stop();
   globalShortcut.unregisterAll();
 });

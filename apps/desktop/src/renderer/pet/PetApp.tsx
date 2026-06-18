@@ -10,6 +10,9 @@ import {
 } from "../../shared/pet-display-scale.js";
 import { useT, useI18n } from "../shared/i18n/index.js";
 import { usePetSpriteEvents } from "./use-pet-sprite-events.js";
+import { ProactiveBubble, resolveProactiveBubblePlacement, type ProactiveBubbleState } from "./proactive-bubble.js";
+import type { ProactiveBubblePlacement } from "../../shared/ipc-contract.js";
+import { PROACTIVE_BUBBLE_EXTRA_HEIGHT } from "../../shared/pet-display-scale.js";
 
 interface Starter {
   id: string;
@@ -40,16 +43,57 @@ export function PetApp(): JSX.Element {
   const nuwa = useNuwa();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const menuLayerRef = useRef<HTMLDivElement | null>(null);
+  const bubbleLayerRef = useRef<HTMLDivElement | null>(null);
+  const bubbleLayoutActiveRef = useRef(false);
 
   const [petDisplayScale, setPetDisplayScale] = useState(PET_DISPLAY_SCALE_DEFAULT);
+  const [defaultHushMinutes, setDefaultHushMinutes] = useState(30);
+  const [bubble, setBubble] = useState<ProactiveBubbleState | null>(null);
+  const [bubblePlacement, setBubblePlacement] = useState<ProactiveBubblePlacement>("above");
+  const bubblePlacementRef = useRef<ProactiveBubblePlacement>("above");
 
   useEffect(() => {
-    void nuwa.proactive.getSettings().then((s) =>
-      setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT)
-    );
+    void nuwa.proactive.getSettings().then((s) => {
+      setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
+      setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
+    });
     return nuwa.on.proactiveSettingsChanged((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
+      setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
     });
+  }, [nuwa]);
+
+  useEffect(() => {
+    if (!bubble) {
+      if (bubbleLayoutActiveRef.current) {
+        bubbleLayoutActiveRef.current = false;
+        void nuwa.pet.setProactiveBubbleLayout(null);
+      }
+      return;
+    }
+    if (bubbleLayoutActiveRef.current) {
+      return;
+    }
+    bubbleLayoutActiveRef.current = true;
+    const placement = resolveProactiveBubblePlacement(null);
+    bubblePlacementRef.current = placement;
+    setBubblePlacement(placement);
+    void nuwa.pet.setProactiveBubbleLayout(placement);
+  }, [bubble, nuwa]);
+
+  const dismissBubble = useCallback(() => {
+    bubbleLayoutActiveRef.current = false;
+    setBubble(null);
+    void nuwa.pet.setProactiveBubbleLayout(null);
+  }, [nuwa]);
+
+  const syncBubblePlacement = useCallback(() => {
+    if (!bubbleLayoutActiveRef.current) return;
+    const next = resolveProactiveBubblePlacement(bubblePlacementRef.current);
+    if (next === bubblePlacementRef.current) return;
+    bubblePlacementRef.current = next;
+    setBubblePlacement(next);
+    void nuwa.pet.setProactiveBubbleLayout(next);
   }, [nuwa]);
 
   const petSlotWidth = Math.round(PET_WINDOW_BASE_SIZE.width * petDisplayScale);
@@ -93,7 +137,9 @@ export function PetApp(): JSX.Element {
     let ignored = true;
     const handler = (e: MouseEvent) => {
       if (draggingRef.current) return;
-      const hitTargets = [wrapRef.current, menuLayerRef.current].filter(Boolean) as HTMLElement[];
+      const hitTargets = [wrapRef.current, bubbleLayerRef.current, menuLayerRef.current].filter(
+        Boolean
+      ) as HTMLElement[];
       const inside = hitTargets.some((el) => {
         const rect = el.getBoundingClientRect();
         return (
@@ -185,6 +231,7 @@ export function PetApp(): JSX.Element {
         void (async () => {
           await nuwa.pet.dragStart();
           await nuwa.pet.dragMove();
+          syncBubblePlacement();
         })();
         sendSpriteEvent("dragStart");
         return;
@@ -192,8 +239,9 @@ export function PetApp(): JSX.Element {
 
       applyDragRunDelta(deltaX);
       void nuwa.pet.dragMove();
+      syncBubblePlacement();
     },
-    [nuwa, sendSpriteEvent, applyDragRunDelta]
+    [nuwa, sendSpriteEvent, applyDragRunDelta, syncBubblePlacement]
   );
 
   const onPetPointerUp = useCallback(
@@ -208,6 +256,7 @@ export function PetApp(): JSX.Element {
       }
       if (wasDragging) {
         void nuwa.pet.dragEnd();
+        syncBubblePlacement();
         sendSpriteEvent("dragEnd");
       } else {
         sendSpriteEvent("click");
@@ -217,7 +266,7 @@ export function PetApp(): JSX.Element {
         }, 420);
       }
     },
-    [nuwa, sendSpriteEvent]
+    [nuwa, sendSpriteEvent, syncBubblePlacement]
   );
 
   // ===== 托盘 / 快捷键唤起时震一下 =====
@@ -232,11 +281,9 @@ export function PetApp(): JSX.Element {
   useEffect(() => {
     return nuwa.on.proactiveWhisper((evt) => {
       if (!bundle || evt.characterId !== bundle.card.id) return;
-      // 气泡渲染搬到独立窗口；桌宠这边只负责放一个 nudge + chatOpen 动画。
-      setNudgeNonce((n) => n + 1);
-      sendSpriteEvent("chatOpen");
+      setBubble({ id: evt.id, text: evt.text });
     });
-  }, [nuwa, bundle?.card.id, sendSpriteEvent]);
+  }, [nuwa, bundle?.card.id]);
 
   // ===== 右键菜单 =====
   const [menu, setMenu] = useState<{ chatOpen: boolean; side: "left" | "right" } | null>(null);
@@ -282,40 +329,68 @@ export function PetApp(): JSX.Element {
   }
 
   return (
-    <div className={`pet-root${menu?.side === "left" ? " pet-root--menu-left" : ""}`}>
+    <div
+      className={`pet-root${menu?.side === "left" ? " pet-root--menu-left" : ""}${
+        bubble ? ` pet-root--bubble-${bubblePlacement}` : ""
+      }`}
+      style={
+        bubble
+          ? ({ ["--bubble-extra" as string]: `${PROACTIVE_BUBBLE_EXTRA_HEIGHT}px` } as React.CSSProperties)
+          : undefined
+      }
+    >
       <div
         className="pet-slot"
         style={{ width: menu ? petSlotWidth : "100%" }}
       >
-        <div
-          ref={wrapRef}
-          key={`pet-wrap-${nudgeNonce}`}
-          className={`${hatching ? "hatch" : ""} ${nudgeNonce > 0 ? "nudge-once" : ""}`}
-          style={{
-            pointerEvents: "auto",
-            padding: 4,
-            borderRadius: 18,
-            cursor: "grab",
-            userSelect: "none"
-          }}
-          onPointerDown={onPetPointerDown}
-          onPointerEnter={() => void nuwa.pet.setMouseIgnore(false)}
-          onPointerMove={onPetPointerMove}
-          onPointerUp={onPetPointerUp}
-          onPointerCancel={onPetPointerUp}
-          onContextMenu={(e) => void onPetContextMenu(e)}
-          title={t("pet.dragHint")}
-        >
-          <PetRenderer
-            key={`sprite-${hatchKey}-${bundle.card.id}`}
-            program={bundle.sprite}
-            externalEvent={externalEvent ?? undefined}
-            runDirection={dragRunDirection}
-            runDirectionRef={dragRunDirectionRef}
-            hatching={hatching}
-            width={petPixelSize?.width}
-            height={petPixelSize?.height}
-          />
+        <div className={`pet-column${bubble ? ` pet-column--bubble-${bubblePlacement}` : ""}`}>
+          {bubble ? (
+            <div ref={bubbleLayerRef} className="pet-bubble-anchor">
+              <ProactiveBubble
+                bubble={bubble}
+                placement={bubblePlacement}
+                hushMinutes={defaultHushMinutes}
+                onDismiss={dismissBubble}
+                onOpenChat={() => {
+                  dismissBubble();
+                  void nuwa.pet.openChat();
+                }}
+                onHush={(minutes) => void nuwa.pet.hush(minutes * 60 * 1000)}
+              />
+            </div>
+          ) : null}
+          <div className="pet-wrap-zone">
+            <div
+              ref={wrapRef}
+              key={`pet-wrap-${nudgeNonce}`}
+              className={`pet-wrap-with-bubble ${hatching ? "hatch" : ""} ${nudgeNonce > 0 ? "nudge-once" : ""}`}
+              style={{
+                pointerEvents: "auto",
+                padding: 4,
+                borderRadius: 18,
+                cursor: "grab",
+                userSelect: "none"
+              }}
+              onPointerDown={onPetPointerDown}
+              onPointerEnter={() => void nuwa.pet.setMouseIgnore(false)}
+              onPointerMove={onPetPointerMove}
+              onPointerUp={onPetPointerUp}
+              onPointerCancel={onPetPointerUp}
+              onContextMenu={(e) => void onPetContextMenu(e)}
+              title={t("pet.dragHint")}
+            >
+              <PetRenderer
+                key={`sprite-${hatchKey}-${bundle.card.id}`}
+                program={bundle.sprite}
+                externalEvent={externalEvent ?? undefined}
+                runDirection={dragRunDirection}
+                runDirectionRef={dragRunDirectionRef}
+                hatching={hatching}
+                width={petPixelSize?.width}
+                height={petPixelSize?.height}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -328,13 +403,14 @@ export function PetApp(): JSX.Element {
               characters={characters}
               starters={starters}
               submenu={submenu}
+              hushMinutes={defaultHushMinutes}
               onSubmenu={(s) => setSubmenu(s)}
               onSummon={() => {
                 void nuwa.pet.summon();
                 closeMenu();
               }}
               onHush={() => {
-                void nuwa.pet.hush(30 * 60 * 1000);
+                void nuwa.pet.hush(defaultHushMinutes * 60 * 1000);
                 void nuwa.chat.hide();
                 closeMenu();
               }}
@@ -403,6 +479,7 @@ interface MenuProps {
   characters: MyCharacter[];
   starters: Starter[];
   submenu: null | "switch";
+  hushMinutes: number;
   onSubmenu: (s: null | "switch") => void;
   onSummon: () => void;
   onHush: () => void;
@@ -423,6 +500,7 @@ function PetContextMenu(props: MenuProps): JSX.Element {
     onSubmenu,
     onSummon,
     onHush,
+    hushMinutes,
     onOpenSettings,
     onHide,
     onActivate,
@@ -451,7 +529,7 @@ function PetContextMenu(props: MenuProps): JSX.Element {
         delay={0}
       />
       <MenuItem
-        label={t("pet.menuHush", { minutes: 30 })}
+        label={t("pet.menuHush", { minutes: hushMinutes })}
         onClick={onHush}
         delay={20}
       />

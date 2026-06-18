@@ -93,13 +93,17 @@ const api = {
     setContextMenuOpen: (open: boolean) => ipcRenderer.invoke(IPC.PetSetContextMenuOpen, open),
     dragStart: () => ipcRenderer.invoke(IPC.PetDragStart),
     dragMove: () => ipcRenderer.invoke(IPC.PetDragMove),
-    dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd)
+    dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd),
+    setProactiveBubbleLayout: (placement: string | null) =>
+      ipcRenderer.invoke(IPC.PetSetProactiveBubbleLayout, placement)
   },
   proactive: {
     getSettings: () => ipcRenderer.invoke(IPC.ProactiveGetSettings),
     setSettings: (input: unknown) => ipcRenderer.invoke(IPC.ProactiveSetSettings, input),
     getStatus: () => ipcRenderer.invoke(IPC.ProactiveGetStatus),
-    triggerNow: (reason?: string) => ipcRenderer.invoke(IPC.ProactiveTriggerNow, reason)
+    triggerNow: (reason?: string) => ipcRenderer.invoke(IPC.ProactiveTriggerNow, reason),
+    triggerLlmScreenshot: () => ipcRenderer.invoke(IPC.ProactiveTriggerLlmScreenshot),
+    focusMode: (durationMs: number) => ipcRenderer.invoke(IPC.ProactiveFocusMode, durationMs)
   },
   on: {
     chatStream(handler: (chunk: unknown) => void) {

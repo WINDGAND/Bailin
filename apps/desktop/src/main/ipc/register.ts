@@ -8,6 +8,7 @@ import {
   type ImageGenerationConfigDTO,
   type ImageTierName,
   type ProactiveSettings,
+  type ProactiveBubblePlacement,
   type SendMessageInput,
   type SettingsTab,
   type UserProfile
@@ -52,6 +53,7 @@ export interface IpcDeps {
   isChatVisible: () => boolean;
   hidePet: () => void;
   setPetContextMenuOpen: (open: boolean) => "left" | "right" | null;
+  setProactiveBubbleLayout: (placement: ProactiveBubblePlacement | null) => void;
   movePet: (x: number, y: number) => { x: number; y: number };
   ensurePetOnScreen: () => void;
   ensureSettingsWindow: (tab?: SettingsTab) => void;
@@ -65,6 +67,7 @@ export interface IpcDeps {
   setChatWindowSize: (width: number, height: number) => { width: number; height: number };
   onLocaleChanged?: () => void;
   applyPetDisplayScale: (scale?: number) => void;
+  syncProactiveAmbient?: () => void;
 }
 
 const SETTING_FIRST_RUN_DONE = "first_run_done";
@@ -734,6 +737,12 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.PetSetContextMenuOpen, (_e, open: boolean) => {
     return deps.setPetContextMenuOpen(open);
   });
+  ipcMain.handle(
+    IPC.PetSetProactiveBubbleLayout,
+    (_e, placement: import("../../shared/ipc-contract.js").ProactiveBubblePlacement | null) => {
+      deps.setProactiveBubbleLayout(placement);
+    }
+  );
 
   // ===== 拖动（主进程全程用 screen 坐标，规避渲染进程 CSS 像素 / DPI 差异） =====
   ipcMain.handle(IPC.PetDragStart, () => deps.petDragStart());
@@ -748,6 +757,7 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.ProactiveSetSettings, (_e, input: ProactiveSettings) => {
     const saved = proactive.setSettings(input);
     deps.applyPetDisplayScale(saved.petDisplayScale);
+    deps.syncProactiveAmbient?.();
     deps.broadcast(IPC.EventProactiveSettingsChanged, saved);
     return saved;
   });
@@ -755,6 +765,10 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.ProactiveTriggerNow, (_e, reason?: string) =>
     proactive.triggerNow(reason as AmbientSignal["kind"] | undefined)
   );
+  ipcMain.handle(IPC.ProactiveTriggerLlmScreenshot, () => proactive.triggerLlmWhisperNow());
+  ipcMain.handle(IPC.ProactiveFocusMode, (_e, durationMs: number) => {
+    proactive.focusMode(durationMs);
+  });
 }
 
 const SETTING_PET_POS = "pet_position_json";
