@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import type { SpriteEvent } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import {
-  getPetWindowSize,
   PET_DISPLAY_SCALE_DEFAULT,
   PET_WINDOW_BASE_SIZE,
   resolveAtlasPetPixelSize,
@@ -12,9 +10,6 @@ import {
 } from "../../shared/pet-display-scale.js";
 import { useT, useI18n } from "../shared/i18n/index.js";
 import { usePetSpriteEvents } from "./use-pet-sprite-events.js";
-import { ProactiveBubble, resolveProactiveBubblePlacement, type ProactiveBubbleState } from "./proactive-bubble.js";
-import type { ProactiveBubblePlacement } from "../../shared/ipc-contract.js";
-import { PROACTIVE_BUBBLE_EXTRA_HEIGHT } from "../../shared/pet-display-scale.js";
 
 interface Starter {
   id: string;
@@ -34,7 +29,6 @@ interface MyCharacter {
 }
 
 const HATCH_SS_KEY_PREFIX = "nuwa.hatched.";
-/** 菜单打开时左侧固定宽度 = 基准桌宠窗宽 × 用户缩放。 */
 /** 判定为「拖动」的最小位移（px）；略大于 0，避免手抖误触。 */
 const DRAG_START_PX = 3;
 
@@ -45,79 +39,19 @@ export function PetApp(): JSX.Element {
   const nuwa = useNuwa();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const menuLayerRef = useRef<HTMLDivElement | null>(null);
-  const bubbleLayerRef = useRef<HTMLDivElement | null>(null);
-  const bubbleLayoutActiveRef = useRef(false);
 
   const [petDisplayScale, setPetDisplayScale] = useState(PET_DISPLAY_SCALE_DEFAULT);
   const [defaultHushMinutes, setDefaultHushMinutes] = useState(30);
-  const [bubble, setBubble] = useState<ProactiveBubbleState | null>(null);
-  const [bubbleLayoutReady, setBubbleLayoutReady] = useState(false);
-  const [bubblePlacement, setBubblePlacement] = useState<ProactiveBubblePlacement>("above");
-  const bubblePlacementRef = useRef<ProactiveBubblePlacement>("above");
-  const companionReservedRef = useRef(false);
-  const [companionReserved, setCompanionReserved] = useState(false);
-
-  const applyCompanionLayout = useCallback((reserved: boolean) => {
-    companionReservedRef.current = reserved;
-    setCompanionReserved(reserved);
-    if (reserved) {
-      const placement = resolveProactiveBubblePlacement(bubblePlacementRef.current);
-      bubbleLayoutActiveRef.current = true;
-      bubblePlacementRef.current = placement;
-      setBubblePlacement(placement);
-      setBubbleLayoutReady(true);
-      return;
-    }
-    bubbleLayoutActiveRef.current = false;
-    setBubbleLayoutReady(false);
-    setBubble(null);
-  }, []);
 
   useEffect(() => {
     void nuwa.proactive.getSettings().then((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
       setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
-      applyCompanionLayout(Boolean(s.enabled && s.companionFrequency !== "off"));
     });
     return nuwa.on.proactiveSettingsChanged((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
       setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
-      applyCompanionLayout(Boolean(s.enabled && s.companionFrequency !== "off"));
     });
-  }, [nuwa, applyCompanionLayout]);
-
-  useEffect(() => {
-    if (bubble) return;
-    if (!bubbleLayoutActiveRef.current) return;
-    if (companionReservedRef.current) return;
-    bubbleLayoutActiveRef.current = false;
-    setBubbleLayoutReady(false);
-    void nuwa.pet.setProactiveBubbleLayout(null);
-  }, [bubble, nuwa]);
-
-  const dismissBubble = useCallback(() => {
-    if (bubbleLayoutActiveRef.current) {
-      setBubble(null);
-      if (companionReservedRef.current) return;
-      void (async () => {
-        await nuwa.pet.setProactiveBubbleLayout(null);
-        flushSync(() => {
-          bubbleLayoutActiveRef.current = false;
-          setBubbleLayoutReady(false);
-        });
-      })();
-      return;
-    }
-    setBubble(null);
-  }, [nuwa]);
-
-  const syncBubblePlacement = useCallback(() => {
-    if (!bubbleLayoutActiveRef.current) return;
-    const next = resolveProactiveBubblePlacement(bubblePlacementRef.current);
-    if (next === bubblePlacementRef.current) return;
-    bubblePlacementRef.current = next;
-    setBubblePlacement(next);
-    void nuwa.pet.setProactiveBubbleLayout(next);
   }, [nuwa]);
 
   const petSlotWidth = Math.round(PET_WINDOW_BASE_SIZE.width * petDisplayScale);
@@ -161,9 +95,7 @@ export function PetApp(): JSX.Element {
     let ignored = true;
     const handler = (e: MouseEvent) => {
       if (draggingRef.current) return;
-      const hitTargets = [wrapRef.current, bubbleLayerRef.current, menuLayerRef.current].filter(
-        Boolean
-      ) as HTMLElement[];
+      const hitTargets = [wrapRef.current, menuLayerRef.current].filter(Boolean) as HTMLElement[];
       const inside = hitTargets.some((el) => {
         const rect = el.getBoundingClientRect();
         return (
@@ -188,8 +120,6 @@ export function PetApp(): JSX.Element {
   }, [nuwa]);
 
   // ===== 拖动 + 单击唤起 =====
-  // 位移计算全在主进程（getCursorScreenPoint），彻底规避 HiDPI 下
-  // 渲染进程 CSS 像素与 Electron 物理坐标系不一致的问题。
   const dragStateRef = useRef<{
     dragging: boolean;
     startScreenX: number;
@@ -255,7 +185,6 @@ export function PetApp(): JSX.Element {
         void (async () => {
           await nuwa.pet.dragStart();
           await nuwa.pet.dragMove();
-          syncBubblePlacement();
         })();
         sendSpriteEvent("dragStart");
         return;
@@ -263,9 +192,8 @@ export function PetApp(): JSX.Element {
 
       applyDragRunDelta(deltaX);
       void nuwa.pet.dragMove();
-      syncBubblePlacement();
     },
-    [nuwa, sendSpriteEvent, applyDragRunDelta, syncBubblePlacement]
+    [nuwa, sendSpriteEvent, applyDragRunDelta]
   );
 
   const onPetPointerUp = useCallback(
@@ -280,7 +208,6 @@ export function PetApp(): JSX.Element {
       }
       if (wasDragging) {
         void nuwa.pet.dragEnd();
-        syncBubblePlacement();
         sendSpriteEvent("dragEnd");
       } else {
         sendSpriteEvent("click");
@@ -290,7 +217,7 @@ export function PetApp(): JSX.Element {
         }, 420);
       }
     },
-    [nuwa, sendSpriteEvent, syncBubblePlacement]
+    [nuwa, sendSpriteEvent]
   );
 
   // ===== 托盘 / 快捷键唤起时震一下 =====
@@ -301,26 +228,6 @@ export function PetApp(): JSX.Element {
       sendSpriteEvent("chatOpen");
     });
   }, [nuwa, sendSpriteEvent]);
-
-  useEffect(() => {
-    return nuwa.on.proactiveWhisper((evt) => {
-      if (!bundle || evt.characterId !== bundle.card.id) return;
-      const nextBubble = { id: evt.id, text: evt.text };
-      if (bubbleLayoutActiveRef.current) {
-        setBubble(nextBubble);
-        return;
-      }
-      const placement = resolveProactiveBubblePlacement(null);
-      flushSync(() => {
-        bubbleLayoutActiveRef.current = true;
-        bubblePlacementRef.current = placement;
-        setBubblePlacement(placement);
-        setBubbleLayoutReady(true);
-        setBubble(nextBubble);
-      });
-      void nuwa.pet.setProactiveBubbleLayout(placement);
-    });
-  }, [nuwa, bundle?.card.id]);
 
   // ===== 右键菜单 =====
   const [menu, setMenu] = useState<{ chatOpen: boolean; side: "left" | "right" } | null>(null);
@@ -352,7 +259,6 @@ export function PetApp(): JSX.Element {
     void nuwa.pet.setContextMenuOpen(false);
   }, [nuwa]);
 
-  // 点击窗外失焦时关闭菜单
   useEffect(() => {
     if (!menu) return;
     const onBlur = () => closeMenu();
@@ -360,52 +266,22 @@ export function PetApp(): JSX.Element {
     return () => window.removeEventListener("blur", onBlur);
   }, [menu, closeMenu]);
 
-  // ===== 空状态 =====
   if (!bundle) {
     return <EmptyPet onPickStarter={() => void nuwa.pet.openSettings()} />;
   }
 
-  const showBubbleLayout = bubbleLayoutReady || companionReserved;
-  const showBubble = bubbleLayoutReady && bubble != null;
-  const petZoneHeight = getPetWindowSize(petDisplayScale).height;
-
   return (
-    <div
-      className={`pet-root${menu?.side === "left" ? " pet-root--menu-left" : ""}${
-        showBubbleLayout ? ` pet-root--bubble-${bubblePlacement}` : ""
-      }`}
-      style={
-        {
-          ["--pet-zone-height" as string]: `${petZoneHeight}px`,
-          ["--bubble-extra" as string]: `${PROACTIVE_BUBBLE_EXTRA_HEIGHT}px`
-        } as React.CSSProperties
-      }
-    >
+    <div className={`pet-root${menu?.side === "left" ? " pet-root--menu-left" : ""}`}>
       <div
         className="pet-slot"
         style={{ width: menu ? petSlotWidth : "100%" }}
       >
-        <div className={`pet-column${showBubbleLayout ? ` pet-column--bubble-${bubblePlacement}` : ""}`}>
-          {showBubble && bubble ? (
-            <div ref={bubbleLayerRef} className="pet-bubble-anchor">
-              <ProactiveBubble
-                bubble={bubble}
-                placement={bubblePlacement}
-                hushMinutes={defaultHushMinutes}
-                onDismiss={dismissBubble}
-                onOpenChat={() => {
-                  dismissBubble();
-                  void nuwa.pet.openChat();
-                }}
-                onHush={(minutes) => void nuwa.pet.hush(minutes * 60 * 1000)}
-              />
-            </div>
-          ) : null}
+        <div className="pet-column">
           <div className="pet-wrap-zone">
             <div
               ref={wrapRef}
               key={`pet-wrap-${nudgeNonce}`}
-              className={`pet-wrap-with-bubble ${hatching ? "hatch" : ""} ${nudgeNonce > 0 ? "nudge-once" : ""}`}
+              className={`pet-wrap ${hatching ? "hatch" : ""} ${nudgeNonce > 0 ? "nudge-once" : ""}`}
               style={{
                 pointerEvents: "auto",
                 padding: 4,
@@ -475,10 +351,6 @@ export function PetApp(): JSX.Element {
   );
 }
 
-// =============================================================
-// 空状态：没有任何角色时给一个明显的引导按钮 + 像素剪影
-// =============================================================
-
 function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element {
   const t = useT();
   return (
@@ -499,7 +371,6 @@ function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element
         className="fade-in-up pet-empty-cta"
         title={t("pet.emptyTitle")}
       >
-        {/* 像素剪影：一只 chibi 形状 */}
         <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">
           <rect x="9" y="3" width="6" height="6" fill="rgba(245,239,226,0.7)" />
           <rect x="7" y="9" width="10" height="8" fill="rgba(245,239,226,0.4)" />
@@ -511,10 +382,6 @@ function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element
     </div>
   );
 }
-
-// =============================================================
-// 右键菜单
-// =============================================================
 
 interface MenuProps {
   chatOpen: boolean;

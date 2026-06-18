@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS: ProactiveSettings = {
   companionFrequency: "light",
   scenarioToggles: { ...DEFAULT_SCENARIO_TOGGLES },
   defaultHushMinutes: 30,
+  defaultFocusMinutes: 25,
   quietHoursEnabled: false,
   quietHoursStart: "22:00",
   quietHoursEnd: "08:00",

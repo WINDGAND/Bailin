@@ -169,8 +169,11 @@ export interface BailinApi {
     dragMove(): Promise<void>;
     /** 拖动结束：清理拖动状态并保存最终位置。*/
     dragEnd(): Promise<void>;
-    /** 为悄悄话气泡扩展/恢复窗口高度；null 表示关闭。 */
-    setProactiveBubbleLayout(placement: ProactiveBubblePlacement | null): Promise<void>;
+  };
+
+  /** 独立气泡窗（方案 B）：关闭当前悄悄话气泡。 */
+  proactiveBubble: {
+    dismiss(): Promise<void>;
   };
 
   // ===== 主动陪伴 / 屏幕感知 =====
@@ -190,6 +193,7 @@ export interface BailinApi {
     activeCharacterChanged(handler: (bundle: CharacterBundle | null) => void): () => void;
     petSummon(handler: () => void): () => void;
     proactiveWhisper(handler: (evt: ProactiveWhisperEvent) => void): () => void;
+    proactiveBubblePlacement(handler: (evt: ProactiveBubblePlacementEvent) => void): () => void;
     ambientSignal(handler: (evt: AmbientSignal) => void): () => void;
     /** 深度蒸馏的实时进度（包含 6 个 Agent 各自的开始 / 结束）。 */
     distillationProgress(handler: (evt: DistillationProgressEvent) => void): () => void;
@@ -201,6 +205,10 @@ export interface BailinApi {
 }
 
 export type ProactiveBubblePlacement = "above" | "below";
+
+export interface ProactiveBubblePlacementEvent {
+  placement: ProactiveBubblePlacement;
+}
 
 export type SettingsTab = "library" | "create" | "memory" | "desktop" | "key" | "settings";
 
@@ -692,7 +700,7 @@ export const IPC = {
   PetDragStart: "nuwa.pet.dragStart",
   PetDragMove: "nuwa.pet.dragMove",
   PetDragEnd: "nuwa.pet.dragEnd",
-  PetSetProactiveBubbleLayout: "nuwa.pet.setProactiveBubbleLayout",
+  ProactiveBubbleDismiss: "nuwa.proactiveBubble.dismiss",
 
   ProactiveGetSettings: "nuwa.proactive.getSettings",
   ProactiveSetSettings: "nuwa.proactive.setSettings",
@@ -706,6 +714,7 @@ export const IPC = {
   EventActiveCharacterChanged: "nuwa.event.activeCharacterChanged",
   EventPetSummon: "nuwa.event.petSummon",
   EventProactiveWhisper: "nuwa.event.proactiveWhisper",
+  EventProactiveBubblePlacement: "nuwa.event.proactiveBubblePlacement",
   EventAmbientSignal: "nuwa.event.ambientSignal",
   EventDistillationProgress: "nuwa.event.distillationProgress",
   EventLocaleChanged: "nuwa.event.localeChanged",

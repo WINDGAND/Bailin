@@ -119,7 +119,8 @@ interface NuwaWindow {
       getRecentChanges(limit?: number): Promise<import("../../shared/ipc-contract.js").ProfileChangeRecord[]>;
       undoLastChange(): Promise<{ ok: boolean; profile?: import("../../shared/ipc-contract.js").UserProfile; reason?: string }>;
     };
-    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(tab?: import("../../shared/ipc-contract.js").SettingsTab): Promise<void>; hide(): Promise<void>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>; setProactiveBubbleLayout(placement: import("../../shared/ipc-contract.js").ProactiveBubblePlacement | null): Promise<void>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
+    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(tab?: import("../../shared/ipc-contract.js").SettingsTab): Promise<void>; hide(): Promise<void>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
+    proactiveBubble: { dismiss(): Promise<void> };
     proactive: {
       getSettings(): Promise<ProactiveSettings>;
       setSettings(input: ProactiveSettings): Promise<ProactiveSettings>;
@@ -134,6 +135,7 @@ interface NuwaWindow {
       activeCharacterChanged(h: (bundle: CharacterBundle | null) => void): () => void;
       petSummon(h: () => void): () => void;
       proactiveWhisper(h: (evt: ProactiveWhisperEvent) => void): () => void;
+      proactiveBubblePlacement(h: (evt: import("../../shared/ipc-contract.js").ProactiveBubblePlacementEvent) => void): () => void;
       ambientSignal(h: (evt: AmbientSignal) => void): () => void;
       distillationProgress(h: (evt: DistillationProgressEvent) => void): () => void;
       localeChanged(h: (locale: "zh" | "en") => void): () => void;
@@ -301,8 +303,10 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       setContextMenuOpen: async () => null,
       dragStart: async () => undefined,
       dragMove: async () => undefined,
-      dragEnd: async () => undefined,
-      setProactiveBubbleLayout: async () => undefined
+      dragEnd: async () => undefined
+    },
+    proactiveBubble: {
+      dismiss: async () => undefined
     },
     proactive: {
       getSettings: async () => ({
@@ -345,6 +349,7 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       activeCharacterChanged: noopOff,
       petSummon: noopOff,
       proactiveWhisper: noopOff,
+      proactiveBubblePlacement: noopOff,
       ambientSignal: noopOff,
       distillationProgress: noopOff,
       localeChanged: (h) => {

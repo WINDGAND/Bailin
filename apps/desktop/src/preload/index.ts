@@ -93,9 +93,10 @@ const api = {
     setContextMenuOpen: (open: boolean) => ipcRenderer.invoke(IPC.PetSetContextMenuOpen, open),
     dragStart: () => ipcRenderer.invoke(IPC.PetDragStart),
     dragMove: () => ipcRenderer.invoke(IPC.PetDragMove),
-    dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd),
-    setProactiveBubbleLayout: (placement: string | null) =>
-      ipcRenderer.invoke(IPC.PetSetProactiveBubbleLayout, placement)
+    dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd)
+  },
+  proactiveBubble: {
+    dismiss: () => ipcRenderer.invoke(IPC.ProactiveBubbleDismiss)
   },
   proactive: {
     getSettings: () => ipcRenderer.invoke(IPC.ProactiveGetSettings),
@@ -130,6 +131,11 @@ const api = {
       const listener = (_e: unknown, p: unknown) => handler(p);
       ipcRenderer.on(IPC.EventProactiveWhisper, listener);
       return () => ipcRenderer.removeListener(IPC.EventProactiveWhisper, listener);
+    },
+    proactiveBubblePlacement(handler: (evt: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventProactiveBubblePlacement, listener);
+      return () => ipcRenderer.removeListener(IPC.EventProactiveBubblePlacement, listener);
     },
     ambientSignal(handler: (evt: unknown) => void) {
       const listener = (_e: unknown, p: unknown) => handler(p);

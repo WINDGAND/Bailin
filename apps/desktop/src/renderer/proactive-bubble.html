@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>百灵 Bailin · 陪伴气泡</title>
+    <script src="./shared/theme-init.js"></script>
+    <link rel="stylesheet" href="./styles/design-system.css" />
+    <style>
+      html,
+      body,
+      #root {
+        margin: 0;
+        padding: 0;
+        background: transparent !important;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+      }
+      .bubble-shell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .proactive-bubble {
+        position: relative;
+        width: max-content;
+        max-width: min(240px, calc(100vw - 16px));
+        min-width: 120px;
+        padding: 16px 14px 8px;
+        background: #ffffff;
+        border: 1.5px solid rgba(0, 0, 0, 0.12);
+        border-radius: 16px;
+        pointer-events: auto;
+      }
+      .proactive-bubble__close {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        font-family: "Yuanti SC", "YouYuan", "PingFang SC", sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1;
+        color: rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+      }
+      .proactive-bubble__close:hover {
+        color: #000000;
+        background: rgba(0, 0, 0, 0.06);
+      }
+      .proactive-bubble__text {
+        display: block;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: none;
+        border: none;
+        font-family: "Yuanti SC", "YouYuan", "STYuanti", "PingFang SC", "Microsoft YaHei UI",
+          sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.5;
+        color: #000000;
+        text-align: center;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+      }
+      .proactive-bubble__text:hover {
+        opacity: 0.82;
+      }
+      .proactive-bubble__actions {
+        margin-top: 6px;
+        display: flex;
+        justify-content: center;
+      }
+      .proactive-bubble__action {
+        padding: 2px 4px;
+        background: none;
+        border: none;
+        font-family: "Yuanti SC", "YouYuan", "STYuanti", "PingFang SC", "Microsoft YaHei UI",
+          sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        color: #000000;
+        opacity: 0.55;
+        cursor: pointer;
+      }
+      .proactive-bubble__action:hover {
+        opacity: 0.85;
+      }
+      .proactive-bubble__tail {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%) rotate(45deg);
+        width: 10px;
+        height: 10px;
+        background: #ffffff;
+      }
+      .proactive-bubble--above .proactive-bubble__tail {
+        bottom: -6px;
+        border-right: 1.5px solid rgba(0, 0, 0, 0.12);
+        border-bottom: 1.5px solid rgba(0, 0, 0, 0.12);
+      }
+      .proactive-bubble--below .proactive-bubble__tail {
+        top: -6px;
+        border-left: 1.5px solid rgba(0, 0, 0, 0.12);
+        border-top: 1.5px solid rgba(0, 0, 0, 0.12);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./proactive-bubble/main.tsx"></script>
+  </body>
+</html>

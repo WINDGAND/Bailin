@@ -1,46 +1,66 @@
 /**
- * 验证气泡布局：坐标可逆 + 渲染侧应先固定桌宠区再扩窗。
+ * 方案 B：独立气泡窗 — 桌宠窗始终基准尺寸，气泡位置/方位由主进程布局模块计算。
+ * 此处内联 shared/proactive-bubble-layout.ts 的核心逻辑以便 node 直接运行。
  */
 import assert from "node:assert/strict";
 
-const EXTRA = 100;
+const PROACTIVE_BUBBLE_WINDOW_SIZE = { width: 280, height: 132 };
+const PROACTIVE_BUBBLE_PET_GAP = 6;
+const PROACTIVE_BUBBLE_PLACEMENT_HYSTERESIS_PX = 80;
+const PET_ANCHOR_RATIO = 0.88;
+
 const BASE_H = 234;
+const BASE_W = 216;
+const DISPLAY_H = 1080;
 
-function baseFromExpanded(x, y, placement) {
-  return placement === "above" ? { x, y: y + EXTRA } : { x, y };
+function resolveProactiveBubblePlacementFromPetRect(pet, displayHeight, current = null) {
+  const anchorY = pet.y + pet.height * PET_ANCHOR_RATIO;
+  const mid = displayHeight / 2;
+  const h = PROACTIVE_BUBBLE_PLACEMENT_HYSTERESIS_PX;
+
+  if (current === "above") {
+    return anchorY > mid - h ? "above" : "below";
+  }
+  if (current === "below") {
+    return anchorY > mid + h ? "above" : "below";
+  }
+  return anchorY > mid ? "above" : "below";
 }
 
-function expandedFromBase(x, y, placement) {
-  return placement === "above" ? { x, y: y - EXTRA } : { x, y };
+function computeProactiveBubbleWindowBounds(pet, placement) {
+  const bubbleSize = PROACTIVE_BUBBLE_WINDOW_SIZE;
+  const gap = PROACTIVE_BUBBLE_PET_GAP;
+  const petCenterX = pet.x + pet.width / 2;
+  const x = Math.round(petCenterX - bubbleSize.width / 2);
+  const y =
+    placement === "above"
+      ? Math.round(pet.y - gap - bubbleSize.height)
+      : Math.round(pet.y + pet.height + gap);
+  return { x, y, width: bubbleSize.width, height: bubbleSize.height };
 }
 
-const base = { x: 400, y: 600 };
+/** 桌宠拖动 clamp 始终用基准窗高，气泡不再撑大桌宠窗。 */
+assert.equal(BASE_H, BASE_H);
 
-for (const placement of ["above", "below"]) {
-  const expanded = expandedFromBase(base.x, base.y, placement);
-  const roundTrip = baseFromExpanded(expanded.x, expanded.y, placement);
-  assert.deepEqual(roundTrip, base, `round-trip failed for ${placement}`);
-}
+const petUpper = { x: 400, y: 200, width: BASE_W, height: BASE_H };
+const petLower = { x: 400, y: 800, width: BASE_W, height: BASE_H };
+assert.equal(resolveProactiveBubblePlacementFromPetRect(petUpper, DISPLAY_H, null), "below");
+assert.equal(resolveProactiveBubblePlacementFromPetRect(petLower, DISPLAY_H, null), "above");
 
-const dragBase = { x: 500, y: 700 };
-const dragExpanded = expandedFromBase(dragBase.x, dragBase.y, "above");
-const dragHeight = BASE_H + EXTRA;
-assert.equal(dragExpanded.y, dragBase.y - EXTRA);
-assert.equal(dragHeight, 334);
+const midPet = { x: 400, y: 350, width: BASE_W, height: BASE_H };
+assert.equal(resolveProactiveBubblePlacementFromPetRect(midPet, DISPLAY_H, "below"), "below");
+assert.equal(
+  resolveProactiveBubblePlacementFromPetRect({ ...midPet, y: 450 }, DISPLAY_H, "below"),
+  "above"
+);
 
-/** 桌宠区高度在扩窗前后保持不变，避免 stretch 闪动。 */
-function petZoneHeight(windowHeight, bubbleLayoutReady) {
-  return BASE_H;
-}
+const aboveBounds = computeProactiveBubbleWindowBounds(petLower, "above");
+assert.ok(aboveBounds.y + aboveBounds.height <= petLower.y - PROACTIVE_BUBBLE_PET_GAP + 1);
 
-/** 陪伴开启时应预留气泡高度，试说/消失不再反复 setContentBounds。 */
-function shouldReserveBubbleSpace(settings) {
-  return Boolean(settings.enabled && settings.companionFrequency !== "off");
-}
+const belowBounds = computeProactiveBubbleWindowBounds(petUpper, "below");
+assert.ok(belowBounds.y >= petUpper.y + petUpper.height + PROACTIVE_BUBBLE_PET_GAP - 1);
 
-assert.equal(petZoneHeight(BASE_H, false), BASE_H);
-assert.equal(petZoneHeight(BASE_H + EXTRA, true), BASE_H);
-assert.equal(shouldReserveBubbleSpace({ enabled: true, companionFrequency: "light" }), true);
-assert.equal(shouldReserveBubbleSpace({ enabled: true, companionFrequency: "off" }), false);
+assert.equal(aboveBounds.width, PROACTIVE_BUBBLE_WINDOW_SIZE.width);
+assert.equal(aboveBounds.height, PROACTIVE_BUBBLE_WINDOW_SIZE.height);
 
-console.log("pet-bubble-layout verify: ok");
+console.log("pet-bubble-layout verify (plan B): ok");

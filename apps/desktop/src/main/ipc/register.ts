@@ -8,7 +8,6 @@ import {
   type ImageGenerationConfigDTO,
   type ImageTierName,
   type ProactiveSettings,
-  type ProactiveBubblePlacement,
   type SendMessageInput,
   type SettingsTab,
   type UserProfile
@@ -53,8 +52,7 @@ export interface IpcDeps {
   isChatVisible: () => boolean;
   hidePet: () => void;
   setPetContextMenuOpen: (open: boolean) => "left" | "right" | null;
-  setProactiveBubbleLayout: (placement: ProactiveBubblePlacement | null) => void;
-  syncProactiveBubbleReserve?: () => void;
+  dismissProactiveBubble: () => void;
   movePet: (x: number, y: number) => { x: number; y: number };
   ensurePetOnScreen: () => void;
   ensureSettingsWindow: (tab?: SettingsTab) => void;
@@ -738,12 +736,9 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.PetSetContextMenuOpen, (_e, open: boolean) => {
     return deps.setPetContextMenuOpen(open);
   });
-  ipcMain.handle(
-    IPC.PetSetProactiveBubbleLayout,
-    (_e, placement: import("../../shared/ipc-contract.js").ProactiveBubblePlacement | null) => {
-      deps.setProactiveBubbleLayout(placement);
-    }
-  );
+  ipcMain.handle(IPC.ProactiveBubbleDismiss, () => {
+    deps.dismissProactiveBubble();
+  });
 
   // ===== 拖动（主进程全程用 screen 坐标，规避渲染进程 CSS 像素 / DPI 差异） =====
   ipcMain.handle(IPC.PetDragStart, () => deps.petDragStart());
@@ -759,7 +754,6 @@ export function registerIpc(deps: IpcDeps): void {
     const saved = proactive.setSettings(input);
     deps.applyPetDisplayScale(saved.petDisplayScale);
     deps.syncProactiveAmbient?.();
-    deps.syncProactiveBubbleReserve?.();
     deps.broadcast(IPC.EventProactiveSettingsChanged, saved);
     return saved;
   });

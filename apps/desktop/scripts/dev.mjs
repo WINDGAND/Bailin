@@ -53,9 +53,74 @@ console.log("[dev] building main + preload (initial sync)…");
 runChecked("pnpm", ["run", "build:main"], appRoot);
 runChecked("pnpm", ["run", "build:preload"], appRoot);
 
+const DEV_VITE_PORT = 5173;
+const DEV_VITE_HOST = "127.0.0.1";
+const DEV_VITE_URL = `http://${DEV_VITE_HOST}:${DEV_VITE_PORT}`;
+
+/** 释放 dev 端口：上次 dev 未正常退出时，僵死的 Vite 会占着 5173，Electron 连到空壳 → 白屏。 */
+function findListeningPidsOnPort(port) {
+  const pids = new Set();
+  if (process.platform === "win32") {
+    const out = spawnSync("netstat", ["-ano"], { encoding: "utf8", shell: true });
+    if (out.status !== 0) return pids;
+    for (const line of out.stdout.split("\n")) {
+      if (!line.includes(`:${port}`) || !line.includes("LISTENING")) continue;
+      const parts = line.trim().split(/\s+/);
+      const pid = Number(parts.at(-1));
+      if (Number.isFinite(pid) && pid > 0) pids.add(pid);
+    }
+    return pids;
+  }
+  const out = spawnSync("lsof", ["-ti", `tcp:${port}`, "-sTCP:LISTEN"], { encoding: "utf8" });
+  if (out.status !== 0) return pids;
+  for (const token of out.stdout.split(/\s+/)) {
+    const pid = Number(token);
+    if (Number.isFinite(pid) && pid > 0) pids.add(pid);
+  }
+  return pids;
+}
+
+function freeDevPort(port) {
+  for (const pid of findListeningPidsOnPort(port)) {
+    if (pid === process.pid) continue;
+    console.warn(`[dev] port ${port} in use by pid ${pid}, stopping stale process…`);
+    if (process.platform === "win32") {
+      spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)], { shell: true, stdio: "ignore" });
+    } else {
+      spawnSync("kill", ["-9", String(pid)], { stdio: "ignore" });
+    }
+  }
+}
+
+async function waitForVite(url, timeoutMs = 45_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${url}/settings.html`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
+        console.log(`[dev] vite ready at ${url}`);
+        return;
+      }
+    } catch {
+      // vite still booting
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  console.error(`[dev] vite did not become ready at ${url} within ${timeoutMs}ms`);
+  process.exit(1);
+}
+
 console.log("[dev] starting vite renderer + tsc main watch + electron…");
 
+freeDevPort(DEV_VITE_PORT);
+
 const vite = run("vite", ["--config", "vite.config.ts"]);
+vite.on("exit", (code) => {
+  if (code != null && code !== 0) {
+    console.error(`[dev] vite exited with code ${code}`);
+    process.exit(code);
+  }
+});
 const mainBuild = run("tsc", ["-w", "-p", "tsconfig.main.json"]);
 const preloadBuild = run("tsc", ["-w", "-p", "tsconfig.preload.json"]);
 
@@ -80,7 +145,7 @@ function spawnElectron(label = "fresh") {
   console.log(`[dev] electron ${label} starting…`);
   electron = run("electron", ["."], {
     NUWA_PET_DEV: "1",
-    VITE_DEV_SERVER: "http://localhost:5173"
+    VITE_DEV_SERVER: DEV_VITE_URL
   });
   electron.on("exit", (code) => {
     if (restartingElectron) {
@@ -152,11 +217,11 @@ function watchDistMain() {
   }
 }
 
-setTimeout(() => {
+void waitForVite(DEV_VITE_URL).then(() => {
   spawnElectron("initial");
   watchDistMain();
   setupManualRestart();
-}, 4000);
+});
 
 /**
  * 让用户在 dev 终端里手动触发主进程重启，避免每次主进程改动都"全局闪屏"。

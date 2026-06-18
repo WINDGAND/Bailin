@@ -15,11 +15,13 @@ export default defineConfig({
       input: {
         pet: resolve(root, "pet.html"),
         chat: resolve(root, "chat.html"),
-        settings: resolve(root, "settings.html")
+        settings: resolve(root, "settings.html"),
+        proactiveBubble: resolve(root, "proactive-bubble.html")
       }
     }
   },
   server: {
+    host: "127.0.0.1",
     port: 5173,
     strictPort: true
   }
