@@ -9,6 +9,10 @@ export const en: TranslationTree = {
     key: "Model & API Key",
     settings: "Settings"
   },
+  sidebar: {
+    collapse: "Collapse sidebar",
+    expand: "Expand sidebar"
+  },
   common: {
     loading: "Loading…",
     settingsSidebar: "Settings sidebar",

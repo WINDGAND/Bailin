@@ -7,6 +7,10 @@ export const zh = {
     key: "模型与 API Key",
     settings: "设置"
   },
+  sidebar: {
+    collapse: "收起侧边栏",
+    expand: "展开侧边栏"
+  },
   common: {
     loading: "加载中…",
     settingsSidebar: "设置侧边栏",

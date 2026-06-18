@@ -18,6 +18,24 @@ import { useI18n } from "../../shared/i18n/index.js";
 
 type Tab = "library" | "create" | "memory" | "desktop" | "key" | "settings";
 
+const SIDEBAR_COLLAPSED_KEY = "bailin.settingsSidebarCollapsed";
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeSidebarCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 interface TabDef {
   id: Tab;
   labelKey: "nav.library" | "nav.create" | "nav.memory" | "nav.desktop" | "nav.key" | "nav.settings";
@@ -40,6 +58,7 @@ export function SettingsApp(): JSX.Element {
   const confirm = useConfirm();
   const [firstRun, setFirstRun] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>("library");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const dirtyRef = useRef(false);
 
   useEffect(() => {
@@ -133,6 +152,14 @@ export function SettingsApp(): JSX.Element {
     handler: () => kb.openHelp()
   });
 
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      writeSidebarCollapsed(next);
+      return next;
+    });
+  }, []);
+
   if (firstRun === null || !i18nReady) {
     return (
       <div style={{ padding: 40 }}>
@@ -157,12 +184,29 @@ export function SettingsApp(): JSX.Element {
       <DistillationJobProvider>
         <VisualJobProvider>
           <div className="settings-shell">
-            <aside className="settings-sidebar" aria-label={t("common.settingsSidebar")}>
-              <div className="settings-brand">
-                <div className="eyebrow">Bailin · 0.0.1</div>
-                <div className="display display--section" style={{ marginTop: 4 }}>
-                  百灵
+            <aside
+              className={`settings-sidebar${sidebarCollapsed ? " is-collapsed" : ""}`}
+              aria-label={t("common.settingsSidebar")}
+              aria-expanded={!sidebarCollapsed}
+            >
+              <div className="settings-sidebar__header">
+                <div className="settings-brand__copy" aria-hidden={sidebarCollapsed}>
+                  <div className="eyebrow">Bailin · 0.0.1</div>
+                  <div className="display display--section" style={{ marginTop: 4 }}>
+                    百灵
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  className="settings-sidebar__toggle"
+                  onClick={toggleSidebar}
+                  aria-label={
+                    sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")
+                  }
+                  title={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
+                >
+                  <SidebarToggleIcon collapsed={sidebarCollapsed} />
+                </button>
               </div>
 
               <nav className="settings-nav" aria-label={t("common.settingsNav")}>
@@ -173,6 +217,7 @@ export function SettingsApp(): JSX.Element {
                     className={tab === tabDef.id ? "settings-nav__item is-active" : "settings-nav__item"}
                     onClick={() => void tryGoTab(tabDef.id)}
                     aria-current={tab === tabDef.id ? "page" : undefined}
+                    title={sidebarCollapsed ? t(tabDef.labelKey) : undefined}
                   >
                     <tabDef.icon size={17} />
                     <span>{t(tabDef.labelKey)}</span>
@@ -345,6 +390,34 @@ function SettingsIcon({ size = 18 }: IconProps): JSX.Element {
       {/* 齿轮：外圈齿 + 中心孔，与侧栏其它描边图标一致 */}
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function SidebarToggleIcon({ collapsed }: { collapsed: boolean }): JSX.Element {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {collapsed ? (
+        <>
+          <path d="M9 6l6 6-6 6" />
+          <path d="M4 6v12" />
+        </>
+      ) : (
+        <>
+          <path d="M15 6l-6 6 6 6" />
+          <path d="M20 6v12" />
+        </>
+      )}
     </svg>
   );
 }
