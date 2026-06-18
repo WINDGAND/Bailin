@@ -54,6 +54,7 @@ export function ProactiveBubble({
   const t = useT();
   const [paused, setPaused] = useState(false);
   const [justOpened, setJustOpened] = useState(false);
+  const hadBubbleRef = useRef(false);
   const timerRef = useRef<number | null>(null);
 
   const clearTimer = useCallback(() => {
@@ -64,6 +65,14 @@ export function ProactiveBubble({
   }, []);
 
   useEffect(() => {
+    if (!bubble) {
+      hadBubbleRef.current = false;
+      setJustOpened(false);
+      return;
+    }
+    const firstInSession = !hadBubbleRef.current;
+    hadBubbleRef.current = true;
+    if (!firstInSession) return;
     setJustOpened(true);
     const tId = window.setTimeout(() => setJustOpened(false), 250);
     return () => window.clearTimeout(tId);

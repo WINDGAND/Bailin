@@ -71,6 +71,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const [visionAvailable, setVisionAvailable] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [llmTesting, setLlmTesting] = useState(false);
+  const [hushDraftMinutes, setHushDraftMinutes] = useState<ProactiveSettings["defaultHushMinutes"]>(30);
   const [advancedOpen, setAdvancedOpen] = useState(true);
   const [statusOpen, setStatusOpen] = useState(true);
 
@@ -92,6 +93,10 @@ export function DesktopBehaviorPanel(): JSX.Element {
     const timer = window.setInterval(() => void refreshStatus(), 30_000);
     return () => window.clearInterval(timer);
   }, [nuwa, refreshStatus]);
+
+  useEffect(() => {
+    setHushDraftMinutes(settings.defaultHushMinutes);
+  }, [settings.defaultHushMinutes]);
 
   async function save(next: ProactiveSettings, opts?: { silent?: boolean }): Promise<void> {
     setSettings(next);
@@ -136,6 +141,27 @@ export function DesktopBehaviorPanel(): JSX.Element {
 
   function translateTriggerReason(reason: string | undefined): string {
     return translateTriggerReasonText(t, reason);
+  }
+
+  async function confirmHush(): Promise<void> {
+    const minutes = hushDraftMinutes;
+    if (minutes !== settings.defaultHushMinutes) {
+      await save({ ...settings, defaultHushMinutes: minutes }, { silent: true });
+    }
+    await nuwa.pet.hush(minutes * 60 * 1000);
+    await refreshStatus();
+    showToast({
+      kind: "success",
+      text: t("desktop.toastHushStarted", {
+        minutes,
+        time: new Date(Date.now() + minutes * 60 * 1000).toLocaleTimeString(timeLocale)
+      })
+    });
+  }
+
+  function cancelHushDraft(): void {
+    setHushDraftMinutes(settings.defaultHushMinutes);
+    showToast({ kind: "info", text: t("desktop.toastHushCancelled") });
   }
 
   function lastReasonLabel(reason: string | undefined): string {
@@ -483,26 +509,29 @@ export function DesktopBehaviorPanel(): JSX.Element {
           {t("desktop.quickActionsHint")}
         </p>
 
-        <div className="row gap-2" style={{ marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <BlSelect
-            value={String(settings.defaultHushMinutes)}
-            onChange={(raw) =>
-              void save({
-                ...settings,
-                defaultHushMinutes: Number(raw) as ProactiveSettings["defaultHushMinutes"]
-              })
-            }
-            options={HUSH_MINUTES.map((n) => ({
-              value: String(n),
-              label: t("desktop.minutes", { count: n })
-            }))}
-          />
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => void nuwa.pet.hush(settings.defaultHushMinutes * 60 * 1000)}
-          >
-            {t("desktop.hushButton", { minutes: settings.defaultHushMinutes })}
+        <div
+          className="row gap-2"
+          style={{ marginTop: 12, flexWrap: "wrap", alignItems: "center" }}
+        >
+          <span className="body-sm">{t("desktop.hushActionLabel")}</span>
+          <div style={{ width: 112, flexShrink: 0 }}>
+            <BlSelect
+              value={String(hushDraftMinutes)}
+              onChange={(raw) =>
+                setHushDraftMinutes(Number(raw) as ProactiveSettings["defaultHushMinutes"])
+              }
+              options={HUSH_MINUTES.map((n) => ({
+                value: String(n),
+                label: t("desktop.minutes", { count: n })
+              }))}
+              aria-label={t("desktop.hushDurationAria")}
+            />
+          </div>
+          <button type="button" className="btn btn--magenta" onClick={() => void confirmHush()}>
+            {t("desktop.hushConfirm")}
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={cancelHushDraft}>
+            {t("desktop.hushCancel")}
           </button>
         </div>
 

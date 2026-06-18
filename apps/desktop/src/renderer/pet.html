@@ -197,6 +197,10 @@
       }
       .pet-bubble-anchor {
         flex-shrink: 0;
+        min-height: var(--bubble-extra, 100px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       .pet-wrap-zone {
         display: flex;
@@ -204,10 +208,10 @@
         justify-content: center;
         width: 100%;
         flex-shrink: 0;
+        height: var(--pet-zone-height, 260px);
       }
-      .pet-root--bubble-above .pet-wrap-zone,
-      .pet-root--bubble-below .pet-wrap-zone {
-        height: calc(100% - var(--bubble-extra, 100px));
+      .pet-root--bubble-below {
+        align-items: flex-start;
       }
       .pet-root--bubble-above .pet-column {
         justify-content: flex-end;

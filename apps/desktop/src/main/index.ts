@@ -99,6 +99,8 @@ let petContextMenuOpen = false;
 let petBoundsBeforeMenu: { x: number; y: number; width: number; height: number } | null = null;
 /** 主动陪伴气泡展开时的方位；null 表示未展开。 */
 let proactiveBubbleLayout: ProactiveBubblePlacement | null = null;
+/** 陪伴开启时预留气泡高度，避免每次显隐气泡都 setContentBounds 导致透明窗闪动。 */
+let proactiveBubbleReserved = false;
 /** 未展开气泡时桌宠窗口左上角（持久化位置也以此为准）。 */
 let petBaseOrigin: { x: number; y: number } | null = null;
 
@@ -425,6 +427,25 @@ function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
   return side;
 }
 
+function syncProactiveBubbleReserve(): void {
+  if (!vaultRef) return;
+  const settings = readProactiveSettings(vaultRef);
+  const shouldReserve = settings.enabled && settings.companionFrequency !== "off";
+
+  if (shouldReserve) {
+    proactiveBubbleReserved = true;
+    if (!proactiveBubbleLayout) {
+      setProactiveBubbleLayout("above");
+    }
+    return;
+  }
+
+  if (proactiveBubbleReserved || proactiveBubbleLayout) {
+    proactiveBubbleReserved = false;
+    setProactiveBubbleLayout(null);
+  }
+}
+
 function setProactiveBubbleLayout(placement: ProactiveBubblePlacement | null): void {
   const pet = petWin;
   if (!pet || pet.isDestroyed()) return;
@@ -434,6 +455,9 @@ function setProactiveBubbleLayout(placement: ProactiveBubblePlacement | null): v
   const extra = PROACTIVE_BUBBLE_EXTRA_HEIGHT;
 
   if (!placement) {
+    if (proactiveBubbleReserved) {
+      return;
+    }
     if (proactiveBubbleLayout) {
       const base = derivePetBaseOrigin(pet);
       pet.setContentBounds({
@@ -707,6 +731,7 @@ void app.whenReady().then(() => {
     hidePet,
     setPetContextMenuOpen,
     setProactiveBubbleLayout,
+    syncProactiveBubbleReserve,
     movePet,
     ensurePetOnScreen,
     ensureSettingsWindow,
@@ -753,6 +778,8 @@ void app.whenReady().then(() => {
     // ignore corrupted position
     positionPetAtPrimaryBottomRight();
   }
+
+  syncProactiveBubbleReserve();
 
   const ok = globalShortcut.register("CommandOrControl+Shift+P", () => {
     summonPetBubble();

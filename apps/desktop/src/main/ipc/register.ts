@@ -54,6 +54,7 @@ export interface IpcDeps {
   hidePet: () => void;
   setPetContextMenuOpen: (open: boolean) => "left" | "right" | null;
   setProactiveBubbleLayout: (placement: ProactiveBubblePlacement | null) => void;
+  syncProactiveBubbleReserve?: () => void;
   movePet: (x: number, y: number) => { x: number; y: number };
   ensurePetOnScreen: () => void;
   ensureSettingsWindow: (tab?: SettingsTab) => void;
@@ -758,6 +759,7 @@ export function registerIpc(deps: IpcDeps): void {
     const saved = proactive.setSettings(input);
     deps.applyPetDisplayScale(saved.petDisplayScale);
     deps.syncProactiveAmbient?.();
+    deps.syncProactiveBubbleReserve?.();
     deps.broadcast(IPC.EventProactiveSettingsChanged, saved);
     return saved;
   });

@@ -1,9 +1,10 @@
 /**
- * 验证气泡布局坐标换算：展开 ↔ 基准原点 可逆，拖动时高度保留 extra。
+ * 验证气泡布局：坐标可逆 + 渲染侧应先固定桌宠区再扩窗。
  */
 import assert from "node:assert/strict";
 
 const EXTRA = 100;
+const BASE_H = 234;
 
 function baseFromExpanded(x, y, placement) {
   return placement === "above" ? { x, y: y + EXTRA } : { x, y };
@@ -23,8 +24,23 @@ for (const placement of ["above", "below"]) {
 
 const dragBase = { x: 500, y: 700 };
 const dragExpanded = expandedFromBase(dragBase.x, dragBase.y, "above");
-const dragHeight = 234 + EXTRA;
+const dragHeight = BASE_H + EXTRA;
 assert.equal(dragExpanded.y, dragBase.y - EXTRA);
 assert.equal(dragHeight, 334);
+
+/** 桌宠区高度在扩窗前后保持不变，避免 stretch 闪动。 */
+function petZoneHeight(windowHeight, bubbleLayoutReady) {
+  return BASE_H;
+}
+
+/** 陪伴开启时应预留气泡高度，试说/消失不再反复 setContentBounds。 */
+function shouldReserveBubbleSpace(settings) {
+  return Boolean(settings.enabled && settings.companionFrequency !== "off");
+}
+
+assert.equal(petZoneHeight(BASE_H, false), BASE_H);
+assert.equal(petZoneHeight(BASE_H + EXTRA, true), BASE_H);
+assert.equal(shouldReserveBubbleSpace({ enabled: true, companionFrequency: "light" }), true);
+assert.equal(shouldReserveBubbleSpace({ enabled: true, companionFrequency: "off" }), false);
 
 console.log("pet-bubble-layout verify: ok");

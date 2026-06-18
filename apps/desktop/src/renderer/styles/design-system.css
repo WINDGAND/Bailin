@@ -110,7 +110,9 @@ body {
 }
 
 #root {
+  height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 /* ---------- Display headings ---------- */
@@ -1083,7 +1085,9 @@ body {
   --sidebar-fade-duration: 260ms;
   display: flex;
   align-items: stretch;
+  height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
   background: var(--paper);
 }
 
@@ -3010,6 +3014,14 @@ body {
   max-height: 240px;
   overflow-y: auto;
   animation: backdrop-fade var(--motion-fast) var(--ease-out) both;
+}
+
+.bl-select__menu--portal {
+  position: fixed;
+  top: auto;
+  left: auto;
+  right: auto;
+  z-index: 1000;
 }
 
 .bl-select__option {

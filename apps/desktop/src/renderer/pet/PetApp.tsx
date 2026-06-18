@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { SpriteEvent } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import {
+  getPetWindowSize,
   PET_DISPLAY_SCALE_DEFAULT,
   PET_WINDOW_BASE_SIZE,
   resolveAtlasPetPixelSize,
@@ -49,42 +51,64 @@ export function PetApp(): JSX.Element {
   const [petDisplayScale, setPetDisplayScale] = useState(PET_DISPLAY_SCALE_DEFAULT);
   const [defaultHushMinutes, setDefaultHushMinutes] = useState(30);
   const [bubble, setBubble] = useState<ProactiveBubbleState | null>(null);
+  const [bubbleLayoutReady, setBubbleLayoutReady] = useState(false);
   const [bubblePlacement, setBubblePlacement] = useState<ProactiveBubblePlacement>("above");
   const bubblePlacementRef = useRef<ProactiveBubblePlacement>("above");
+  const companionReservedRef = useRef(false);
+  const [companionReserved, setCompanionReserved] = useState(false);
+
+  const applyCompanionLayout = useCallback((reserved: boolean) => {
+    companionReservedRef.current = reserved;
+    setCompanionReserved(reserved);
+    if (reserved) {
+      const placement = resolveProactiveBubblePlacement(bubblePlacementRef.current);
+      bubbleLayoutActiveRef.current = true;
+      bubblePlacementRef.current = placement;
+      setBubblePlacement(placement);
+      setBubbleLayoutReady(true);
+      return;
+    }
+    bubbleLayoutActiveRef.current = false;
+    setBubbleLayoutReady(false);
+    setBubble(null);
+  }, []);
 
   useEffect(() => {
     void nuwa.proactive.getSettings().then((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
       setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
+      applyCompanionLayout(Boolean(s.enabled && s.companionFrequency !== "off"));
     });
     return nuwa.on.proactiveSettingsChanged((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
       setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
+      applyCompanionLayout(Boolean(s.enabled && s.companionFrequency !== "off"));
     });
-  }, [nuwa]);
+  }, [nuwa, applyCompanionLayout]);
 
   useEffect(() => {
-    if (!bubble) {
-      if (bubbleLayoutActiveRef.current) {
-        bubbleLayoutActiveRef.current = false;
-        void nuwa.pet.setProactiveBubbleLayout(null);
-      }
-      return;
-    }
-    if (bubbleLayoutActiveRef.current) {
-      return;
-    }
-    bubbleLayoutActiveRef.current = true;
-    const placement = resolveProactiveBubblePlacement(null);
-    bubblePlacementRef.current = placement;
-    setBubblePlacement(placement);
-    void nuwa.pet.setProactiveBubbleLayout(placement);
+    if (bubble) return;
+    if (!bubbleLayoutActiveRef.current) return;
+    if (companionReservedRef.current) return;
+    bubbleLayoutActiveRef.current = false;
+    setBubbleLayoutReady(false);
+    void nuwa.pet.setProactiveBubbleLayout(null);
   }, [bubble, nuwa]);
 
   const dismissBubble = useCallback(() => {
-    bubbleLayoutActiveRef.current = false;
+    if (bubbleLayoutActiveRef.current) {
+      setBubble(null);
+      if (companionReservedRef.current) return;
+      void (async () => {
+        await nuwa.pet.setProactiveBubbleLayout(null);
+        flushSync(() => {
+          bubbleLayoutActiveRef.current = false;
+          setBubbleLayoutReady(false);
+        });
+      })();
+      return;
+    }
     setBubble(null);
-    void nuwa.pet.setProactiveBubbleLayout(null);
   }, [nuwa]);
 
   const syncBubblePlacement = useCallback(() => {
@@ -281,7 +305,20 @@ export function PetApp(): JSX.Element {
   useEffect(() => {
     return nuwa.on.proactiveWhisper((evt) => {
       if (!bundle || evt.characterId !== bundle.card.id) return;
-      setBubble({ id: evt.id, text: evt.text });
+      const nextBubble = { id: evt.id, text: evt.text };
+      if (bubbleLayoutActiveRef.current) {
+        setBubble(nextBubble);
+        return;
+      }
+      const placement = resolveProactiveBubblePlacement(null);
+      flushSync(() => {
+        bubbleLayoutActiveRef.current = true;
+        bubblePlacementRef.current = placement;
+        setBubblePlacement(placement);
+        setBubbleLayoutReady(true);
+        setBubble(nextBubble);
+      });
+      void nuwa.pet.setProactiveBubbleLayout(placement);
     });
   }, [nuwa, bundle?.card.id]);
 
@@ -328,23 +365,28 @@ export function PetApp(): JSX.Element {
     return <EmptyPet onPickStarter={() => void nuwa.pet.openSettings()} />;
   }
 
+  const showBubbleLayout = bubbleLayoutReady || companionReserved;
+  const showBubble = bubbleLayoutReady && bubble != null;
+  const petZoneHeight = getPetWindowSize(petDisplayScale).height;
+
   return (
     <div
       className={`pet-root${menu?.side === "left" ? " pet-root--menu-left" : ""}${
-        bubble ? ` pet-root--bubble-${bubblePlacement}` : ""
+        showBubbleLayout ? ` pet-root--bubble-${bubblePlacement}` : ""
       }`}
       style={
-        bubble
-          ? ({ ["--bubble-extra" as string]: `${PROACTIVE_BUBBLE_EXTRA_HEIGHT}px` } as React.CSSProperties)
-          : undefined
+        {
+          ["--pet-zone-height" as string]: `${petZoneHeight}px`,
+          ["--bubble-extra" as string]: `${PROACTIVE_BUBBLE_EXTRA_HEIGHT}px`
+        } as React.CSSProperties
       }
     >
       <div
         className="pet-slot"
         style={{ width: menu ? petSlotWidth : "100%" }}
       >
-        <div className={`pet-column${bubble ? ` pet-column--bubble-${bubblePlacement}` : ""}`}>
-          {bubble ? (
+        <div className={`pet-column${showBubbleLayout ? ` pet-column--bubble-${bubblePlacement}` : ""}`}>
+          {showBubble && bubble ? (
             <div ref={bubbleLayerRef} className="pet-bubble-anchor">
               <ProactiveBubble
                 bubble={bubble}
