@@ -554,7 +554,7 @@ export interface ProactiveSettings {
   quietHoursStart: string;
   quietHoursEnd: string;
   screenAwareness: "off" | "signals" | "screenshots";
-  /** 桌宠显示倍率；0.75–1.5，默认 1.0。 */
+  /** 桌宠显示倍率；0.75–1.0，默认 0.9（90%）。 */
   petDisplayScale: number;
 }
 

@@ -3,6 +3,7 @@ import type { SpriteEvent } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import {
+  PET_DISPLAY_SCALE_DEFAULT,
   PET_WINDOW_BASE_SIZE,
   resolveAtlasPetPixelSize,
   resolveDslPetPixelSize
@@ -40,12 +41,14 @@ export function PetApp(): JSX.Element {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const menuLayerRef = useRef<HTMLDivElement | null>(null);
 
-  const [petDisplayScale, setPetDisplayScale] = useState(1);
+  const [petDisplayScale, setPetDisplayScale] = useState(PET_DISPLAY_SCALE_DEFAULT);
 
   useEffect(() => {
-    void nuwa.proactive.getSettings().then((s) => setPetDisplayScale(s.petDisplayScale ?? 1));
+    void nuwa.proactive.getSettings().then((s) =>
+      setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT)
+    );
     return nuwa.on.proactiveSettingsChanged((s) => {
-      setPetDisplayScale(s.petDisplayScale ?? 1);
+      setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
     });
   }, [nuwa]);
 

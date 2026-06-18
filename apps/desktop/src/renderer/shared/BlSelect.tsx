@@ -78,7 +78,10 @@ export function BlSelect<T extends string = string>({
                 role="option"
                 aria-selected={opt.value === value}
                 className={`bl-select__option${opt.value === value ? " is-selected" : ""}`}
-                onClick={() => {
+                onMouseDown={(e) => {
+                  // 阻止默认行为，避免菜单关闭后 click 落到 trigger 上再次打开
+                  e.preventDefault();
+                  e.stopPropagation();
                   onChange(opt.value);
                   setOpen(false);
                 }}

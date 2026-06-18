@@ -2,8 +2,8 @@
 export const PET_WINDOW_BASE_SIZE = { width: 240, height: 260 } as const;
 
 export const PET_DISPLAY_SCALE_MIN = 0.75;
-export const PET_DISPLAY_SCALE_MAX = 1.5;
-export const PET_DISPLAY_SCALE_DEFAULT = 1;
+export const PET_DISPLAY_SCALE_MAX = 1;
+export const PET_DISPLAY_SCALE_DEFAULT = 0.9;
 export const PET_DISPLAY_SCALE_STEP = 0.05;
 
 export function clampPetDisplayScale(value: unknown): number {

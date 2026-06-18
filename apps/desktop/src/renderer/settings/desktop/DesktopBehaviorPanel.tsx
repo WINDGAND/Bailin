@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ProactiveSettings, ProactiveStatus } from "../../../shared/ipc-contract.js";
 import {
   clampPetDisplayScale,
+  PET_DISPLAY_SCALE_DEFAULT,
   PET_DISPLAY_SCALE_MAX,
   PET_DISPLAY_SCALE_MIN,
   PET_DISPLAY_SCALE_STEP,
@@ -23,7 +24,7 @@ const DEFAULT_SETTINGS: ProactiveSettings = {
   quietHoursStart: "22:00",
   quietHoursEnd: "08:00",
   screenAwareness: "off",
-  petDisplayScale: 1
+  petDisplayScale: PET_DISPLAY_SCALE_DEFAULT
 };
 
 const HUSH_MINUTES = [15, 30, 60] as const;
@@ -91,7 +92,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const timeLocale = locale === "zh" ? "zh-CN" : "en-US";
 
   const previewSize = useMemo(() => {
-    const scale = settings.petDisplayScale ?? 1;
+    const scale = settings.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT;
     const program = bundle?.sprite;
     if (!program) return { width: 108, height: 128 };
     if (program.mode === "atlas" && program.atlas) {
@@ -104,7 +105,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
     return { width: Math.round(px.width * fit), height: Math.round(px.height * fit) };
   }, [bundle?.sprite, settings.petDisplayScale]);
 
-  const scalePercent = Math.round((settings.petDisplayScale ?? 1) * 100);
+  const scalePercent = Math.round((settings.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT) * 100);
 
   return (
     <div className="stack" style={{ maxWidth: 760 }}>
@@ -211,7 +212,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
           </label>
         </div>
 
-        <div className="grid-2" style={{ marginTop: 18 }}>
+        <div className="stack stack--lg" style={{ marginTop: 18 }}>
           <Field label={t("desktop.intensityLabel")}>
             <BlSelect
               value={settings.intensity}
@@ -363,9 +364,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
 
 function Field({ label, children }: { label: string; children: ReactNode }): JSX.Element {
   return (
-    <label className="stack" style={{ gap: 6 }}>
+    <div className="stack" style={{ gap: 8 }}>
       <span className="body-sm">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
