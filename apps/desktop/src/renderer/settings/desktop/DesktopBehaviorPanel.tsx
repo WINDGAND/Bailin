@@ -315,6 +315,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
         </h2>
 
         <Field label={t("desktop.frequencyLabel")} style={{ marginTop: 16 }}>
+          <p className="body-sm" style={{ margin: "0 0 8px", opacity: 0.65, lineHeight: 1.5 }}>
+            {t("desktop.frequencyQuotaNote")}
+          </p>
           <BlSelect
             value={frequency}
             onChange={(companionFrequency) => setFrequency(companionFrequency)}

@@ -583,6 +583,7 @@ export interface ProactiveStatus {
   maxPerHour: number;
   hushUntil?: number;
   focusModeUntil?: number;
+  /** 本自然小时内已触发的智能截图（LLM）次数；场景模板提醒不计入。 */
   utterancesThisHour: number;
   screenAwareness: ProactiveSettings["screenAwareness"];
   lastReason?: AmbientSignal["kind"] | "long_active" | "llm";

@@ -136,8 +136,7 @@ export class ProactiveOrchestrator {
       text: result.text,
       reason: "llm",
       layer: "llm",
-      settings,
-      bucket
+      settings
     });
   }
 
@@ -181,8 +180,7 @@ export class ProactiveOrchestrator {
       text: result.text,
       reason: "llm",
       layer: "llm",
-      settings,
-      bucket
+      settings
     });
   }
 
@@ -193,11 +191,6 @@ export class ProactiveOrchestrator {
     const settings = this.getSettings();
     const gate = this.checkGates(settings, { force: options.force });
     if (!gate.ok) return gate;
-
-    const bucket = this.getHourCount(Date.now());
-    if (!options.force && bucket.count >= settings.maxPerHour) {
-      return { ok: false, reason: "hourly-quota" };
-    }
 
     const characterId = this.deps.getActiveCharacterId();
     if (!characterId) return { ok: false, reason: "no-active-character" };
@@ -224,8 +217,7 @@ export class ProactiveOrchestrator {
       text,
       reason: signal.kind as WhisperReason,
       layer: "template",
-      settings,
-      bucket
+      settings
     });
   }
 
@@ -235,10 +227,12 @@ export class ProactiveOrchestrator {
     reason: WhisperReason;
     layer: "template" | "llm";
     settings: ProactiveSettings;
-    bucket: { bucket: string; count: number };
   }): { ok: boolean; reason?: string } {
     const now = Date.now();
-    this.setHourCount(input.bucket.bucket, input.bucket.count + 1);
+    if (input.layer === "llm") {
+      const bucket = this.getHourCount(now);
+      this.setHourCount(bucket.bucket, bucket.count + 1);
+    }
     this.deps.vault.setSetting(SETTING_PROACTIVE_LAST_REASON, input.reason);
     this.deps.vault.setSetting(SETTING_PROACTIVE_LAST_AT, String(now));
     if (input.layer === "llm") {
