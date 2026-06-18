@@ -4,7 +4,7 @@ const PROACTIVE_TRIGGER_KEYS: Record<string, string> = {
   disabled: "desktop.triggerReasonDisabled",
   "quiet-hours": "desktop.triggerReasonQuietHours",
   hushed: "desktop.triggerReasonHushed",
-  "focus-mode": "desktop.triggerReasonFocusMode",
+  "focus-mode": "desktop.triggerReasonHushed",
   "chat-visible": "desktop.triggerReasonChatVisible",
   locked: "desktop.triggerReasonLocked",
   "quota-disabled": "desktop.triggerReasonQuotaDisabled",
