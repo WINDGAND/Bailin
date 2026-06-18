@@ -41,7 +41,7 @@ export function ProactiveBubbleApp(): JSX.Element {
   }
 
   return (
-    <div className="bubble-shell">
+    <div className={`bubble-shell bubble-shell--${placement}`}>
       <ProactiveBubble
         bubble={bubble}
         placement={placement}
