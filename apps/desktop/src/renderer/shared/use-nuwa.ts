@@ -317,6 +317,7 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
           unlock: false
         },
         defaultHushMinutes: 30 as const,
+        defaultFocusMinutes: 25 as const,
         quietHoursEnabled: false,
         quietHoursStart: "22:00",
         quietHoursEnd: "08:00",

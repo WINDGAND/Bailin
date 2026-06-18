@@ -569,6 +569,8 @@ export interface ProactiveSettings {
   companionFrequency: CompanionFrequency;
   scenarioToggles: ProactiveScenarioToggles;
   defaultHushMinutes: 15 | 30 | 60;
+  /** 一键专注模式默认时长（分钟）。 */
+  defaultFocusMinutes: 15 | 25 | 30 | 45 | 60;
   quietHoursEnabled: boolean;
   quietHoursStart: string;
   quietHoursEnd: string;

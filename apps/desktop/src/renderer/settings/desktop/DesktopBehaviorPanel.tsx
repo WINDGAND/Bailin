@@ -24,6 +24,7 @@ import { useConfirm, useToast } from "../../shared/feedback.js";
 import { BlSelect } from "../../shared/BlSelect.js";
 import { PetPreview } from "../../shared/pet-preview.js";
 import { useI18n } from "../../shared/i18n/index.js";
+import { translateTriggerReason as translateTriggerReasonText } from "../../shared/translate-trigger-reason.js";
 
 const DEFAULT_SETTINGS: ProactiveSettings = {
   enabled: true,
@@ -49,28 +50,6 @@ const FREQUENCY_HINT_KEYS: Record<CompanionFrequency, string> = {
   intense: "desktop.frequencyHint_intense"
 };
 
-const TRIGGER_REASON_KEYS: Record<string, string> = {
-  disabled: "desktop.triggerReasonDisabled",
-  "quiet-hours": "desktop.triggerReasonQuietHours",
-  hushed: "desktop.triggerReasonHushed",
-  "focus-mode": "desktop.triggerReasonFocusMode",
-  "chat-visible": "desktop.triggerReasonChatVisible",
-  locked: "desktop.triggerReasonLocked",
-  "quota-disabled": "desktop.triggerReasonQuotaDisabled",
-  "hourly-quota": "desktop.triggerReasonHourlyQuota",
-  "no-active-character": "desktop.triggerReasonNoActiveCharacter",
-  "character-not-found": "desktop.triggerReasonCharacterNotFound",
-  "scenario-disabled": "desktop.triggerReasonScenarioDisabled",
-  "llm-screenshots-off": "desktop.triggerReasonLlmScreenshotsOff",
-  "llm-no-vision": "desktop.triggerReasonLlmNoVision",
-  "llm-capture-failed": "desktop.triggerReasonLlmCaptureFailed",
-  "llm-unavailable": "desktop.triggerReasonLlmUnavailable",
-  "llm-empty": "desktop.triggerReasonLlmEmpty",
-  "llm-not-standard": "desktop.triggerReasonLlmNotStandard",
-  "llm-interval": "desktop.triggerReasonLlmInterval",
-  "llm-error": "desktop.triggerReasonLlmEmpty"
-};
-
 const LAST_REASON_KEYS: Record<string, string> = {
   long_active: "desktop.lastReasonLongActive",
   idle: "desktop.lastReasonIdle",
@@ -92,8 +71,8 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const [visionAvailable, setVisionAvailable] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [llmTesting, setLlmTesting] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(true);
+  const [statusOpen, setStatusOpen] = useState(true);
 
   const refreshStatus = useCallback(async () => {
     setStatus(await nuwa.proactive.getStatus());
@@ -156,9 +135,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
   }
 
   function translateTriggerReason(reason: string | undefined): string {
-    if (!reason) return t("common.unknownError");
-    const key = TRIGGER_REASON_KEYS[reason];
-    return key ? t(key) : reason;
+    return translateTriggerReasonText(t, reason);
   }
 
   function lastReasonLabel(reason: string | undefined): string {
@@ -198,16 +175,14 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const statusSummary = useMemo(() => {
     const count = status?.utterancesThisHour ?? 0;
     const max = status?.maxPerHour ?? settings.maxPerHour;
-    if (status?.focusModeUntil && status.focusModeUntil > Date.now()) {
-      return t("desktop.statusSummaryFocus", {
-        time: new Date(status.focusModeUntil).toLocaleTimeString(timeLocale),
-        count,
-        max
-      });
-    }
-    if (status?.hushUntil && status.hushUntil > Date.now()) {
+    const now = Date.now();
+    const quietUntil = Math.max(
+      status?.hushUntil && status.hushUntil > now ? status.hushUntil : 0,
+      status?.focusModeUntil && status.focusModeUntil > now ? status.focusModeUntil : 0
+    );
+    if (quietUntil > now) {
       return t("desktop.statusSummaryHush", {
-        time: new Date(status.hushUntil).toLocaleTimeString(timeLocale),
+        time: new Date(quietUntil).toLocaleTimeString(timeLocale),
         count,
         max
       });
@@ -473,22 +448,6 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 />
               </div>
             </Field>
-
-            <Field label={t("desktop.hushDurationLabel")}>
-              <BlSelect
-                value={String(settings.defaultHushMinutes)}
-                onChange={(raw) =>
-                  void save({
-                    ...settings,
-                    defaultHushMinutes: Number(raw) as ProactiveSettings["defaultHushMinutes"]
-                  })
-                }
-                options={HUSH_MINUTES.map((n) => ({
-                  value: String(n),
-                  label: t("desktop.minutes", { count: n })
-                }))}
-              />
-            </Field>
           </div>
         </details>
       </section>
@@ -520,7 +479,24 @@ export function DesktopBehaviorPanel(): JSX.Element {
             : t("desktop.statusNoLastTrigger")}
         </div>
 
-        <div className="row gap-2" style={{ marginTop: 14, flexWrap: "wrap" }}>
+        <p className="body-sm" style={{ margin: "12px 0 0", opacity: 0.65, lineHeight: 1.5 }}>
+          {t("desktop.quickActionsHint")}
+        </p>
+
+        <div className="row gap-2" style={{ marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <BlSelect
+            value={String(settings.defaultHushMinutes)}
+            onChange={(raw) =>
+              void save({
+                ...settings,
+                defaultHushMinutes: Number(raw) as ProactiveSettings["defaultHushMinutes"]
+              })
+            }
+            options={HUSH_MINUTES.map((n) => ({
+              value: String(n),
+              label: t("desktop.minutes", { count: n })
+            }))}
+          />
           <button
             type="button"
             className="btn btn--ghost"
@@ -528,13 +504,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
           >
             {t("desktop.hushButton", { minutes: settings.defaultHushMinutes })}
           </button>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => void nuwa.proactive.focusMode(25 * 60 * 1000)}
-          >
-            {t("desktop.focusButton")}
-          </button>
+        </div>
+
+        <div className="row gap-2" style={{ marginTop: 14, flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn btn--magenta"

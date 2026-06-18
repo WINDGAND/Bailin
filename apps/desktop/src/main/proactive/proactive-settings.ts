@@ -25,6 +25,7 @@ export const DEFAULT_PROACTIVE_SETTINGS: ProactiveSettings = {
   companionFrequency: "light",
   scenarioToggles: { ...DEFAULT_SCENARIO_TOGGLES },
   defaultHushMinutes: 30,
+  defaultFocusMinutes: 25,
   quietHoursEnabled: false,
   quietHoursStart: "22:00",
   quietHoursEnd: "08:00",
@@ -68,6 +69,11 @@ export function normalizeProactiveSettings(
       input.defaultHushMinutes,
       [15, 30, 60],
       DEFAULT_PROACTIVE_SETTINGS.defaultHushMinutes
+    ),
+    defaultFocusMinutes: pick(
+      input.defaultFocusMinutes,
+      [15, 25, 30, 45, 60],
+      DEFAULT_PROACTIVE_SETTINGS.defaultFocusMinutes
     ),
     quietHoursEnabled: input.quietHoursEnabled ?? DEFAULT_PROACTIVE_SETTINGS.quietHoursEnabled,
     quietHoursStart: normalizeTime(input.quietHoursStart, DEFAULT_PROACTIVE_SETTINGS.quietHoursStart),
