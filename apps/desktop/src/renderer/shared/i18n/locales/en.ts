@@ -557,7 +557,15 @@ export const en: TranslationTree = {
     eyebrow: "Model service",
     title: "Model & API Key",
     subtitle:
-      "Paste your API Key—Bailin auto-configures chat, vision, and image models for you.",
+      "Choose OhMyGPT one-click (Key + chat model only) or custom setup with full four-model verification.",
+    modeSwitchAria: "Connection mode",
+    modeOhmygpt: "OhMyGPT one-click",
+    modeCustom: "Custom configuration",
+    verifyKeyAndChat: "Verify Key & chat model",
+    saveAndVerify: "Save & verify",
+    verifyRunning: "Saving and verifying…",
+    toastChatReady: "Key and chat model connected ({{latency}} ms)",
+    readinessTitleQuick: "Connection check",
     guide: {
       title: "How it works",
       collapse: "Hide guide",
@@ -595,7 +603,9 @@ export const en: TranslationTree = {
         imageGen: "Pet sprites"
       },
       otherRelays:
-        "You can also use keys from other API relays or aggregators, as long as they support the model types above. Use Custom configuration to enter API URLs and model IDs manually."
+        "You can also use keys from other API relays or aggregators, as long as they support the model types above. Use Custom configuration to enter API URLs and model IDs manually.",
+      ohmygptDisclaimer:
+        "Disclaimer: The author has no official partnership or affiliation with OhMyGPT. OhMyGPT is shown only as a convenient example—it is relatively easy to use and supports WeChat and Alipay top-ups. You are free to choose any other reliable API relay you prefer."
     },
     quickStart: {
       title: "Quick start · author's setup",
@@ -704,17 +714,21 @@ export const en: TranslationTree = {
       bundles:
         "Bailin can use different models for chat, vision, web research, and image generation; one-click connect writes the selected stack.",
       apiKey: "Secret key from your relay or official provider, usually starting with sk-.",
-      protocol: "Protocol format used when sending requests to your API provider.",
+      protocol:
+        "Bailin supports only these two. Choose OpenAI compatible for most relays (OhMyGPT, DeepSeek, Moonshot, etc.) and OpenAI-format endpoints; choose Anthropic compatible only when your provider's docs specify Anthropic / Claude Messages API. When unsure, keep OpenAI compatible.",
       baseUrl: "Base URL of the API service (often includes a version path such as /v1).",
       mainModel: "Model ID used for daily chat with your desktop pet.",
       visionModel: "Model ID used to read uploaded reference images; must accept image input.",
+      webSearchModel:
+        "Model ID used for web research during deep character creation; usually a search-preview series.",
       webSearch: "Web retrieval used during deep character creation; availability depends on model and provider.",
       imageGen: "Image model and parameters used to generate pixel pet sprites.",
       imageTiers: "Economy, standard, and premium tiers—each with its own model, size, quality, and cost estimate.",
       defaultTier: "Default image quality tier when generating a pet sprite.",
       presets: "Switching a preset overwrites connection settings and model fields below.",
       connStatus: "Shows whether an API Key is saved and the latest connection test result.",
-      readiness: "After one-click connect, verifies chat, vision, web research, and image generation."
+      readiness: "After save & verify, checks chat, vision, web research, and image generation.",
+      readinessQuick: "Verifies that your API Key and chat model respond."
     },
     chatModelTitle: "Chat model",
     chatModelLede: "All requests go directly from this machine. Keys are encrypted at rest with DPAPI.",
@@ -727,8 +741,9 @@ export const en: TranslationTree = {
     mainModelLabel: "Chat model",
     mainModelPlaceholder: "gpt-4o-mini / deepseek-v4-flash / claude-3-5-sonnet ...",
     visionModelLabel: "Vision model",
-    visionModelHint: "Used when uploading reference images; separate from the chat model.",
     visionModelPlaceholder: "e.g. gpt-4o-mini, claude-3-5-sonnet …",
+    webSearchModelLabel: "Web search model",
+    webSearchModelPlaceholder: "e.g. gpt-4o-mini-search-preview …",
     apiKeyLabel: "API Key",
     apiKeyHint: "After saving, decrypted once via system DPAPI only—never uploaded.",
     showKey: "Show",

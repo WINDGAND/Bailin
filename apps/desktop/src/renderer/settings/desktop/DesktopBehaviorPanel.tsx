@@ -242,7 +242,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
         <h1 className="display display--page" style={{ margin: "6px 0 0" }}>
           {t("desktop.title")}
         </h1>
-        <p className="body-sm" style={{ maxWidth: 520, margin: "8px 0 0", opacity: 0.72 }}>
+        <p className="bl-field-hint" style={{ maxWidth: 520, margin: "8px 0 0" }}>
           {t("desktop.subtitle")}
         </p>
       </div>
@@ -267,7 +267,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 height={previewSize.height}
               />
             ) : (
-              <span className="body-sm" style={{ opacity: 0.55, textAlign: "center", padding: 8 }}>
+              <span className="body-sm" style={{ textAlign: "center", padding: 8 }}>
                 {t("desktop.petSizePreviewEmpty")}
               </span>
             )}
@@ -299,10 +299,10 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 style={{ width: "100%" }}
               />
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <span className="body-sm" style={{ opacity: 0.6 }}>
+                <span className="body-sm">
                   {t("desktop.petSizePercent", { percent: Math.round(PET_DISPLAY_SCALE_MIN * 100) })}
                 </span>
-                <span className="body-sm" style={{ opacity: 0.6 }}>
+                <span className="body-sm">
                   {t("desktop.petSizePercent", { percent: Math.round(PET_DISPLAY_SCALE_MAX * 100) })}
                 </span>
               </div>
@@ -317,7 +317,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
         </h2>
 
         <Field label={t("desktop.frequencyLabel")} style={{ marginTop: 16 }}>
-          <p className="body-sm" style={{ margin: "0 0 8px", opacity: 0.65, lineHeight: 1.5 }}>
+          <p className="bl-field-hint" style={{ margin: "0 0 8px" }}>
             {t("desktop.frequencyQuotaNote")}
           </p>
           <BlSelect
@@ -328,7 +328,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
               label: t(`desktop.frequency_${f}` as "desktop.frequency_off")
             }))}
           />
-          <p className="body-sm" style={{ margin: "6px 0 0", opacity: 0.72, lineHeight: 1.5 }}>
+          <p className="bl-field-hint" style={{ margin: "6px 0 0" }}>
             {frequencyHint}
             {trackHint ? ` ${trackHint}` : null}
           </p>
@@ -355,7 +355,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
             {screenshotsOn ? (
               <>
                 {screenshotStatusLine ? (
-                  <p className="body-sm" style={{ margin: 0, opacity: 0.72 }}>
+                  <p className="bl-field-hint" style={{ margin: 0 }}>
                     {screenshotStatusLine}
                   </p>
                 ) : null}
@@ -399,7 +399,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
           </summary>
           <div className="stack stack--lg" style={{ marginTop: 14 }}>
             <div className="stack" style={{ gap: 10 }}>
-              <span className="body-sm" style={{ opacity: 0.85 }}>
+              <span className="bl-field-label" style={{ fontSize: "var(--text-caption)", fontWeight: 500 }}>
                 {t("desktop.scenariosTitle")}
               </span>
               <ScenarioToggle
@@ -492,12 +492,12 @@ export function DesktopBehaviorPanel(): JSX.Element {
           <span className="display display--section" style={{ fontSize: 20 }}>
             {t("desktop.statusAdvancedTitle")}
           </span>
-          <span className="body-sm" style={{ display: "block", marginTop: 6, opacity: 0.72 }}>
+          <span className="bl-field-hint" style={{ display: "block", marginTop: 6 }}>
             {statusSummary}
           </span>
         </summary>
 
-        <div className="body-sm" style={{ marginTop: 14, lineHeight: 1.6, opacity: 0.85 }}>
+        <div className="body-sm" style={{ marginTop: 14 }}>
           {status?.lastAt
             ? t("desktop.statusLastTrigger", {
                 reason: lastReasonLabel(status.lastReason),
@@ -506,7 +506,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
             : t("desktop.statusNoLastTrigger")}
         </div>
 
-        <p className="body-sm" style={{ margin: "12px 0 0", opacity: 0.65, lineHeight: 1.5 }}>
+        <p className="bl-field-hint" style={{ margin: "12px 0 0" }}>
           {t("desktop.quickActionsHint")}
         </p>
 

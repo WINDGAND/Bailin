@@ -339,7 +339,11 @@ export class NuwaOrchestrator {
    *   落盘 → yield done
    */
   async *createCharacterDeep(input: DeepOrchestrateInput): AsyncGenerator<DeepProgressEvent> {
-    const { jobId, config } = input;
+    const { jobId } = input;
+    const config: DistillationJobConfig = {
+      ...input.config,
+      researchModel: this.llm.getWebSearchModel()
+    };
     const warnings: string[] = [];
     const aborted = (): boolean => input.signal?.aborted === true;
     const yieldWarn = (msg: string) => {

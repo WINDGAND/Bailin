@@ -347,6 +347,8 @@ export interface LLMProviderConfig {
    * 默认 bytedance/doubao-seed-2.0-lite-260428。
    */
   visionModel?: string;
+  /** 深度调研 / 联网检索专用模型（与 model 分离）。 */
+  webSearchModel?: string;
   defaultTemperature?: number;
   defaultMaxTokens?: number;
 }

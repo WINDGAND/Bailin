@@ -1,3 +1,4 @@
+import type { ImageGenerationConfigDTO } from "../../../shared/ipc-contract.js";
 import type { RecommendedBundle, BundleFeature } from "./presets.js";
 
 export type ReadinessKey = BundleFeature;
@@ -18,13 +19,14 @@ export const IDLE_READINESS: ReadinessMap = {
   imageGen: { status: "idle" }
 };
 
-interface NuwaBundleApis {
+interface NuwaProviderApis {
   llm: {
     setProvider(input: {
       kind: string;
       baseUrl: string;
       model: string;
       visionModel: string;
+      webSearchModel: string;
       apiKey: string;
     }): Promise<{ ok: boolean; error?: string }>;
     testConnection(): Promise<{ ok: boolean; latencyMs?: number; error?: string }>;
@@ -57,127 +59,213 @@ export interface ApplyBundleResult {
   allRequiredPassed: boolean;
 }
 
-export async function applyRecommendedBundle(
-  nuwa: NuwaBundleApis,
-  bundle: RecommendedBundle,
-  apiKey: string,
-  onProgress: (key: ReadinessKey, state: ReadinessState) => void,
-  unavailableReason: (feature: ReadinessKey) => string
-): Promise<ApplyBundleResult> {
-  const readiness: ReadinessMap = { ...IDLE_READINESS };
+export interface CustomProviderInput {
+  kind: string;
+  baseUrl: string;
+  model: string;
+  visionModel: string;
+  webSearchModel: string;
+  apiKey: string;
+  imageConfig: ImageGenerationConfigDTO;
+  imageApiKey?: string;
+}
 
+type ProgressFn = (key: ReadinessKey, state: ReadinessState) => void;
+
+async function saveOhMyGptBundle(
+  nuwa: NuwaProviderApis,
+  bundle: RecommendedBundle,
+  apiKey: string
+): Promise<{ ok: boolean; error?: string }> {
   const llmSave = await nuwa.llm.setProvider({
     kind: bundle.llm.kind,
     baseUrl: bundle.llm.baseUrl,
     model: bundle.llm.model,
     visionModel: bundle.llm.visionModel,
+    webSearchModel: bundle.llm.webSearchModel,
     apiKey
   });
-  if (!llmSave.ok) {
-    return {
-      saveOk: false,
-      saveError: llmSave.error,
-      readiness,
-      allRequiredPassed: false
-    };
-  }
+  if (!llmSave.ok) return { ok: false, error: llmSave.error };
 
   const imgSave = await nuwa.imageGen.setConfig(bundle.image);
-  if (!imgSave.ok) {
+  if (!imgSave.ok) return { ok: false, error: imgSave.error };
+
+  return { ok: true };
+}
+
+async function saveCustomProvider(
+  nuwa: NuwaProviderApis,
+  input: CustomProviderInput
+): Promise<{ ok: boolean; error?: string }> {
+  const llmSave = await nuwa.llm.setProvider({
+    kind: input.kind,
+    baseUrl: input.baseUrl,
+    model: input.model,
+    visionModel: input.visionModel,
+    webSearchModel: input.webSearchModel,
+    apiKey: input.apiKey
+  });
+  if (!llmSave.ok) return { ok: false, error: llmSave.error };
+
+  const payload: ImageGenerationConfigDTO = {
+    ...input.imageConfig,
+    apiKey: input.imageConfig.useLLMProvider ? undefined : input.imageApiKey || undefined
+  };
+  const imgSave = await nuwa.imageGen.setConfig(payload);
+  if (!imgSave.ok) return { ok: false, error: imgSave.error };
+
+  return { ok: true };
+}
+
+async function runChatTest(
+  nuwa: NuwaProviderApis,
+  onProgress: ProgressFn
+): Promise<ReadinessState> {
+  onProgress("chat", { status: "running" });
+  const chatTest = await nuwa.llm.testConnection();
+  const state: ReadinessState = chatTest.ok
+    ? { status: "ok", latencyMs: chatTest.latencyMs }
+    : { status: "fail", reason: chatTest.error ?? "connection failed" };
+  onProgress("chat", state);
+  return state;
+}
+
+async function runVisionTest(
+  nuwa: NuwaProviderApis,
+  onProgress: ProgressFn
+): Promise<ReadinessState> {
+  onProgress("vision", { status: "running" });
+  try {
+    const v = await nuwa.characters.probeVision();
+    const state: ReadinessState = v.ok
+      ? { status: "ok", latencyMs: v.latencyMs }
+      : { status: "fail", reason: v.reason ?? "vision probe failed" };
+    onProgress("vision", state);
+    return state;
+  } catch (e) {
+    const state: ReadinessState = {
+      status: "fail",
+      reason: e instanceof Error ? e.message : String(e)
+    };
+    onProgress("vision", state);
+    return state;
+  }
+}
+
+async function runWebSearchTest(
+  nuwa: NuwaProviderApis,
+  onProgress: ProgressFn
+): Promise<ReadinessState> {
+  onProgress("webSearch", { status: "running" });
+  try {
+    const w = await nuwa.characters.probeWebSearch();
+    const ok = w.ok && w.realWebSearch;
+    const state: ReadinessState = ok
+      ? { status: "ok", latencyMs: w.latencyMs, detail: String(w.citations) }
+      : {
+          status: "fail",
+          reason: w.reason ?? (w.ok ? "no citations" : "web probe failed")
+        };
+    onProgress("webSearch", state);
+    return state;
+  } catch (e) {
+    const state: ReadinessState = {
+      status: "fail",
+      reason: e instanceof Error ? e.message : String(e)
+    };
+    onProgress("webSearch", state);
+    return state;
+  }
+}
+
+async function runImageGenTest(
+  nuwa: NuwaProviderApis,
+  tier: string,
+  onProgress: ProgressFn
+): Promise<ReadinessState> {
+  onProgress("imageGen", { status: "running" });
+  try {
+    const img = await nuwa.imageGen.test(tier);
+    const state: ReadinessState = img.ok
+      ? { status: "ok", latencyMs: img.latencyMs, detail: img.model }
+      : { status: "fail", reason: img.error ?? "image test failed" };
+    onProgress("imageGen", state);
+    return state;
+  } catch (e) {
+    const state: ReadinessState = {
+      status: "fail",
+      reason: e instanceof Error ? e.message : String(e)
+    };
+    onProgress("imageGen", state);
+    return state;
+  }
+}
+
+/** OhMyGPT 一键接入：写入作者预设，仅验证 Key + 主模型。 */
+export async function applyOhMyGptBundle(
+  nuwa: NuwaProviderApis,
+  bundle: RecommendedBundle,
+  apiKey: string,
+  onProgress: ProgressFn
+): Promise<ApplyBundleResult> {
+  const readiness: ReadinessMap = { ...IDLE_READINESS };
+
+  const save = await saveOhMyGptBundle(nuwa, bundle, apiKey);
+  if (!save.ok) {
     return {
       saveOk: false,
-      saveError: imgSave.error,
+      saveError: save.error,
       readiness,
       allRequiredPassed: false
     };
   }
 
-  // --- chat ---
-  onProgress("chat", { status: "running" });
-  readiness.chat = { status: "running" };
-  const chatTest = await nuwa.llm.testConnection();
-  if (chatTest.ok) {
-    readiness.chat = { status: "ok", latencyMs: chatTest.latencyMs };
-  } else {
-    readiness.chat = { status: "fail", reason: chatTest.error ?? "connection failed" };
-  }
-  onProgress("chat", readiness.chat);
+  readiness.chat = await runChatTest(nuwa, onProgress);
+  const allRequiredPassed = readiness.chat.status === "ok";
 
-  // --- vision ---
-  if (!bundle.capabilities.vision) {
-    readiness.vision = { status: "unavailable", reason: unavailableReason("vision") };
-    onProgress("vision", readiness.vision);
-  } else {
-    onProgress("vision", { status: "running" });
-    readiness.vision = { status: "running" };
-    try {
-      const v = await nuwa.characters.probeVision();
-      readiness.vision = v.ok
-        ? { status: "ok", latencyMs: v.latencyMs }
-        : { status: "fail", reason: v.reason ?? "vision probe failed" };
-    } catch (e) {
-      readiness.vision = {
-        status: "fail",
-        reason: e instanceof Error ? e.message : String(e)
-      };
-    }
-    onProgress("vision", readiness.vision);
+  return { saveOk: true, readiness, allRequiredPassed };
+}
+
+/** 个性化配置：保存用户填写项，四项全部实测。 */
+export async function verifyCustomProvider(
+  nuwa: NuwaProviderApis,
+  input: CustomProviderInput,
+  onProgress: ProgressFn
+): Promise<ApplyBundleResult> {
+  const readiness: ReadinessMap = { ...IDLE_READINESS };
+
+  const save = await saveCustomProvider(nuwa, input);
+  if (!save.ok) {
+    return {
+      saveOk: false,
+      saveError: save.error,
+      readiness,
+      allRequiredPassed: false
+    };
   }
 
-  // --- web search ---
-  if (!bundle.capabilities.webSearch) {
-    readiness.webSearch = { status: "unavailable", reason: unavailableReason("webSearch") };
-    onProgress("webSearch", readiness.webSearch);
-  } else {
-    onProgress("webSearch", { status: "running" });
-    readiness.webSearch = { status: "running" };
-    try {
-      const w = await nuwa.characters.probeWebSearch();
-      const ok = w.ok && w.realWebSearch;
-      readiness.webSearch = ok
-        ? {
-            status: "ok",
-            latencyMs: w.latencyMs,
-            detail: String(w.citations)
-          }
-        : {
-            status: "fail",
-            reason: w.reason ?? (w.ok ? "no citations" : "web probe failed")
-          };
-    } catch (e) {
-      readiness.webSearch = {
-        status: "fail",
-        reason: e instanceof Error ? e.message : String(e)
-      };
-    }
-    onProgress("webSearch", readiness.webSearch);
-  }
-
-  // --- image gen ---
-  if (!bundle.capabilities.imageGen) {
-    readiness.imageGen = { status: "unavailable", reason: unavailableReason("imageGen") };
-    onProgress("imageGen", readiness.imageGen);
-  } else {
-    onProgress("imageGen", { status: "running" });
-    readiness.imageGen = { status: "running" };
-    try {
-      const img = await nuwa.imageGen.test("standard");
-      readiness.imageGen = img.ok
-        ? { status: "ok", latencyMs: img.latencyMs, detail: img.model }
-        : { status: "fail", reason: img.error ?? "image test failed" };
-    } catch (e) {
-      readiness.imageGen = {
-        status: "fail",
-        reason: e instanceof Error ? e.message : String(e)
-      };
-    }
-    onProgress("imageGen", readiness.imageGen);
-  }
-
-  const required = (Object.keys(bundle.capabilities) as ReadinessKey[]).filter(
-    (k) => bundle.capabilities[k]
+  readiness.chat = await runChatTest(nuwa, onProgress);
+  readiness.vision = await runVisionTest(nuwa, onProgress);
+  readiness.webSearch = await runWebSearchTest(nuwa, onProgress);
+  readiness.imageGen = await runImageGenTest(
+    nuwa,
+    input.imageConfig.defaultTier,
+    onProgress
   );
+
+  const required: ReadinessKey[] = ["chat", "vision", "webSearch", "imageGen"];
   const allRequiredPassed = required.every((k) => readiness[k].status === "ok");
 
   return { saveOk: true, readiness, allRequiredPassed };
+}
+
+/** @deprecated 使用 applyOhMyGptBundle 或 verifyCustomProvider */
+export async function applyRecommendedBundle(
+  nuwa: NuwaProviderApis,
+  bundle: RecommendedBundle,
+  apiKey: string,
+  onProgress: ProgressFn,
+  _unavailableReason: (feature: ReadinessKey) => string
+): Promise<ApplyBundleResult> {
+  return applyOhMyGptBundle(nuwa, bundle, apiKey, onProgress);
 }

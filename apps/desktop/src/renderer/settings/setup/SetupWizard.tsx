@@ -6,13 +6,11 @@ import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
 import {
   DEFAULT_BUNDLE_ID,
-  RECOMMENDED_BUNDLES,
   getRecommendedBundle
 } from "../provider/presets.js";
 import {
-  applyRecommendedBundle,
+  applyOhMyGptBundle,
   IDLE_READINESS,
-  type ReadinessKey,
   type ReadinessMap
 } from "../provider/apply-recommended-bundle.js";
 import { ProviderGuideSection } from "../provider/ProviderGuideSection.js";
@@ -210,13 +208,7 @@ function ProviderStep({
     | { kind: "error"; message: string }
   >({ kind: "idle" });
 
-  const selectedBundle = getRecommendedBundle(selectedBundleId) ?? RECOMMENDED_BUNDLES[0]!;
-
-  const unavailableReason = (feature: ReadinessKey): string => {
-    if (feature === "vision") return t("provider.readinessUnavailableVision");
-    if (feature === "webSearch") return t("provider.readinessUnavailableWeb");
-    return t("provider.readinessUnavailableImage");
-  };
+  const selectedBundle = getRecommendedBundle(selectedBundleId)!;
 
   async function connect(): Promise<void> {
     if (!apiKey.trim()) return;
@@ -224,23 +216,16 @@ function ProviderStep({
     setStatus({ kind: "running" });
     setReadiness(IDLE_READINESS);
 
-    const progressLabels: Record<ReadinessKey, string> = {
-      chat: t("provider.oneClickProgressChat"),
-      vision: t("provider.oneClickProgressVision"),
-      webSearch: t("provider.oneClickProgressWeb"),
-      imageGen: t("provider.oneClickProgressImage")
-    };
-
-    const bundle = selectedBundle;
-    const result = await applyRecommendedBundle(
+    const result = await applyOhMyGptBundle(
       nuwa,
-      bundle,
+      selectedBundle,
       apiKey.trim(),
       (key, state) => {
-        if (state.status === "running") setOneClickProgress(progressLabels[key]);
+        if (state.status === "running" && key === "chat") {
+          setOneClickProgress(t("provider.oneClickProgressChat"));
+        }
         setReadiness((prev) => ({ ...prev, [key]: state }));
-      },
-      unavailableReason
+      }
     );
     setBusy(false);
     setOneClickProgress(null);
@@ -260,9 +245,7 @@ function ProviderStep({
     setStatus({ kind: "ok", latency: chat.latencyMs });
     showToast({
       kind: "success",
-      text: result.allRequiredPassed
-        ? t("provider.toastAllReady")
-        : t("provider.toastConnectOk", { latency: chat.latencyMs ?? "?" })
+      text: t("provider.toastChatReady", { latency: chat.latencyMs ?? "?" })
     });
     setTimeout(onNext, 500);
   }
@@ -275,6 +258,8 @@ function ProviderStep({
       <div className="display display--section" style={{ marginBottom: 8 }}>
         {t("setup.stepProvider")}
       </div>
+
+      <ProviderGuideSection compact />
 
       <QuickStartSection
         compact
@@ -289,8 +274,6 @@ function ProviderStep({
         onConnect={() => void connect()}
         onClear={() => {}}
       />
-
-      <ProviderGuideSection compact />
 
       {status.kind !== "idle" ? (
         <div className="row gap-2" style={{ minHeight: 22, marginTop: 8 }}>

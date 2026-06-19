@@ -117,6 +117,7 @@ export interface RecommendedBundle {
     baseUrl: string;
     model: string;
     visionModel: string;
+    webSearchModel: string;
   };
   image: ImageGenerationConfigDTO;
 }
@@ -136,7 +137,8 @@ export const RECOMMENDED_BUNDLES: RecommendedBundle[] = [
       kind: "openai-compatible",
       baseUrl: "https://api.ohmygpt.com/v1",
       model: "deepseek-v4-flash",
-      visionModel: "bytedance/doubao-seed-2.0-lite-260428"
+      visionModel: "bytedance/doubao-seed-2.0-lite-260428",
+      webSearchModel: "gpt-4o-mini-search-preview"
     },
     image: { ...DEFAULT_IMAGE_CONFIG, useLLMProvider: true }
   },
@@ -153,7 +155,8 @@ export const RECOMMENDED_BUNDLES: RecommendedBundle[] = [
       kind: "openai-compatible",
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o-mini",
-      visionModel: "gpt-4o-mini"
+      visionModel: "gpt-4o-mini",
+      webSearchModel: "gpt-4o-mini-search-preview"
     },
     image: { ...DEFAULT_IMAGE_CONFIG, useLLMProvider: true }
   },
@@ -170,7 +173,8 @@ export const RECOMMENDED_BUNDLES: RecommendedBundle[] = [
       kind: "openai-compatible",
       baseUrl: "https://api.deepseek.com",
       model: "deepseek-v4-flash",
-      visionModel: "bytedance/doubao-seed-2.0-lite-260428"
+      visionModel: "bytedance/doubao-seed-2.0-lite-260428",
+      webSearchModel: "gpt-4o-mini-search-preview"
     },
     image: { ...DEFAULT_IMAGE_CONFIG, useLLMProvider: true }
   }

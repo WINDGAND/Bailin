@@ -318,7 +318,7 @@ export function MemoryPanel(): JSX.Element {
               <p className="bl-field-hint" style={{ marginTop: 4, marginBottom: 0 }}>
                 {t("memory.autoLearnHint")}
               </p>
-              <p className="body-sm" style={{ marginTop: 6, color: "var(--ink-faint)" }}>
+              <p className="bl-field-hint" style={{ marginTop: 6, marginBottom: 0 }}>
                 {t("memory.autoLearnInterval", { n: settings.extractEveryNTurns })}
               </p>
             </div>
@@ -383,7 +383,7 @@ export function MemoryPanel(): JSX.Element {
               </p>
 
               {!hasAnyFacts ? (
-                <p className="body-sm" style={{ margin: "12px 0 0", color: "var(--ink-faint)" }}>
+                <p className="bl-field-hint" style={{ margin: "12px 0 0" }}>
                   {t("memory.factsEmpty")}
                 </p>
               ) : (
@@ -486,7 +486,7 @@ export function MemoryPanel(): JSX.Element {
                 {saving ? t("memory.saving") : t("memory.save")}
               </button>
             ) : (
-              <span className="body-sm" style={{ color: "var(--ink-faint)" }}>
+              <span className="body-sm">
                 {t("memory.synced")}
               </span>
             )}

@@ -554,7 +554,16 @@ export const zh = {
   provider: {
     eyebrow: "模型服务",
     title: "模型与 API Key",
-    subtitle: "粘贴 API Key，百灵会自动配置聊天、识图、生图所需的全部模型。",
+    subtitle:
+      "选择 OhMyGPT 一键接入（只验证 Key 与主模型），或个性化配置并逐项实测四类模型。",
+    modeSwitchAria: "接入方式",
+    modeOhmygpt: "OhMyGPT 一键接入",
+    modeCustom: "个性化配置",
+    verifyKeyAndChat: "验证 Key 与主模型",
+    saveAndVerify: "保存并验证",
+    verifyRunning: "正在保存并验证…",
+    toastChatReady: "Key 与主模型已连通（{{latency}} ms）",
+    readinessTitleQuick: "连接验证",
     guide: {
       title: "使用指引",
       collapse: "收起指引",
@@ -592,7 +601,9 @@ export const zh = {
         imageGen: "桌宠生图"
       },
       otherRelays:
-        "你也可以使用其他 API 聚合站 / 中转站的 Key，只要它能调用上述几类模型即可。选「个性化配置」可手动填写 API 地址和模型名。"
+        "你也可以使用其他 API 聚合站 / 中转站的 Key，只要它能调用上述几类模型即可。选「个性化配置」可手动填写 API 地址和模型名。",
+      ohmygptDisclaimer:
+        "声明：作者与 OhMyGPT 无任何官方合作或利益关联。推荐该平台仅因使用方便、相对稳定，且支持微信 / 支付宝充值；你完全可以自行选择其他靠谱的 API 中转平台。"
     },
     quickStart: {
       title: "快速上手 · 作者同款方案",
@@ -656,13 +667,13 @@ export const zh = {
         step1: "打开 ohmygpt.com 注册账号",
         step2: "充值（建议 ¥10 起，日常聊天够用很久）",
         step3: "在控制台创建 API Key 并复制",
-        step4: "粘贴到下方，点「一键接入并验证」"
+        step4: "粘贴到下方，点「验证 Key 与主模型」"
       },
       openai: {
         step1: "打开 platform.openai.com 注册（需海外支付方式）",
         step2: "在 Billing 中充值",
         step3: "在 API Keys 页面创建 Key 并复制",
-        step4: "粘贴到下方，点「一键接入并验证」"
+        step4: "粘贴到下方，点「验证 Key 与主模型」"
       },
       deepseek: {
         step1: "打开 platform.deepseek.com 注册",
@@ -701,17 +712,20 @@ export const zh = {
       bundles:
         "百灵可为聊天、识图、联网调研、生图分别配置不同模型；一键接入会写入对应选型。",
       apiKey: "从中转站或官方平台获取的密钥，通常以 sk- 开头。",
-      protocol: "向 API 服务商发起请求时使用的协议格式。",
+      protocol:
+        "百灵目前仅支持以上两种。多数中转站（OhMyGPT、DeepSeek、Moonshot 等）及 OpenAI 格式接口请选「OpenAI 兼容」；仅当服务商文档明确要求 Anthropic / Claude 接口格式时才选「Anthropic 兼容」。不确定时保持 OpenAI 兼容即可。",
       baseUrl: "API 服务的基础地址（通常含 /v1 等版本路径）。",
       mainModel: "用于与桌宠日常对话的模型 ID。",
       visionModel: "用于读取上传参考图的模型 ID；需支持图像输入。",
+      webSearchModel: "深度创建角色时用于联网检索的模型 ID；通常为 search-preview 系列。",
       webSearch: "深度创建角色时用于联网检索；是否可用取决于所选模型与服务商。",
       imageGen: "用于生成像素桌宠外观的图像模型与相关参数。",
       imageTiers: "经济、标准、精品三档，可分别设置模型、尺寸、质量与预估单价。",
       defaultTier: "创建桌宠时默认使用的生图质量档位。",
       presets: "切换预设时会覆盖下方连接方式与模型字段。",
       connStatus: "显示 API Key 是否已保存，以及连接测试的结果。",
-      readiness: "一键接入后逐项验证聊天、识图、联网调研、生图是否可用。"
+      readiness: "保存并验证后逐项检查聊天、识图、联网调研、生图是否可用。",
+      readinessQuick: "验证 API Key 能否连通，以及主模型是否可用。"
     },
     chatModelTitle: "对话模型",
     chatModelLede: "所有调用从这台电脑直接发出。Key 用 DPAPI 加密落盘。",
@@ -724,8 +738,9 @@ export const zh = {
     mainModelLabel: "聊天模型",
     mainModelPlaceholder: "gpt-4o-mini / deepseek-v4-flash / claude-3-5-sonnet ...",
     visionModelLabel: "识图模型",
-    visionModelHint: "上传参考图时使用，与聊天模型分开配置。",
     visionModelPlaceholder: "例如 gpt-4o-mini、claude-3-5-sonnet …",
+    webSearchModelLabel: "联网模型",
+    webSearchModelPlaceholder: "例如 gpt-4o-mini-search-preview …",
     apiKeyLabel: "API Key",
     apiKeyHint: "保存后只通过系统 DPAPI 解密读取一次，永远不会上传。",
     showKey: "显示",

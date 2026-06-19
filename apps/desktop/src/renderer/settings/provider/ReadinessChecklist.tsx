@@ -3,7 +3,7 @@ import type { ReadinessKey, ReadinessMap, ReadinessState } from "./apply-recomme
 import { useT } from "../../shared/i18n/index.js";
 import { FieldLabel } from "../../shared/FieldHelp.js";
 
-const ROWS: ReadinessKey[] = ["chat", "vision", "webSearch", "imageGen"];
+const ALL_ROWS: ReadinessKey[] = ["chat", "vision", "webSearch", "imageGen"];
 
 const LABEL_KEYS: Record<ReadinessKey, string> = {
   chat: "provider.readinessMeterChat",
@@ -14,18 +14,30 @@ const LABEL_KEYS: Record<ReadinessKey, string> = {
 
 interface ReadinessChecklistProps {
   readiness: ReadinessMap;
+  rows?: ReadinessKey[];
+  titleKey?: "provider.readinessTitle" | "provider.readinessTitleQuick";
+  helpKey?: "provider.help.readiness" | "provider.help.readinessQuick";
 }
 
-export function ReadinessChecklist({ readiness }: ReadinessChecklistProps): JSX.Element {
+export function ReadinessChecklist({
+  readiness,
+  rows = ALL_ROWS,
+  titleKey = "provider.readinessTitle",
+  helpKey = "provider.help.readiness"
+}: ReadinessChecklistProps): JSX.Element {
   const t = useT();
+  const gridClass =
+    rows.length === 1
+      ? "provider-readiness-meter__grid provider-readiness-meter__grid--single"
+      : "provider-readiness-meter__grid";
 
   return (
-    <div className="provider-readiness-meter" role="group" aria-label={t("provider.readinessTitle")}>
+    <div className="provider-readiness-meter" role="group" aria-label={t(titleKey)}>
       <div className="provider-readiness-meter__head">
-        <FieldLabel help={t("provider.help.readiness")}>{t("provider.readinessTitle")}</FieldLabel>
+        <FieldLabel help={t(helpKey)}>{t(titleKey)}</FieldLabel>
       </div>
-      <div className="provider-readiness-meter__grid">
-        {ROWS.map((key) => (
+      <div className={gridClass}>
+        {rows.map((key) => (
           <ReadinessCell key={key} label={t(LABEL_KEYS[key])} state={readiness[key]} />
         ))}
       </div>

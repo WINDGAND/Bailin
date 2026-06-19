@@ -6,14 +6,8 @@ import type {
 } from "../../../shared/ipc-contract.js";
 import { BlSelect } from "../../shared/BlSelect.js";
 import { FieldLabel } from "../../shared/FieldHelp.js";
-import {
-  ConnStrip,
-  NetStrip,
-  VisionStrip,
-  type ConnStatus,
-  type WebProbe,
-  type VisionProbe
-} from "./provider-strips.js";
+import { ReadinessChecklist } from "./ReadinessChecklist.js";
+import type { ReadinessMap } from "./apply-recommended-bundle.js";
 import { useT } from "../../shared/i18n/index.js";
 
 const IMAGE_TIERS: ImageTierName[] = ["economy", "standard", "premium"];
@@ -25,48 +19,35 @@ const TIER_KEYS: Record<ImageTierName, string> = {
 };
 
 export interface CustomConfigSectionProps {
-  deviatedFromBundle: boolean;
-  dirty: boolean;
   busy: boolean;
   apiKey: string;
-  keyMasked: string;
+  showKey: boolean;
   kind: "openai-compatible" | "anthropic-compatible";
   baseUrl: string;
   model: string;
   visionModel: string;
-  status: ConnStatus;
-  caps: { webSearch: boolean; reason: string } | null;
-  probe: WebProbe;
-  vision: { vision: boolean; reason: string } | null;
-  visionProbe: VisionProbe;
-  isAnthropic: boolean;
-  readyForDeep: boolean;
+  webSearchModel: string;
+  verifyProgress: string | null;
+  readiness: ReadinessMap;
   imageConfig: ImageGenerationConfigDTO;
   imageApiKeyDraft: string;
-  imageBusy: ImageTierName | "save" | null;
-  imageStatus:
-    | null
-    | { kind: "ok"; reason: string }
-    | { kind: "error"; reason: string }
-    | { kind: "test"; tier: ImageTierName; model?: string; latencyMs?: number; cost?: number };
+  onApiKeyChange(v: string): void;
+  onToggleShowKey(): void;
   onKindChange(kind: "openai-compatible" | "anthropic-compatible"): void;
   onBaseUrlChange(v: string): void;
   onModelChange(v: string): void;
   onVisionModelChange(v: string): void;
-  onProbeWeb(): void;
-  onProbeVision(): void;
-  onSaveAdvanced(): void;
+  onWebSearchModelChange(v: string): void;
+  onVerify(): void;
+  onClear(): void;
   onImageConfigChange(fn: (prev: ImageGenerationConfigDTO) => ImageGenerationConfigDTO): void;
   onImageApiKeyDraftChange(v: string): void;
   onUpdateImageTier(tier: ImageTierName, patch: Partial<ImageTierConfigDTO>): void;
-  onTestImageTier(tier: ImageTierName): void;
-  onSaveImageConfig(): void;
   onClearImageKey(): void;
 }
 
 export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Element {
   const t = useT();
-  const [open, setOpen] = useState(true);
   const [imageGenOpen, setImageGenOpen] = useState(true);
 
   function tierLabel(tier: ImageTierName): string {
@@ -74,31 +55,42 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
   }
 
   return (
-    <section className="forge-section">
-      <details
-        className="forge-disclosure"
-        open={open}
-        onToggle={(e) => setOpen(e.currentTarget.open)}
-      >
-        <summary>{t("provider.custom.title")}</summary>
+    <section className="forge-section provider-connect-section">
+      <div className="forge-section__head">
+        <span className="bl-field-label">{t("provider.custom.title")}</span>
+        <span className="forge-section__lede">{t("provider.custom.lede")}</span>
+      </div>
 
+      <div className="provider-connect__surface">
         <div className="provider-custom-body">
-          <p className="forge-section__lede">{t("provider.custom.lede")}</p>
-
-          <div>
-            <div className="bl-field-label" style={{ marginBottom: 8 }}>
-              {t("provider.custom.whenNeededTitle")}
+          <div className="provider-connect__key-block">
+            <FieldLabel htmlFor="custom-provider-key" help={t("provider.help.apiKey")}>
+              {t("provider.apiKeyLabel")}
+            </FieldLabel>
+            <div className="input-group provider-connect__key-input">
+              <input
+                id="custom-provider-key"
+                className="input input--provider-key"
+                type={props.showKey ? "text" : "password"}
+                value={props.apiKey}
+                onChange={(e) => props.onApiKeyChange(e.target.value)}
+                placeholder="sk-..."
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <div className="input-group__suffix">
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={props.onToggleShowKey}
+                  aria-label={props.showKey ? t("provider.hideKeyAria") : t("provider.showKeyAria")}
+                >
+                  {props.showKey ? t("provider.hideKey") : t("provider.showKey")}
+                </button>
+              </div>
             </div>
-            <div className="provider-when-chips">
-              <span className="bl-tag bl-tag--skeleton">{t("provider.custom.whenNeeded1")}</span>
-              <span className="bl-tag bl-tag--skeleton">{t("provider.custom.whenNeeded2")}</span>
-              <span className="bl-tag bl-tag--skeleton">{t("provider.custom.whenNeeded3")}</span>
-            </div>
+            <p className="bl-field-hint provider-connect__key-hint">{t("provider.apiKeyHint")}</p>
           </div>
-
-          {props.deviatedFromBundle ? (
-            <p className="body-sm bl-deviated-banner">{t("provider.deviatedFromBundle")}</p>
-          ) : null}
 
           <div className="bl-provider-form-grid">
             <div className="bl-provider-form-field">
@@ -144,7 +136,6 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
               <FieldLabel htmlFor="provider-vision" help={t("provider.help.visionModel")}>
                 {t("provider.visionModelLabel")}
               </FieldLabel>
-              <p className="bl-field-hint bl-provider-form-field__hint">{t("provider.visionModelHint")}</p>
               <input
                 id="provider-vision"
                 className="input"
@@ -153,50 +144,17 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
                 placeholder={t("provider.visionModelPlaceholder")}
               />
             </div>
-          </div>
-
-          <div className="bl-provider-status-block">
-            <FieldLabel help={t("provider.help.connStatus")}>{t("provider.connStatusLabel")}</FieldLabel>
-            <ConnStrip status={props.status} apiKey={props.apiKey} keyMasked={props.keyMasked} />
-            <NetStrip
-              caps={props.caps}
-              probe={props.probe}
-              disabled={!props.apiKey || props.isAnthropic}
-              disabledHint={
-                props.isAnthropic ? t("provider.anthropicNetHint") : t("provider.fillKeyFirst")
-              }
-              onProbe={props.onProbeWeb}
-              helpText={t("provider.help.webSearch")}
-            />
-            <VisionStrip
-              vision={props.vision}
-              visionProbe={props.visionProbe}
-              visionModel={props.visionModel}
-              disabled={!props.apiKey}
-              onProbe={props.onProbeVision}
-            />
-            {props.readyForDeep ? (
-              <div className="bl-status-strip is-ok">
-                <div className="bl-status-strip__body">
-                  <div className="bl-status-strip__title">{t("provider.readyForDeepTitle")}</div>
-                  <div className="bl-status-strip__detail">{t("provider.readyForDeepDetail")}</div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="bl-action-bar">
-            <div className="bl-action-bar__left" />
-            <div className="bl-action-bar__right">
-              {props.dirty ? <span className="bl-dirty-dot">{t("provider.unsaved")}</span> : null}
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => props.onSaveAdvanced()}
-                disabled={props.busy || !props.apiKey}
-              >
-                {props.busy ? t("provider.saveTesting") : t("provider.saveAndTest")}
-              </button>
+            <div className="bl-provider-form-field bl-provider-form-field--wide">
+              <FieldLabel htmlFor="provider-web" help={t("provider.help.webSearchModel")}>
+                {t("provider.webSearchModelLabel")}
+              </FieldLabel>
+              <input
+                id="provider-web"
+                className="input"
+                value={props.webSearchModel}
+                onChange={(e) => props.onWebSearchModelChange(e.target.value)}
+                placeholder={t("provider.webSearchModelPlaceholder")}
+              />
             </div>
           </div>
 
@@ -353,41 +311,10 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
                           })
                         }
                       />
-                      <button
-                        type="button"
-                        className="btn btn--ghost btn--sm"
-                        onClick={() => props.onTestImageTier(tier)}
-                        disabled={props.imageBusy != null}
-                      >
-                        {props.imageBusy === tier ? t("provider.testing") : t("provider.test")}
-                      </button>
                     </div>
                   );
                 })}
               </div>
-
-              {props.imageStatus ? (
-                <div
-                  className={
-                    props.imageStatus.kind === "error"
-                      ? "bl-status-strip is-error"
-                      : "bl-status-strip is-ok"
-                  }
-                >
-                  <div className="bl-status-strip__body">
-                    <div className="bl-status-strip__detail">
-                      {props.imageStatus.kind === "test"
-                        ? t("provider.imageTestSuccess", {
-                            tier: tierLabel(props.imageStatus.tier),
-                            model: props.imageStatus.model ?? "unknown",
-                            latency: props.imageStatus.latencyMs ?? "?",
-                            cost: (props.imageStatus.cost ?? 0).toFixed(3)
-                          })
-                        : props.imageStatus.reason}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
 
               <div className="bl-action-bar">
                 <div className="bl-action-bar__left">
@@ -395,28 +322,42 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
                     type="button"
                     className="btn btn--ghost btn--sm"
                     onClick={() => props.onClearImageKey()}
-                    disabled={props.imageConfig.useLLMProvider || props.imageBusy != null}
+                    disabled={props.imageConfig.useLLMProvider}
                   >
                     {t("provider.clearImageKey")}
-                  </button>
-                </div>
-                <div className="bl-action-bar__right">
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => props.onSaveImageConfig()}
-                    disabled={props.imageBusy != null}
-                  >
-                    {props.imageBusy === "save"
-                      ? t("provider.savingImageConfig")
-                      : t("provider.saveImageConfig")}
                   </button>
                 </div>
               </div>
             </div>
           </details>
+
+          <div className="provider-connect__cta-row" style={{ marginTop: 20 }}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={props.onClear}
+              disabled={props.busy || !props.apiKey}
+            >
+              {t("provider.clearConfig")}
+            </button>
+            <button
+              type="button"
+              className="btn btn--magenta provider-connect__cta"
+              onClick={props.onVerify}
+              disabled={props.busy || !props.apiKey.trim()}
+              data-hint={!props.apiKey ? t("provider.fillKeyFirst") : ""}
+            >
+              {props.busy ? t("provider.verifyRunning") : t("provider.saveAndVerify")}
+            </button>
+          </div>
+
+          {props.verifyProgress ? (
+            <p className="bl-one-click-progress">{props.verifyProgress}</p>
+          ) : null}
+
+          <ReadinessChecklist readiness={props.readiness} />
         </div>
-      </details>
+      </div>
     </section>
   );
 }

@@ -153,6 +153,7 @@ const VISION_MODEL_KEYWORDS = [
 
 /** 参考图 vision 读图 / 自检专用模型（与主模型分离，主模型可为 DeepSeek 等纯文本模型）。 */
 export const DEFAULT_VISION_MODEL = "bytedance/doubao-seed-2.0-lite-260428";
+export const DEFAULT_WEB_SEARCH_MODEL = "gpt-4o-mini-search-preview";
 
 export function resolveVisionModel(
   provider: LLMProviderConfig | null | undefined,
@@ -163,6 +164,17 @@ export function resolveVisionModel(
   const fromProvider = provider?.visionModel?.trim();
   if (fromProvider) return fromProvider;
   return DEFAULT_VISION_MODEL;
+}
+
+export function resolveWebSearchModel(
+  provider: LLMProviderConfig | null | undefined,
+  modelOverride?: string
+): string {
+  const trimmed = modelOverride?.trim();
+  if (trimmed) return trimmed;
+  const fromProvider = provider?.webSearchModel?.trim();
+  if (fromProvider) return fromProvider;
+  return DEFAULT_WEB_SEARCH_MODEL;
 }
 
 /** 1×1 透明 PNG 的 data URI；用于 vision probe。 */
@@ -202,6 +214,11 @@ export class LLMAdapter {
     return resolveVisionModel(this.provider(), modelOverride);
   }
 
+  /** 深度调研 / 联网检索使用的模型（独立于 provider.model）。 */
+  getWebSearchModel(modelOverride?: string): string {
+    return resolveWebSearchModel(this.provider(), modelOverride);
+  }
+
   /**
    * 检测当前 provider + (可选) 指定 model 是否声明支持 web_search。
    * UI 用它决定是否显示「深度版」按钮。
@@ -209,7 +226,12 @@ export class LLMAdapter {
   detectCapabilities(modelOverride?: string): { webSearch: boolean; reason: string } {
     const p = this.provider();
     if (!p) return { webSearch: false, reason: "未配置 LLM 提供商" };
-    const model = (modelOverride ?? p.model ?? "").toLowerCase();
+    const model = (
+      modelOverride ??
+      p.webSearchModel?.trim() ??
+      p.model ??
+      ""
+    ).toLowerCase();
 
     if (p.kind === "openai-compatible") {
       if (matchesSearchModel(model)) {
@@ -368,7 +390,7 @@ export class LLMAdapter {
         reason: "实测仅支持 OpenAI 兼容协议（Anthropic 通过 tool block 判定）"
       };
     }
-    const model = modelOverride ?? "gpt-4o-mini-search-preview";
+    const model = modelOverride ?? this.getWebSearchModel();
     const startedAt = Date.now();
     const r = await this.chatWithTools({
       systemPrompt: "回答时必须引用至少一个 URL 来源。",

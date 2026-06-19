@@ -5,6 +5,7 @@ import {
   type ModelRoleId
 } from "./presets.js";
 import { useT } from "../../shared/i18n/index.js";
+import { OhMyGptDisclaimer } from "./OhMyGptDisclaimer.js";
 
 const ROLE_I18N: Record<ModelRoleId, string> = {
   chat: "chat",
@@ -26,7 +27,7 @@ interface ProviderGuideSectionProps {
 
 export function ProviderGuideSection({ compact = false }: ProviderGuideSectionProps): JSX.Element {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!compact);
 
   return (
     <section className="forge-section">
@@ -116,6 +117,7 @@ export function ProviderGuideSection({ compact = false }: ProviderGuideSectionPr
                     </dd>
                   </div>
                 </dl>
+                <OhMyGptDisclaimer />
               </div>
 
               <p className="bl-field-hint" style={{ margin: 0 }}>

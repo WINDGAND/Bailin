@@ -4,6 +4,7 @@ import { FieldLabel } from "../../shared/FieldHelp.js";
 import { ReadinessChecklist } from "./ReadinessChecklist.js";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { useT } from "../../shared/i18n/index.js";
+import { OhMyGptDisclaimer } from "./OhMyGptDisclaimer.js";
 
 const FAQ_LINKS: Record<RecommendedBundle["faqId"], { href: string; site: string }> = {
   ohmygpt: { href: "https://www.ohmygpt.com/", site: "OhMyGPT" },
@@ -100,6 +101,7 @@ export function QuickStartSection({
                 <span className="provider-connect__tagline">
                   {t("provider.bundles.ohmygpt.tagline")}
                 </span>
+                {compact ? <OhMyGptDisclaimer /> : null}
               </div>
             ) : (
               <div className="provider-connect__brand">
@@ -158,13 +160,20 @@ export function QuickStartSection({
                 disabled={busy || !apiKey.trim()}
                 data-hint={!apiKey ? t("provider.fillKeyFirst") : ""}
               >
-                {busy ? t("provider.oneClickRunning") : t("provider.oneClickConnect")}
+                {busy ? t("provider.oneClickRunning") : t("provider.verifyKeyAndChat")}
               </button>
             </div>
 
             {oneClickProgress ? <p className="bl-one-click-progress">{oneClickProgress}</p> : null}
 
-            {!compact ? <ReadinessChecklist readiness={readiness} /> : null}
+            {!compact ? (
+              <ReadinessChecklist
+                readiness={readiness}
+                rows={["chat"]}
+                titleKey="provider.readinessTitleQuick"
+                helpKey="provider.help.readinessQuick"
+              />
+            ) : null}
           </div>
         </div>
       </div>
