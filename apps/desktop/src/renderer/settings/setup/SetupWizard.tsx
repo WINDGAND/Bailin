@@ -4,8 +4,19 @@ import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
-import { BlSelect } from "../../shared/BlSelect.js";
-import { PROVIDER_PRESETS, type ProviderPreset } from "../provider/presets.js";
+import {
+  DEFAULT_BUNDLE_ID,
+  RECOMMENDED_BUNDLES,
+  getRecommendedBundle
+} from "../provider/presets.js";
+import {
+  applyRecommendedBundle,
+  IDLE_READINESS,
+  type ReadinessKey,
+  type ReadinessMap
+} from "../provider/apply-recommended-bundle.js";
+import { ProviderGuideSection } from "../provider/ProviderGuideSection.js";
+import { QuickStartSection } from "../provider/QuickStartSection.js";
 import { useT } from "../../shared/i18n/index.js";
 
 interface SetupWizardProps {
@@ -186,14 +197,12 @@ function ProviderStep({
   const t = useT();
   const nuwa = useNuwa();
   const { showToast } = useToast();
-  const [kind, setKind] = useState<"openai-compatible" | "anthropic-compatible">(
-    "openai-compatible"
-  );
-  const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
-  const [model, setModel] = useState("deepseek-v4-flash");
+  const [selectedBundleId] = useState(DEFAULT_BUNDLE_ID);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [oneClickProgress, setOneClickProgress] = useState<string | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessMap>(IDLE_READINESS);
   const [status, setStatus] = useState<
     | { kind: "idle" }
     | { kind: "running" }
@@ -201,32 +210,59 @@ function ProviderStep({
     | { kind: "error"; message: string }
   >({ kind: "idle" });
 
-  function applyPreset(p: ProviderPreset) {
-    setKind(p.kind);
-    setBaseUrl(p.baseUrl);
-    setModel(p.model);
-    setStatus({ kind: "idle" });
-  }
+  const selectedBundle = getRecommendedBundle(selectedBundleId) ?? RECOMMENDED_BUNDLES[0]!;
 
-  async function save(): Promise<void> {
+  const unavailableReason = (feature: ReadinessKey): string => {
+    if (feature === "vision") return t("provider.readinessUnavailableVision");
+    if (feature === "webSearch") return t("provider.readinessUnavailableWeb");
+    return t("provider.readinessUnavailableImage");
+  };
+
+  async function connect(): Promise<void> {
+    if (!apiKey.trim()) return;
     setBusy(true);
     setStatus({ kind: "running" });
-    const r = await nuwa.llm.setProvider({ kind, baseUrl, model, apiKey });
-    if (!r.ok) {
-      setBusy(false);
-      setStatus({ kind: "error", message: r.error ?? t("provider.toastSaveFailed") });
-      return;
-    }
-    const test = await nuwa.llm.testConnection();
+    setReadiness(IDLE_READINESS);
+
+    const progressLabels: Record<ReadinessKey, string> = {
+      chat: t("provider.oneClickProgressChat"),
+      vision: t("provider.oneClickProgressVision"),
+      webSearch: t("provider.oneClickProgressWeb"),
+      imageGen: t("provider.oneClickProgressImage")
+    };
+
+    const bundle = selectedBundle;
+    const result = await applyRecommendedBundle(
+      nuwa,
+      bundle,
+      apiKey.trim(),
+      (key, state) => {
+        if (state.status === "running") setOneClickProgress(progressLabels[key]);
+        setReadiness((prev) => ({ ...prev, [key]: state }));
+      },
+      unavailableReason
+    );
     setBusy(false);
-    if (!test.ok) {
-      setStatus({ kind: "error", message: test.error ?? t("setup.testFailed") });
+    setOneClickProgress(null);
+
+    if (!result.saveOk) {
+      setStatus({ kind: "error", message: result.saveError ?? t("provider.toastSaveFailed") });
       return;
     }
-    setStatus({ kind: "ok", latency: test.latencyMs });
+    const chat = result.readiness.chat;
+    if (chat.status !== "ok") {
+      setStatus({
+        kind: "error",
+        message: chat.status === "fail" ? chat.reason : t("setup.testFailed")
+      });
+      return;
+    }
+    setStatus({ kind: "ok", latency: chat.latencyMs });
     showToast({
       kind: "success",
-      text: t("provider.toastConnectOk", { latency: test.latencyMs ?? "?" })
+      text: result.allRequiredPassed
+        ? t("provider.toastAllReady")
+        : t("provider.toastConnectOk", { latency: chat.latencyMs ?? "?" })
     });
     setTimeout(onNext, 500);
   }
@@ -236,90 +272,32 @@ function ProviderStep({
       className="card fade-in-up"
       style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}
     >
-      <div className="display display--section">{t("setup.stepProvider")}</div>
-      <p className="body-md" style={{ marginTop: -4 }}>
-        {t("setup.providerIntro")}
-      </p>
-
-      <div>
-        <label className="eyebrow">{t("provider.presetsLabel")}</label>
-        <div className="row gap-2 row--wrap" style={{ marginTop: 6 }}>
-          {PROVIDER_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className={`btn btn--ghost btn--sm ${
-                baseUrl === p.baseUrl && model === p.model ? "btn--magenta" : ""
-              }`}
-              onClick={() => applyPreset(p)}
-              data-hint={t(`provider.presetNotes.${p.id}`)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+      <div className="display display--section" style={{ marginBottom: 8 }}>
+        {t("setup.stepProvider")}
       </div>
 
-      <div>
-        <label className="eyebrow">{t("provider.protocolLabel")}</label>
-        <BlSelect
-          value={kind}
-          onChange={setKind}
-          triggerClassName="select"
-          options={[
-            { value: "openai-compatible", label: t("setup.protocolOpenAILong") },
-            { value: "anthropic-compatible", label: t("setup.protocolAnthropicLong") }
-          ]}
-        />
-      </div>
-      <div>
-        <label className="eyebrow">{t("provider.baseUrlLabel")}</label>
-        <input
-          className="input"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-        />
-      </div>
-      <div>
-        <label className="eyebrow">{t("setup.modelLabel")}</label>
-        <input
-          className="input"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-        />
-      </div>
-      <div>
-        <label className="eyebrow">{t("provider.apiKeyLabel")}</label>
-        <div className="input-group">
-          <input
-            className="input"
-            type={showKey ? "text" : "password"}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-..."
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <div className="input-group__suffix">
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={() => setShowKey((v) => !v)}
-              data-hint={showKey ? t("provider.hideKey") : t("provider.showKey")}
-              aria-label={showKey ? t("provider.hideKeyAria") : t("provider.showKeyAria")}
-            >
-              {showKey ? t("provider.hideKey") : t("provider.showKey")}
-            </button>
-          </div>
-        </div>
-      </div>
+      <QuickStartSection
+        compact
+        selectedBundle={selectedBundle}
+        apiKey={apiKey}
+        showKey={showKey}
+        busy={busy}
+        oneClickProgress={oneClickProgress}
+        readiness={readiness}
+        onApiKeyChange={setApiKey}
+        onToggleShowKey={() => setShowKey((v) => !v)}
+        onConnect={() => void connect()}
+        onClear={() => {}}
+      />
+
+      <ProviderGuideSection compact />
 
       {status.kind !== "idle" ? (
-        <div className="row gap-2" style={{ minHeight: 22 }}>
+        <div className="row gap-2" style={{ minHeight: 22, marginTop: 8 }}>
           {status.kind === "running" ? (
             <>
               <Spinner magenta />
-              <span className="body-sm">{t("setup.pinging", { url: baseUrl })}</span>
+              <span className="body-sm">{t("provider.oneClickRunning")}</span>
             </>
           ) : null}
           {status.kind === "ok" ? (
@@ -334,17 +312,9 @@ function ProviderStep({
         </div>
       ) : null}
 
-      <div className="row row--between gap-2" style={{ marginTop: 6 }}>
+      <div className="row row--between gap-2" style={{ marginTop: 12 }}>
         <button className="btn btn--ghost btn--sm" onClick={onBack}>
           {t("setup.back")}
-        </button>
-        <button
-          className="btn btn--magenta"
-          onClick={() => void save()}
-          disabled={busy || !apiKey}
-          data-hint={!apiKey ? t("provider.fillKeyFirst") : ""}
-        >
-          {busy ? t("setup.saveTesting") : t("setup.saveAndTest")}
         </button>
       </div>
     </div>

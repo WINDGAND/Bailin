@@ -9,7 +9,8 @@ const api = {
     getLocale: () => ipcRenderer.invoke(IPC.AppGetLocale),
     setLocale: (locale: "zh" | "en") => ipcRenderer.invoke(IPC.AppSetLocale, locale),
     getTheme: () => ipcRenderer.invoke(IPC.AppGetTheme),
-    setTheme: (theme: "light" | "dark" | "system") => ipcRenderer.invoke(IPC.AppSetTheme, theme)
+    setTheme: (theme: "light" | "dark" | "system") => ipcRenderer.invoke(IPC.AppSetTheme, theme),
+    openExternal: (url: string) => ipcRenderer.invoke(IPC.AppOpenExternal, url)
   },
   llm: {
     setProvider: (input: unknown) => ipcRenderer.invoke(IPC.LlmSetProvider, input),

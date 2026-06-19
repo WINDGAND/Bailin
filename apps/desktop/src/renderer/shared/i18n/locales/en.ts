@@ -554,22 +554,181 @@ export const en: TranslationTree = {
     lastReasonLlm: "Smart screenshot"
   },
   provider: {
-    eyebrow: "Provider",
+    eyebrow: "Model service",
     title: "Model & API Key",
     subtitle:
-      "Connect your model provider and verify web search and vision capabilities. Once confirmed, you can use deep creation with confidence.",
+      "Paste your API Key—Bailin auto-configures chat, vision, and image models for you.",
+    guide: {
+      title: "How it works",
+      collapse: "Hide guide",
+      expand: "Show guide",
+      purpose:
+        "This page connects your API Key. Once configured, Bailin can chat with your pet, read reference images, research characters on the web, and generate pixel sprites.",
+      modelRolesTitle: "What model types does Bailin need?",
+      modelRoles: {
+        chat: {
+          label: "Reasoning / daily chat",
+          when: "When talking to your desktop pet"
+        },
+        vision: {
+          label: "Vision / reference images",
+          when: "When you upload reference images to create a character"
+        },
+        web: {
+          label: "Web / deep research",
+          when: "When deep-creating a character with online research"
+        },
+        image: {
+          label: "Image / pet sprites",
+          when: "When generating pixel pet artwork"
+        }
+      },
+      authorStack: {
+        title: "Author's setup (recommended)",
+        intro: "The author uses OhMyGPT as a relay—one API Key calls all models below, no manual setup:"
+      },
+      authorStackRows: {
+        relay: "Relay platform",
+        chat: "Daily chat",
+        vision: "Reference images",
+        webSearch: "Deep research (web)",
+        imageGen: "Pet sprites"
+      },
+      otherRelays:
+        "You can also use keys from other API relays or aggregators, as long as they support the model types above. Use Custom configuration to enter API URLs and model IDs manually."
+    },
+    quickStart: {
+      title: "Quick start · author's setup",
+      titleAlt: "Quick start · {{bundle}}",
+      subtitle: "Get a key from OhMyGPT, paste it, and connect—all models configured automatically.",
+      subtitleAlt: "Paste your key and connect with one click.",
+      stepsTitle: "Get your API Key",
+      openSite: "Open OhMyGPT →",
+      openSiteAlt: "Open {{site}} →"
+    },
+    alternatives: {
+      title: "Other recommended plans (optional)",
+      hint: "If you already have OpenAI official or DeepSeek direct keys, switch here. One-click connect above will use the selected plan."
+    },
+    custom: {
+      title: "Custom configuration",
+      lede: "Manually adjust connection type, API URL, model IDs, and image generation settings.",
+      whenNeededTitle: "When do you need custom configuration?",
+      whenNeeded1: "Using a relay other than OhMyGPT—you need to enter the API URL manually",
+      whenNeeded2: "You want different chat, vision, or image model IDs",
+      whenNeeded3: "You want separate image tier settings or a dedicated image API Key"
+    },
+    bundlesLabel: "Recommended setup",
+    bundlesHint: "Pick a plan, paste your key, then click Connect & verify once.",
+    recommendedBadge: "Recommended",
+    oneClickConnect: "Connect & verify",
+    oneClickRunning: "Connecting and verifying…",
+    oneClickProgressSave: "Saving config",
+    oneClickProgressChat: "Verifying chat",
+    oneClickProgressVision: "Verifying reference images",
+    oneClickProgressWeb: "Verifying deep research",
+    oneClickProgressImage: "Verifying pet images",
+    toastAllReady: "All features ready—you can start using Bailin",
+    toastPartialReady: "Some features failed—see the checklist below",
+    readinessTitle: "Feature readiness",
+    readinessMeterChat: "Chat",
+    readinessMeterVision: "Vision",
+    readinessMeterWeb: "Web",
+    readinessMeterImage: "Images",
+    readinessChat: "Chat with your pet",
+    readinessVision: "Upload reference images",
+    readinessWeb: "Deep creation (web research)",
+    readinessImage: "Generate pixel pet sprites",
+    readinessIdle: "Not verified",
+    readinessRunning: "Verifying…",
+    readinessOk: "Passed",
+    readinessFail: "Failed",
+    readinessUnavailable: "Not supported on this plan",
+    readinessUnavailableVision: "Reference images not supported—try OhMyGPT or OpenAI",
+    readinessUnavailableWeb: "Web research not supported—deep creation is limited",
+    readinessUnavailableImage: "Pet images not supported—try OhMyGPT or OpenAI",
+    advancedTitle: "Advanced customization",
+    advancedLede: "Connection type, API URL, model IDs, etc. Usually no changes needed.",
+    deviatedFromBundle: "Current config differs from the selected recommended plan",
+    faqTitle: "How do I get an API Key?",
+    faqLinkOhmygpt: "Open OhMyGPT",
+    faqLinkOpenai: "Open OpenAI platform",
+    faqLinkDeepseek: "Open DeepSeek platform",
+    faqSteps: {
+      ohmygpt: {
+        step1: "Register at ohmygpt.com",
+        step2: "Add credits (¥10+ is enough for a long time)",
+        step3: "Create an API Key in the dashboard and copy it",
+        step4: "Paste below and click Connect & verify"
+      },
+      openai: {
+        step1: "Register at platform.openai.com (international payment required)",
+        step2: "Add billing credits",
+        step3: "Create an API Key on the API Keys page",
+        step4: "Paste below and click Connect & verify"
+      },
+      deepseek: {
+        step1: "Register at platform.deepseek.com",
+        step2: "Add credits and create an API Key",
+        step3: "Paste below for chat only (vision/images/deep creation unavailable)",
+        step4: "For full features, switch to the OhMyGPT recommended plan"
+      }
+    },
+    bundles: {
+      ohmygpt: {
+        label: "OhMyGPT",
+        tagline: "One key for everything—best for users in China",
+        featChat: "Chat",
+        featVision: "Reference images",
+        featWeb: "Deep research",
+        featImage: "Pet sprites"
+      },
+      openai: {
+        label: "OpenAI official",
+        tagline: "Most reliable direct connection (international payment)",
+        featChat: "Chat",
+        featVision: "Reference images",
+        featWeb: "Deep research",
+        featImage: "Pet sprites"
+      },
+      deepseek: {
+        label: "DeepSeek direct",
+        tagline: "Cheapest, chat only",
+        featChat: "Chat",
+        featVision: "Unavailable",
+        featWeb: "Unavailable",
+        featImage: "Unavailable"
+      }
+    },
+    help: {
+      bundles:
+        "Bailin can use different models for chat, vision, web research, and image generation; one-click connect writes the selected stack.",
+      apiKey: "Secret key from your relay or official provider, usually starting with sk-.",
+      protocol: "Protocol format used when sending requests to your API provider.",
+      baseUrl: "Base URL of the API service (often includes a version path such as /v1).",
+      mainModel: "Model ID used for daily chat with your desktop pet.",
+      visionModel: "Model ID used to read uploaded reference images; must accept image input.",
+      webSearch: "Web retrieval used during deep character creation; availability depends on model and provider.",
+      imageGen: "Image model and parameters used to generate pixel pet sprites.",
+      imageTiers: "Economy, standard, and premium tiers—each with its own model, size, quality, and cost estimate.",
+      defaultTier: "Default image quality tier when generating a pet sprite.",
+      presets: "Switching a preset overwrites connection settings and model fields below.",
+      connStatus: "Shows whether an API Key is saved and the latest connection test result.",
+      readiness: "After one-click connect, verifies chat, vision, web research, and image generation."
+    },
     chatModelTitle: "Chat model",
     chatModelLede: "All requests go directly from this machine. Keys are encrypted at rest with DPAPI.",
-    presetsLabel: "Common providers",
-    presetsHint: "Click to auto-fill protocol, base URL, and model—then paste your key.",
-    protocolLabel: "Protocol",
+    presetsLabel: "More providers",
+    presetsHint: "For advanced users switching to other API providers.",
+    protocolLabel: "Connection type",
     protocolOpenAI: "OpenAI compatible",
     protocolAnthropic: "Anthropic compatible",
-    baseUrlLabel: "Base URL",
-    mainModelLabel: "Main model",
+    baseUrlLabel: "API URL",
+    mainModelLabel: "Chat model",
     mainModelPlaceholder: "gpt-4o-mini / deepseek-v4-flash / claude-3-5-sonnet ...",
-    visionModelLabel: "Reference image model",
-    visionModelHint: "Used when uploading reference images; separate from the main model.",
+    visionModelLabel: "Vision model",
+    visionModelHint: "Used when uploading reference images; separate from the chat model.",
+    visionModelPlaceholder: "e.g. gpt-4o-mini, claude-3-5-sonnet …",
     apiKeyLabel: "API Key",
     apiKeyHint: "After saving, decrypted once via system DPAPI only—never uploaded.",
     showKey: "Show",
@@ -577,12 +736,13 @@ export const en: TranslationTree = {
     showKeyAria: "Show API Key",
     hideKeyAria: "Hide API Key",
     connStatusLabel: "Connection status",
-    imageGenTitle: "Pet image generation (advanced)",
-    imageGenLedeReuse: "Reusing the chat model above for images. Expand to configure three quality tiers independently.",
-    imageGenLedeIndependent: "Using a separate image provider.",
+    imageGenTitle: "Pet sprite generation",
+    imageGenLedeReuse: "Reusing the API Key above for images. Adjust three quality tiers if needed.",
+    imageGenLedeIndependent: "Using a separate image API Key.",
     expand: "Expand",
+    collapse: "Collapse",
     reuseLLMProvider: "Reuse chat model provider",
-    reuseLLMHint: "(Recommended; standard/premium tiers default to gpt-image-2)",
+    reuseLLMHint: "(When enabled, image generation shares the API Key and URL above)",
     imageBaseUrlLabel: "Image Base URL",
     imageApiKeyLabel: "Image API Key",
     imageApiKeyPlaceholder: "Leave blank to keep saved key",
@@ -629,8 +789,8 @@ export const en: TranslationTree = {
     connFailed: "Connection failed",
     connConfigured: "Configured",
     connNotConfigured: "Not configured",
-    connConfiguredDetail: "Key: {{masked}} · click Save & test to verify",
-    connNotConfiguredDetail: "Paste your key above, then click Save & test",
+    connConfiguredDetail: "Key: {{masked}} · click Connect & verify",
+    connNotConfiguredDetail: "Paste your key above, then click Connect & verify",
     netTestingTitle: "Testing real web search…",
     netTestingDetail: "Sending a search ping to check the proxy",
     netOkTitle: "Real web search · verified",
@@ -698,7 +858,9 @@ export const en: TranslationTree = {
     disclaimerCta: "Got it, next",
     back: "← Back",
     providerIntro:
-      "We don't host models. Paste your own key—all requests go directly from this computer.",
+      "Pick a recommended plan, paste your API Key, and click Connect & verify. Bailin auto-configures chat, vision, and image models.",
+    advancedHint:
+      "After setup, adjust details under Advanced customization on the Model & API Key page.",
     protocolOpenAILong: "OpenAI compatible (DeepSeek / Moonshot / SiliconFlow …)",
     protocolAnthropicLong: "Anthropic compatible (Claude series)",
     modelLabel: "Model",

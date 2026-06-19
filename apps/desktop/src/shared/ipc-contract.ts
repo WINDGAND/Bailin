@@ -25,6 +25,8 @@ export interface BailinApi {
     setLocale(locale: AppLocale): Promise<void>;
     getTheme(): Promise<ThemePreference>;
     setTheme(theme: ThemePreference): Promise<void>;
+    /** 用系统默认浏览器打开 http(s) 链接。 */
+    openExternal(url: string): Promise<{ ok: boolean }>;
   };
 
   // ===== LLM 提供商 =====
@@ -630,6 +632,7 @@ export const IPC = {
   AppSetLocale: "nuwa.app.setLocale",
   AppGetTheme: "nuwa.app.getTheme",
   AppSetTheme: "nuwa.app.setTheme",
+  AppOpenExternal: "nuwa.app.openExternal",
 
   LlmSetProvider: "nuwa.llm.setProvider",
   LlmGetProvider: "nuwa.llm.getProvider",

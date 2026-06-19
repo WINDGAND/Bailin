@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, shell } from "electron";
 import { ulid } from "ulid";
 import {
   IPC,
@@ -130,6 +130,18 @@ export function registerIpc(deps: IpcDeps): void {
     const next = theme === "light" || theme === "dark" || theme === "system" ? theme : "system";
     vault.setSetting(SETTING_THEME, next);
     broadcast(IPC.EventThemeChanged, next);
+  });
+  ipcMain.handle(IPC.AppOpenExternal, async (_evt, url: unknown) => {
+    if (typeof url !== "string") return { ok: false };
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { ok: false };
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return { ok: false };
+    await shell.openExternal(parsed.href);
+    return { ok: true };
   });
 
   // ===== LLM =====
@@ -786,14 +798,10 @@ export function broadcastToAllWindows(channel: string, payload: unknown): void {
  */
 export function readImageConfigForRenderer(
   vault: LocalVault
-): ImageGenerationConfigDTO {
+): ImageGenerationConfigDTO | null {
   const raw = vault.getSetting(SETTING_IMAGE_PROVIDER);
   if (!raw) {
-    return {
-      useLLMProvider: DEFAULT_IMAGE_GENERATION_CONFIG.useLLMProvider,
-      tiers: DEFAULT_IMAGE_GENERATION_CONFIG.tiers,
-      defaultTier: DEFAULT_IMAGE_GENERATION_CONFIG.defaultTier
-    };
+    return null;
   }
   try {
     const parsed = JSON.parse(raw) as Omit<ImageGenerationConfig, "apiKey">;

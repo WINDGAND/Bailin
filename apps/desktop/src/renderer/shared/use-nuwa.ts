@@ -19,7 +19,7 @@ import type { ChatStreamChunk, ChatVisibilityEvent } from "../../shared/ipc-cont
 
 interface NuwaWindow {
   nuwa: {
-    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void> };
+    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void>; openExternal(url: string): Promise<{ ok: boolean }> };
     llm: {
       setProvider(input: unknown): Promise<{ ok: boolean; error?: string }>;
       getProvider(): Promise<unknown>;
@@ -194,6 +194,10 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       setTheme: async (theme: "light" | "dark" | "system") => {
         localStorage.setItem("bailin.theme", theme);
         window.dispatchEvent(new CustomEvent("bailin-theme", { detail: theme }));
+      },
+      openExternal: async (url: string) => {
+        window.open(url, "_blank", "noopener,noreferrer");
+        return { ok: true };
       }
     },
     llm: {

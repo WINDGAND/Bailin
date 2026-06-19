@@ -552,21 +552,180 @@ export const zh = {
     lastReasonLlm: "智能截图"
   },
   provider: {
-    eyebrow: "Provider",
+    eyebrow: "模型服务",
     title: "模型与 API Key",
-    subtitle: "连接你的模型供应商，并确认联网与视觉能力。通过后就可以放心使用深度创建。",
+    subtitle: "粘贴 API Key，百灵会自动配置聊天、识图、生图所需的全部模型。",
+    guide: {
+      title: "使用指引",
+      collapse: "收起指引",
+      expand: "展开指引",
+      purpose:
+        "这页用来连接你的 API Key。配置成功后，百灵就能和桌宠聊天、读懂参考图、联网深度创建角色、生成像素桌宠。",
+      modelRolesTitle: "百灵需要哪几类模型？",
+      modelRoles: {
+        chat: {
+          label: "推理 / 日常聊天",
+          when: "和桌宠说话、角色回复时使用"
+        },
+        vision: {
+          label: "识图 / 参考图识读",
+          when: "上传参考图创建角色时使用"
+        },
+        web: {
+          label: "联网 / 深度调研",
+          when: "深度创建角色、联网查资料时使用"
+        },
+        image: {
+          label: "生图 / 桌宠外观",
+          when: "生成像素桌宠外观时使用"
+        }
+      },
+      authorStack: {
+        title: "作者同款方案（推荐）",
+        intro: "作者使用 OhMyGPT 中转，一个 API Key 调用下面全部模型，无需手动逐个配置："
+      },
+      authorStackRows: {
+        relay: "中转平台",
+        chat: "日常聊天",
+        vision: "参考图识读",
+        webSearch: "深度调研（联网）",
+        imageGen: "桌宠生图"
+      },
+      otherRelays:
+        "你也可以使用其他 API 聚合站 / 中转站的 Key，只要它能调用上述几类模型即可。选「个性化配置」可手动填写 API 地址和模型名。"
+    },
+    quickStart: {
+      title: "快速上手 · 作者同款方案",
+      titleAlt: "快速上手 · {{bundle}}",
+      subtitle: "去 OhMyGPT 拿 Key，粘贴后一键接入，自动配置全部模型。",
+      subtitleAlt: "粘贴 Key 后一键接入并验证。",
+      stepsTitle: "获取 API Key",
+      openSite: "打开 OhMyGPT 官网 →",
+      openSiteAlt: "打开 {{site}} →"
+    },
+    alternatives: {
+      title: "其他推荐方案（可选）",
+      hint: "若已有 OpenAI 官方或 DeepSeek 直连 Key，可在此切换。选中后上方一键接入会使用对应方案。"
+    },
+    custom: {
+      title: "个性化配置",
+      lede: "手动调整连接方式、API 地址、模型名和生图参数。",
+      whenNeededTitle: "什么时候需要个性化配置？",
+      whenNeeded1: "使用非 OhMyGPT 的中转站，需要手动填写 API 地址",
+      whenNeeded2: "想更换聊天、识图或生图的模型型号",
+      whenNeeded3: "想独立配置生图三档质量，或使用单独的生图 API Key"
+    },
+    bundlesLabel: "推荐接入方式",
+    bundlesHint: "选一个方案，粘贴 Key，点一次「一键接入并验证」即可。",
+    recommendedBadge: "推荐",
+    oneClickConnect: "一键接入并验证",
+    oneClickRunning: "正在接入并验证…",
+    oneClickProgressSave: "保存配置",
+    oneClickProgressChat: "验证日常聊天",
+    oneClickProgressVision: "验证参考图识读",
+    oneClickProgressWeb: "验证深度调研",
+    oneClickProgressImage: "验证桌宠生图",
+    toastAllReady: "全部功能已就绪，可以开始使用了",
+    toastPartialReady: "部分功能未通过，请查看下方清单",
+    readinessTitle: "功能就绪清单",
+    readinessMeterChat: "聊天",
+    readinessMeterVision: "识图",
+    readinessMeterWeb: "联网",
+    readinessMeterImage: "生图",
+    readinessChat: "可以和桌宠说话了",
+    readinessVision: "可以上传参考图创建角色",
+    readinessWeb: "可以深度创建（联网查资料）",
+    readinessImage: "可以生成像素桌宠",
+    readinessIdle: "未验证",
+    readinessRunning: "验证中…",
+    readinessOk: "已通过",
+    readinessFail: "未通过",
+    readinessUnavailable: "此方案不支持",
+    readinessUnavailableVision: "此方案不支持参考图识读，请换 OhMyGPT 或 OpenAI",
+    readinessUnavailableWeb: "此方案不支持联网调研，深度创建功能受限",
+    readinessUnavailableImage: "此方案不支持桌宠生图，请换 OhMyGPT 或 OpenAI",
+    advancedTitle: "高级自定义",
+    advancedLede: "连接方式、API 地址、模型名等细节。一般不需要改。",
+    deviatedFromBundle: "当前配置已偏离所选推荐方案",
+    faqTitle: "如何获取 API Key？",
+    faqLinkOhmygpt: "打开 OhMyGPT 官网",
+    faqLinkOpenai: "打开 OpenAI 平台",
+    faqLinkDeepseek: "打开 DeepSeek 平台",
+    faqSteps: {
+      ohmygpt: {
+        step1: "打开 ohmygpt.com 注册账号",
+        step2: "充值（建议 ¥10 起，日常聊天够用很久）",
+        step3: "在控制台创建 API Key 并复制",
+        step4: "粘贴到下方，点「一键接入并验证」"
+      },
+      openai: {
+        step1: "打开 platform.openai.com 注册（需海外支付方式）",
+        step2: "在 Billing 中充值",
+        step3: "在 API Keys 页面创建 Key 并复制",
+        step4: "粘贴到下方，点「一键接入并验证」"
+      },
+      deepseek: {
+        step1: "打开 platform.deepseek.com 注册",
+        step2: "充值后创建 API Key",
+        step3: "粘贴到下方即可聊天（识图/生图/深度创建不可用）",
+        step4: "需要全功能请改选 OhMyGPT 推荐方案"
+      }
+    },
+    bundles: {
+      ohmygpt: {
+        label: "OhMyGPT",
+        tagline: "一个 Key 搞定全部功能，国内用户首选",
+        featChat: "日常聊天",
+        featVision: "参考图识读",
+        featWeb: "深度调研",
+        featImage: "桌宠生图"
+      },
+      openai: {
+        label: "OpenAI 官方",
+        tagline: "官方直连，稳定性最高（需海外支付）",
+        featChat: "日常聊天",
+        featVision: "参考图识读",
+        featWeb: "深度调研",
+        featImage: "桌宠生图"
+      },
+      deepseek: {
+        label: "DeepSeek 直连",
+        tagline: "最便宜，但只能聊天",
+        featChat: "日常聊天",
+        featVision: "不可用",
+        featWeb: "不可用",
+        featImage: "不可用"
+      }
+    },
+    help: {
+      bundles:
+        "百灵可为聊天、识图、联网调研、生图分别配置不同模型；一键接入会写入对应选型。",
+      apiKey: "从中转站或官方平台获取的密钥，通常以 sk- 开头。",
+      protocol: "向 API 服务商发起请求时使用的协议格式。",
+      baseUrl: "API 服务的基础地址（通常含 /v1 等版本路径）。",
+      mainModel: "用于与桌宠日常对话的模型 ID。",
+      visionModel: "用于读取上传参考图的模型 ID；需支持图像输入。",
+      webSearch: "深度创建角色时用于联网检索；是否可用取决于所选模型与服务商。",
+      imageGen: "用于生成像素桌宠外观的图像模型与相关参数。",
+      imageTiers: "经济、标准、精品三档，可分别设置模型、尺寸、质量与预估单价。",
+      defaultTier: "创建桌宠时默认使用的生图质量档位。",
+      presets: "切换预设时会覆盖下方连接方式与模型字段。",
+      connStatus: "显示 API Key 是否已保存，以及连接测试的结果。",
+      readiness: "一键接入后逐项验证聊天、识图、联网调研、生图是否可用。"
+    },
     chatModelTitle: "对话模型",
     chatModelLede: "所有调用从这台电脑直接发出。Key 用 DPAPI 加密落盘。",
-    presetsLabel: "常用提供商",
-    presetsHint: "点一下自动填充协议、Base URL、模型，再贴 Key 即可。",
-    protocolLabel: "协议",
+    presetsLabel: "更多供应商",
+    presetsHint: "高级用户可切换其他 API 服务商。",
+    protocolLabel: "连接方式",
     protocolOpenAI: "OpenAI 兼容",
     protocolAnthropic: "Anthropic 兼容",
-    baseUrlLabel: "Base URL",
-    mainModelLabel: "主模型",
+    baseUrlLabel: "API 地址",
+    mainModelLabel: "聊天模型",
     mainModelPlaceholder: "gpt-4o-mini / deepseek-v4-flash / claude-3-5-sonnet ...",
-    visionModelLabel: "参考图读图模型",
-    visionModelHint: "上传参考图时使用，与主模型分离。",
+    visionModelLabel: "识图模型",
+    visionModelHint: "上传参考图时使用，与聊天模型分开配置。",
+    visionModelPlaceholder: "例如 gpt-4o-mini、claude-3-5-sonnet …",
     apiKeyLabel: "API Key",
     apiKeyHint: "保存后只通过系统 DPAPI 解密读取一次，永远不会上传。",
     showKey: "显示",
@@ -574,12 +733,13 @@ export const zh = {
     showKeyAria: "显示 API Key",
     hideKeyAria: "隐藏 API Key",
     connStatusLabel: "连接状态",
-    imageGenTitle: "桌宠生图（高级）",
-    imageGenLedeReuse: "正在复用上面的对话模型生图。点开可独立配置三档质量。",
-    imageGenLedeIndependent: "正在使用独立 Image Provider。",
+    imageGenTitle: "生成桌宠外观",
+    imageGenLedeReuse: "正在复用上面的 API Key 生图。可独立调整三档质量。",
+    imageGenLedeIndependent: "正在使用独立的生图 API Key。",
     expand: "展开",
+    collapse: "收起",
     reuseLLMProvider: "复用对话模型 Provider",
-    reuseLLMHint: "（推荐；标准/精品档默认 gpt-image-2）",
+    reuseLLMHint: "（开启后与生图共用上方 API Key 与地址）",
     imageBaseUrlLabel: "Image Base URL",
     imageApiKeyLabel: "Image API Key",
     imageApiKeyPlaceholder: "留空则沿用已保存 key",
@@ -626,8 +786,8 @@ export const zh = {
     connFailed: "连接失败",
     connConfigured: "已配置",
     connNotConfigured: "未配置",
-    connConfiguredDetail: "Key: {{masked}} · 点「保存并测试」验证",
-    connNotConfiguredDetail: "在上方贴 Key 后点保存并测试",
+    connConfiguredDetail: "Key: {{masked}} · 点「一键接入并验证」确认",
+    connNotConfiguredDetail: "在上方贴 Key 后点一键接入并验证",
     netTestingTitle: "正在测试联网真实性…",
     netTestingDetail: "发一个 search ping 检查代理",
     netOkTitle: "真联网 · 验证通过",
@@ -693,7 +853,8 @@ export const zh = {
       "角色卡、像素桌宠、用户画像都默认存在本机；完整对话默认不保存；可一键清空所有数据。",
     disclaimerCta: "明白，下一步",
     back: "← 上一步",
-    providerIntro: "我们不托管模型。把你自己的 Key 贴进来，所有调用都直接从这台电脑发出。",
+    providerIntro: "选一个推荐方案，粘贴 API Key，点「一键接入并验证」。百灵会自动配置聊天、识图、生图所需的全部模型。",
+    advancedHint: "完成首启后，可在「模型与 API Key」页的「高级自定义」中调整细节。",
     protocolOpenAILong: "OpenAI 兼容（含 DeepSeek / Moonshot / SiliconFlow ...）",
     protocolAnthropicLong: "Anthropic 兼容（Claude 系列）",
     modelLabel: "模型",
