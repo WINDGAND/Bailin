@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AUTHOR_MODEL_STACK,
   MODEL_ROLE_IDS,
@@ -27,7 +27,11 @@ interface ProviderGuideSectionProps {
 
 export function ProviderGuideSection({ compact = false }: ProviderGuideSectionProps): JSX.Element {
   const t = useT();
-  const [open, setOpen] = useState(!compact);
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    if (!compact) setOpen(true);
+  }, [compact]);
 
   return (
     <section className="forge-section">

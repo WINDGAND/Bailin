@@ -19,16 +19,19 @@ import type { LLMProviderConfig } from "../../shared/ipc-contract.js";
 
 export type ImageTierName = "economy" | "standard" | "premium";
 
+export type ImageTierParamMode = "openaiImages" | "providerDefault" | "custom";
+
 export interface ImageTierConfig {
   /** 模型 ID，由用户在 Settings 中配置；默认见 DEFAULT_IMAGE_TIERS。 */
   model: string;
-  /** OpenAI Images API 的尺寸；非该协议的 provider 可忽略。 */
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
-  /**
-   * 质量档。OpenAI gpt-image-* 用 low/medium/high；
-   * 旧 DALL·E 用 standard/hd；其它 provider 不识别就忽略。
-   */
-  quality?: "low" | "medium" | "high" | "standard" | "hd";
+  /** 请求体组装方式；缺省 openaiImages。 */
+  paramMode?: ImageTierParamMode;
+  /** 仅 openaiImages 模式发送。 */
+  size?: string;
+  /** 仅 openaiImages 模式发送。 */
+  quality?: string;
+  /** 仅 custom 模式 shallow-merge 进请求体。 */
+  customBody?: Record<string, unknown>;
   /** 仅用于 UI 显示成本估算（美元/张）。 */
   estimatedCostUsd?: number;
 }
@@ -54,18 +57,21 @@ export interface ImageGenerationConfig {
 export const DEFAULT_IMAGE_TIERS: Record<ImageTierName, ImageTierConfig> = {
   economy: {
     model: "gpt-image-1-mini",
+    paramMode: "openaiImages",
     size: "1024x1024",
     quality: "low",
     estimatedCostUsd: 0.005
   },
   standard: {
     model: "gpt-image-2",
+    paramMode: "openaiImages",
     size: "1024x1024",
     quality: "medium",
     estimatedCostUsd: 0.032
   },
   premium: {
     model: "gpt-image-2",
+    paramMode: "openaiImages",
     size: "1024x1536",
     quality: "high",
     estimatedCostUsd: 0.18
@@ -90,10 +96,10 @@ export interface ImageGenerationRequest {
    * 不会让整次生图失败；上层（hatch-pet）应在拿到非透明图后通过 chroma 抠白边。
    */
   transparentBackground?: boolean;
-  /** 覆盖 tier.size。 */
-  size?: ImageTierConfig["size"];
-  /** 覆盖 tier.quality。 */
-  quality?: ImageTierConfig["quality"];
+  /** 覆盖 tier.size（仅 openaiImages / custom 生效）。 */
+  size?: string;
+  /** 覆盖 tier.quality（仅 openaiImages / custom 生效）。 */
+  quality?: string;
   /** 超时（毫秒），默认 120s。生图通常需要 5-30s。 */
   timeoutMs?: number;
   /** 给主进程日志埋点用的可读标签（如 "hatch:三笠:base"），不影响请求语义。 */
@@ -181,13 +187,13 @@ export class ImageGenerationAdapter {
     const tierName = req.tier ?? config.defaultTier;
     const tier = config.tiers[tierName];
     const supportsTransparent = modelSupportsTransparent(tier.model);
-    const body = buildGenerationBody({
-      model: tier.model,
-      prompt: req.prompt,
-      size: req.size ?? tier.size ?? "1024x1024",
-      quality: req.quality ?? tier.quality,
-      transparentBackground: req.transparentBackground === true && supportsTransparent
-    });
+    const transparent = req.transparentBackground === true && supportsTransparent;
+    const body = buildTierRequestBody(
+      tier,
+      req.prompt,
+      { size: req.size, quality: req.quality },
+      { transparentBackground: transparent }
+    );
     const requestId = `gen#${Math.random().toString(36).slice(2, 7)}`;
     const requestUrl = joinUrl(resolved.baseUrl, "images/generations");
     const logCtx = {
@@ -223,13 +229,12 @@ export class ImageGenerationAdapter {
         httpDt: first.durationMs,
         note: "first try rejected by provider, retry without background:transparent"
       });
-      const retryBody = buildGenerationBody({
-        model: tier.model,
-        prompt: req.prompt,
-        size: req.size ?? tier.size ?? "1024x1024",
-        quality: req.quality ?? tier.quality,
-        transparentBackground: false
-      });
+      const retryBody = buildTierRequestBody(
+        tier,
+        req.prompt,
+        { size: req.size, quality: req.quality },
+        { transparentBackground: false }
+      );
       return this.postJsonAndDecodeImage(
         requestUrl,
         resolved.apiKey,
@@ -266,15 +271,13 @@ export class ImageGenerationAdapter {
     const wantTransparent = req.transparentBackground === true && supportsTransparent;
 
     const buildForm = async (transparent: boolean): Promise<FormData> => {
-      const form = new FormData();
-      form.set("model", tier.model);
-      form.set("prompt", req.prompt);
-      form.set("size", req.size ?? tier.size ?? "1024x1024");
-      form.set("n", "1");
-      form.set("response_format", "b64_json");
-      const quality = req.quality ?? tier.quality;
-      if (quality) form.set("quality", quality);
-      if (transparent) form.set("background", "transparent");
+      const body = buildTierRequestBody(
+        tier,
+        req.prompt,
+        { size: req.size, quality: req.quality },
+        { transparentBackground: transparent }
+      );
+      const form = requestBodyToFormData(body);
       for (let i = 0; i < req.images.length; i += 1) {
         const src = req.images[i];
         if (!src) continue;
@@ -288,6 +291,12 @@ export class ImageGenerationAdapter {
       return form;
     };
 
+    const previewBody = buildTierRequestBody(
+      tier,
+      req.prompt,
+      { size: req.size, quality: req.quality },
+      { transparentBackground: wantTransparent }
+    );
     const requestId = `edit#${Math.random().toString(36).slice(2, 7)}`;
     const requestUrl = joinUrl(resolved.baseUrl, "images/edits");
     const logCtx = {
@@ -298,13 +307,7 @@ export class ImageGenerationAdapter {
       model: tier.model,
       tier: tierName,
       bodyKeys: [
-        "model",
-        "prompt",
-        "size",
-        "n",
-        "response_format",
-        ...((req.quality ?? tier.quality) ? ["quality"] : []),
-        ...(wantTransparent ? ["background"] : []),
+        ...Object.keys(previewBody),
         `images(${req.images.length})`,
         ...(req.mask ? ["mask"] : [])
       ],
@@ -723,23 +726,54 @@ export function shouldRetryWithoutTransparent(
   );
 }
 
-function buildGenerationBody(p: {
-  model: string;
-  prompt: string;
-  size: string;
-  quality?: ImageTierConfig["quality"];
-  transparentBackground: boolean;
-}): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    model: p.model,
-    prompt: p.prompt,
-    size: p.size,
+export function buildTierRequestBody(
+  tier: ImageTierConfig,
+  prompt: string,
+  overrides: { size?: string; quality?: string },
+  opts: { transparentBackground: boolean }
+): Record<string, unknown> {
+  const mode = resolveParamMode(tier);
+  const base: Record<string, unknown> = {
+    model: tier.model,
+    prompt,
     n: 1,
     response_format: "b64_json"
   };
-  if (p.quality) body.quality = p.quality;
-  if (p.transparentBackground) body.background = "transparent";
-  return body;
+
+  if (opts.transparentBackground) {
+    base.background = "transparent";
+  }
+
+  if (mode === "providerDefault") {
+    return base;
+  }
+
+  const overrideEntries: Record<string, unknown> = {};
+  if (overrides.size !== undefined) overrideEntries.size = overrides.size;
+  if (overrides.quality !== undefined) overrideEntries.quality = overrides.quality;
+
+  if (mode === "custom") {
+    return { ...base, ...(tier.customBody ?? {}), ...overrideEntries };
+  }
+
+  const size = overrides.size ?? tier.size;
+  const quality = overrides.quality ?? tier.quality;
+  if (size) base.size = size;
+  if (quality) base.quality = quality;
+  return base;
+}
+
+function requestBodyToFormData(body: Record<string, unknown>): FormData {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined || value === null) continue;
+    form.set(key, String(value));
+  }
+  return form;
+}
+
+export function resolveParamMode(tier: ImageTierConfig): ImageTierParamMode {
+  return tier.paramMode ?? "openaiImages";
 }
 
 /** 日志上下文，所有 image adapter 调用共享。 */

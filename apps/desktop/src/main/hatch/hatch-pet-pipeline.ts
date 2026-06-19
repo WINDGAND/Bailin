@@ -37,6 +37,7 @@ import {
 import type { LocalVault } from "../store/local-vault.js";
 import {
   modelSupportsTransparent,
+  resolveParamMode,
   type ImageGenerationAdapter,
   type ImageGenerationConfig,
   type ImageTierName
@@ -603,14 +604,15 @@ export class HatchPetPipeline {
     const images: string[] = [
       bufferToDataUrl(canonicalBasePng, "image/png")
     ];
+    const tierCfg = this.deps.imageGen.getConfig().tiers[tier];
     const res = await this.deps.imageGen.edit({
       prompt,
       images,
       tier,
       transparentBackground,
-      // row strip 是宽幅，OpenAI Images 不允许任意宽高比；这里按 1024×1024 兜底，
+      // row strip 是宽幅，OpenAI Images 不允许任意宽高比；openaiImages 模式按 1024×1024 兜底，
       // pet-atlas-tools 在裁帧时会 resize 到目标 cell。
-      size: "1024x1024",
+      ...(resolveParamMode(tierCfg) === "openaiImages" ? { size: "1024x1024" } : {}),
       requestLabel: `hatch:${input.characterName.slice(0, 16)}:row-${rowState}`
     });
     if (res.kind === "error") {

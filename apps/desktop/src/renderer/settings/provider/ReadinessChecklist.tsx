@@ -55,13 +55,14 @@ function ReadinessCell({ label, state }: { label: string; state: ReadinessState 
     statusText = t("provider.readinessRunning");
   } else if (state.status === "ok") {
     statusClass = "is-ok";
-    statusText =
+    const base =
       state.latencyMs != null
         ? `${t("provider.readinessOk")} · ${state.latencyMs} ms`
         : t("provider.readinessOk");
+    statusText = state.detail ? `${base} · ${state.detail}` : base;
   } else if (state.status === "fail") {
     statusClass = "is-fail";
-    statusText = t("provider.readinessFail");
+    statusText = state.reason || t("provider.readinessFail");
   } else if (state.status === "unavailable") {
     statusClass = "is-unavailable";
     statusText = t("provider.readinessUnavailable");
@@ -75,6 +76,9 @@ function ReadinessCell({ label, state }: { label: string; state: ReadinessState 
         {state.status === "running" ? <Spinner magenta /> : null}
         <span>{statusText}</span>
       </span>
+      {state.status === "fail" && state.hintKey ? (
+        <span className="provider-readiness-meter__hint">{t(state.hintKey)}</span>
+      ) : null}
     </div>
   );
 }

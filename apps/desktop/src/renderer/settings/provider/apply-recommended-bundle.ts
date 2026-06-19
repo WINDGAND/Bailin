@@ -1,5 +1,6 @@
-import type { ImageGenerationConfigDTO } from "../../../shared/ipc-contract.js";
+import type { ImageGenerationConfigDTO, ImageTierName } from "../../../shared/ipc-contract.js";
 import type { RecommendedBundle, BundleFeature } from "./presets.js";
+import { validateImageConfig } from "./image-tier-validation.js";
 
 export type ReadinessKey = BundleFeature;
 
@@ -7,7 +8,7 @@ export type ReadinessState =
   | { status: "idle" }
   | { status: "running" }
   | { status: "ok"; latencyMs?: number; detail?: string }
-  | { status: "fail"; reason: string }
+  | { status: "fail"; reason: string; hintKey?: string }
   | { status: "unavailable"; reason: string };
 
 export type ReadinessMap = Record<ReadinessKey, ReadinessState>;
@@ -38,6 +39,7 @@ interface NuwaProviderApis {
       latencyMs?: number;
       model?: string;
       error?: string;
+      requestFields?: string[];
     }>;
   };
   characters: {
@@ -181,14 +183,34 @@ async function runWebSearchTest(
 async function runImageGenTest(
   nuwa: NuwaProviderApis,
   tier: string,
+  imageConfig: ImageGenerationConfigDTO,
   onProgress: ProgressFn
 ): Promise<ReadinessState> {
   onProgress("imageGen", { status: "running" });
   try {
     const img = await nuwa.imageGen.test(tier);
-    const state: ReadinessState = img.ok
-      ? { status: "ok", latencyMs: img.latencyMs, detail: img.model }
-      : { status: "fail", reason: img.error ?? "image test failed" };
+    const tierCfg = imageConfig.tiers[tier as ImageTierName];
+    if (img.ok) {
+      const detailParts = [img.model, img.requestFields?.join(", ")].filter(Boolean);
+      const state: ReadinessState = {
+        status: "ok",
+        latencyMs: img.latencyMs,
+        detail: detailParts.length > 0 ? detailParts.join(" · ") : undefined
+      };
+      onProgress("imageGen", state);
+      return state;
+    }
+    const reason = img.error ?? "image test failed";
+    const paramMode = tierCfg.paramMode ?? "openaiImages";
+    const errLower = reason.toLowerCase();
+    const suggestHint =
+      paramMode === "openaiImages" &&
+      (errLower.includes("quality") || errLower.includes("size") || errLower.includes("invalid"));
+    const state: ReadinessState = {
+      status: "fail",
+      reason,
+      ...(suggestHint ? { hintKey: "provider.imageGenTestParamHint" } : {})
+    };
     onProgress("imageGen", state);
     return state;
   } catch (e) {
@@ -234,6 +256,16 @@ export async function verifyCustomProvider(
 ): Promise<ApplyBundleResult> {
   const readiness: ReadinessMap = { ...IDLE_READINESS };
 
+  const imageValidation = validateImageConfig(input.imageConfig);
+  if (imageValidation) {
+    return {
+      saveOk: false,
+      saveError: imageValidation.key,
+      readiness,
+      allRequiredPassed: false
+    };
+  }
+
   const save = await saveCustomProvider(nuwa, input);
   if (!save.ok) {
     return {
@@ -250,6 +282,7 @@ export async function verifyCustomProvider(
   readiness.imageGen = await runImageGenTest(
     nuwa,
     input.imageConfig.defaultTier,
+    input.imageConfig,
     onProgress
   );
 

@@ -597,6 +597,7 @@ void app.whenReady().then(() => {
     hidePet,
     setPetContextMenuOpen,
     dismissProactiveBubble: () => proactiveBubbleHost?.hide(),
+    resizeProactiveBubble: (size) => proactiveBubbleHost?.resize(size),
     movePet,
     ensurePetOnScreen,
     ensureSettingsWindow,

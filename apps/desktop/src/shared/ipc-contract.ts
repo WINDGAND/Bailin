@@ -176,6 +176,7 @@ export interface BailinApi {
   /** 独立气泡窗（方案 B）：关闭当前悄悄话气泡。 */
   proactiveBubble: {
     dismiss(): Promise<void>;
+    resize(size: { width: number; height: number }): Promise<void>;
   };
 
   // ===== 主动陪伴 / 屏幕感知 =====
@@ -355,10 +356,18 @@ export interface LLMProviderConfig {
 
 export type ImageTierName = "economy" | "standard" | "premium";
 
+/** 生图档位如何组装 OpenAI 兼容请求体。缺省视为 openaiImages（兼容旧配置）。 */
+export type ImageTierParamMode = "openaiImages" | "providerDefault" | "custom";
+
 export interface ImageTierConfigDTO {
   model: string;
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
-  quality?: "low" | "medium" | "high" | "standard" | "hd";
+  paramMode?: ImageTierParamMode;
+  /** 仅 openaiImages 模式发送；空则 omit。 */
+  size?: string;
+  /** 仅 openaiImages 模式发送；空则 omit。 */
+  quality?: string;
+  /** 仅 custom 模式 merge 进请求体。 */
+  customBody?: Record<string, unknown>;
   estimatedCostUsd?: number;
 }
 
@@ -706,6 +715,7 @@ export const IPC = {
   PetDragMove: "nuwa.pet.dragMove",
   PetDragEnd: "nuwa.pet.dragEnd",
   ProactiveBubbleDismiss: "nuwa.proactiveBubble.dismiss",
+  ProactiveBubbleResize: "nuwa.proactiveBubble.resize",
 
   ProactiveGetSettings: "nuwa.proactive.getSettings",
   ProactiveSetSettings: "nuwa.proactive.setSettings",

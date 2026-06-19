@@ -3,7 +3,7 @@
  */
 import assert from "node:assert/strict";
 
-const PROACTIVE_BUBBLE_WINDOW_SIZE = { width: 260, height: 96 };
+const PROACTIVE_BUBBLE_WINDOW_SIZE = { width: 300, height: 160 };
 const PROACTIVE_BUBBLE_PET_GAP = 3;
 const PROACTIVE_BUBBLE_PLACEMENT_HYSTERESIS_PX = 80;
 const PET_ANCHOR_RATIO = 0.88;

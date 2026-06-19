@@ -1,7 +1,37 @@
 import type { ProactiveBubblePlacement } from "./ipc-contract.js";
 
-/** 独立气泡窗内容区尺寸（方案 B：与桌宠窗分离）。 */
-export const PROACTIVE_BUBBLE_WINDOW_SIZE = { width: 260, height: 96 } as const;
+/** 独立气泡窗内容区默认/上限尺寸（方案 B：与桌宠窗分离）。 */
+export const PROACTIVE_BUBBLE_SIZE_LIMITS = {
+  minWidth: 200,
+  maxWidth: 320,
+  minHeight: 64,
+  maxHeight: 240
+} as const;
+
+export const PROACTIVE_BUBBLE_WINDOW_SIZE = {
+  width: 300,
+  height: 160
+} as const;
+
+export type ProactiveBubbleWindowSize = { width: number; height: number };
+
+export function defaultProactiveBubbleWindowSize(): ProactiveBubbleWindowSize {
+  return {
+    width: PROACTIVE_BUBBLE_WINDOW_SIZE.width,
+    height: PROACTIVE_BUBBLE_WINDOW_SIZE.height
+  };
+}
+
+export function clampProactiveBubbleSize(size: {
+  width: number;
+  height: number;
+}): { width: number; height: number } {
+  const { minWidth, maxWidth, minHeight, maxHeight } = PROACTIVE_BUBBLE_SIZE_LIMITS;
+  return {
+    width: Math.round(Math.min(maxWidth, Math.max(minWidth, size.width))),
+    height: Math.round(Math.min(maxHeight, Math.max(minHeight, size.height)))
+  };
+}
 
 /** 气泡与桌宠精灵可视区之间的间距（屏幕坐标 px）。 */
 export const PROACTIVE_BUBBLE_PET_GAP = 3;

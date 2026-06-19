@@ -70,9 +70,27 @@ export const EMPTY_IMAGE_CONFIG: ImageGenerationConfigDTO = {
   useLLMProvider: true,
   defaultTier: "standard",
   tiers: {
-    economy: { model: "", size: "1024x1024", quality: "low", estimatedCostUsd: 0 },
-    standard: { model: "", size: "1024x1024", quality: "medium", estimatedCostUsd: 0 },
-    premium: { model: "", size: "1024x1536", quality: "high", estimatedCostUsd: 0 }
+    economy: {
+      model: "",
+      paramMode: "openaiImages",
+      size: "1024x1024",
+      quality: "low",
+      estimatedCostUsd: 0
+    },
+    standard: {
+      model: "",
+      paramMode: "openaiImages",
+      size: "1024x1024",
+      quality: "medium",
+      estimatedCostUsd: 0
+    },
+    premium: {
+      model: "",
+      paramMode: "openaiImages",
+      size: "1024x1536",
+      quality: "high",
+      estimatedCostUsd: 0
+    }
   }
 };
 
@@ -83,18 +101,21 @@ export const DEFAULT_IMAGE_CONFIG: ImageGenerationConfigDTO = {
   tiers: {
     economy: {
       model: "gpt-image-1-mini",
+      paramMode: "openaiImages",
       size: "1024x1024",
       quality: "low",
       estimatedCostUsd: 0.005
     },
     standard: {
       model: "gpt-image-2",
+      paramMode: "openaiImages",
       size: "1024x1024",
       quality: "medium",
       estimatedCostUsd: 0.032
     },
     premium: {
       model: "gpt-image-2",
+      paramMode: "openaiImages",
       size: "1024x1536",
       quality: "high",
       estimatedCostUsd: 0.18

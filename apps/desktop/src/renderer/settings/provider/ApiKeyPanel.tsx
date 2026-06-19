@@ -274,7 +274,14 @@ export function ApiKeyPanel(): JSX.Element {
       );
 
       if (!result.saveOk) {
-        showToast({ kind: "error", text: result.saveError ?? t("provider.toastSaveFailed") });
+        const err = result.saveError;
+        showToast({
+          kind: "error",
+          text:
+            err && err.startsWith("provider.")
+              ? t(err as "provider.imageCustomBodyInvalid")
+              : (err ?? t("provider.toastSaveFailed"))
+        });
         return;
       }
 

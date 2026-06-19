@@ -97,7 +97,9 @@ const api = {
     dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd)
   },
   proactiveBubble: {
-    dismiss: () => ipcRenderer.invoke(IPC.ProactiveBubbleDismiss)
+    dismiss: () => ipcRenderer.invoke(IPC.ProactiveBubbleDismiss),
+    resize: (size: { width: number; height: number }) =>
+      ipcRenderer.invoke(IPC.ProactiveBubbleResize, size)
   },
   proactive: {
     getSettings: () => ipcRenderer.invoke(IPC.ProactiveGetSettings),

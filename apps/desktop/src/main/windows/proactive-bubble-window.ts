@@ -10,6 +10,7 @@ export function createProactiveBubbleWindow(devUrl: string | undefined): Browser
     height,
     frame: false,
     transparent: true,
+    backgroundColor: "#00000000",
     resizable: false,
     movable: false,
     alwaysOnTop: true,

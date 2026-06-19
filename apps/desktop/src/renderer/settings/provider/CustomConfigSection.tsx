@@ -8,6 +8,7 @@ import { BlSelect } from "../../shared/BlSelect.js";
 import { FieldLabel } from "../../shared/FieldHelp.js";
 import { ReadinessChecklist } from "./ReadinessChecklist.js";
 import type { ReadinessMap } from "./apply-recommended-bundle.js";
+import { ImageTierRow } from "./ImageTierRow.js";
 import { useT } from "../../shared/i18n/index.js";
 
 const IMAGE_TIERS: ImageTierName[] = ["economy", "standard", "premium"];
@@ -49,9 +50,18 @@ export interface CustomConfigSectionProps {
 export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Element {
   const t = useT();
   const [imageGenOpen, setImageGenOpen] = useState(true);
+  const [expandedTiers, setExpandedTiers] = useState<Record<ImageTierName, boolean>>({
+    economy: false,
+    standard: false,
+    premium: false
+  });
 
   function tierLabel(tier: ImageTierName): string {
     return t(TIER_KEYS[tier]);
+  }
+
+  function toggleTierExpanded(tier: ImageTierName): void {
+    setExpandedTiers((prev) => ({ ...prev, [tier]: !prev[tier] }));
   }
 
   return (
@@ -249,71 +259,25 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
               </div>
 
               <FieldLabel help={t("provider.help.imageTiers")}>{t("provider.imageGenTitle")}</FieldLabel>
+              <p className="bl-field-hint tier-list__lede">{t("provider.imageTierCostLede")}</p>
 
               <div className="tier-list">
-                {IMAGE_TIERS.map((tier) => {
-                  const cfg = props.imageConfig.tiers[tier];
-                  return (
-                    <div className="tier-row" key={tier}>
-                      <div className="tier-row__label">
-                        <strong>{tierLabel(tier)}</strong>
-                        <span>
-                          ${(cfg.estimatedCostUsd ?? 0).toFixed(3)} {t("provider.perImage")}
-                        </span>
-                      </div>
-                      <input
-                        className="input input--inline"
-                        value={cfg.model}
-                        onChange={(e) => props.onUpdateImageTier(tier, { model: e.target.value })}
-                        placeholder={t("provider.modelNamePlaceholder")}
-                      />
-                      <BlSelect
-                        className="bl-select--inline"
-                        triggerClassName="select select--inline"
-                        value={cfg.quality ?? "medium"}
-                        onChange={(quality) =>
-                          props.onUpdateImageTier(tier, {
-                            quality: quality as ImageTierConfigDTO["quality"]
-                          })
-                        }
-                        options={[
-                          { value: "low", label: "low" },
-                          { value: "medium", label: "medium" },
-                          { value: "high", label: "high" },
-                          { value: "standard", label: "standard" },
-                          { value: "hd", label: "hd" }
-                        ]}
-                      />
-                      <BlSelect
-                        className="bl-select--inline"
-                        triggerClassName="select select--inline"
-                        value={cfg.size ?? "1024x1024"}
-                        onChange={(size) =>
-                          props.onUpdateImageTier(tier, {
-                            size: size as ImageTierConfigDTO["size"]
-                          })
-                        }
-                        options={[
-                          { value: "1024x1024", label: "1024x1024" },
-                          { value: "1024x1536", label: "1024x1536" },
-                          { value: "1536x1024", label: "1536x1024" }
-                        ]}
-                      />
-                      <input
-                        className="input input--inline input--price"
-                        type="number"
-                        min={0}
-                        step={0.001}
-                        value={cfg.estimatedCostUsd ?? 0}
-                        onChange={(e) =>
-                          props.onUpdateImageTier(tier, {
-                            estimatedCostUsd: Number(e.target.value)
-                          })
-                        }
-                      />
-                    </div>
-                  );
-                })}
+                <div className="tier-list__head" aria-hidden>
+                  <span>{t("provider.tierColumnLabel")}</span>
+                  <span>{t("provider.modelColumnLabel")}</span>
+                  <span>{t("provider.imageParamsToggle")}</span>
+                </div>
+                {IMAGE_TIERS.map((tier) => (
+                  <ImageTierRow
+                    key={tier}
+                    tier={tier}
+                    tierLabel={tierLabel(tier)}
+                    cfg={props.imageConfig.tiers[tier]}
+                    expanded={expandedTiers[tier]}
+                    onToggleExpand={() => toggleTierExpanded(tier)}
+                    onUpdate={(patch) => props.onUpdateImageTier(tier, patch)}
+                  />
+                ))}
               </div>
 
               <div className="bl-action-bar">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import type { ProactiveBubblePlacement } from "../../shared/ipc-contract.js";
 import { useT } from "../shared/i18n/index.js";
 
@@ -12,71 +12,53 @@ export interface ProactiveBubbleState {
 interface ProactiveBubbleProps {
   bubble: ProactiveBubbleState | null;
   placement: ProactiveBubblePlacement;
-  hushMinutes: number;
   onDismiss: () => void;
   onOpenChat: () => void;
-  onHush: (minutes: number) => void;
 }
 
-export function ProactiveBubble({
-  bubble,
-  placement,
-  hushMinutes,
-  onDismiss,
-  onOpenChat,
-  onHush
-}: ProactiveBubbleProps): JSX.Element | null {
-  const t = useT();
-  const [paused, setPaused] = useState(false);
-  const timerRef = useRef<number | null>(null);
+export const ProactiveBubble = forwardRef<HTMLDivElement, ProactiveBubbleProps>(
+  function ProactiveBubble({ bubble, placement, onDismiss, onOpenChat }, ref): JSX.Element | null {
+    const t = useT();
+    const [paused, setPaused] = useState(false);
+    const timerRef = useRef<number | null>(null);
 
-  const clearTimer = useCallback(() => {
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
+    const clearTimer = useCallback(() => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    }, []);
 
-  useEffect(() => {
-    clearTimer();
-    if (!bubble || paused) return;
-    timerRef.current = window.setTimeout(onDismiss, AUTO_DISMISS_MS);
-    return clearTimer;
-  }, [bubble, paused, onDismiss, clearTimer]);
+    useEffect(() => {
+      clearTimer();
+      if (!bubble || paused) return;
+      timerRef.current = window.setTimeout(onDismiss, AUTO_DISMISS_MS);
+      return clearTimer;
+    }, [bubble, paused, onDismiss, clearTimer]);
 
-  if (!bubble) return null;
+    if (!bubble) return null;
 
-  return (
-    <div
-      className={`proactive-bubble proactive-bubble--${placement}`}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
-      <button
-        type="button"
-        className="proactive-bubble__close"
-        aria-label={t("pet.bubbleClose")}
-        onClick={onDismiss}
+    return (
+      <div
+        ref={ref}
+        className={`proactive-bubble proactive-bubble--${placement}`}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        ×
-      </button>
-      <button type="button" className="proactive-bubble__text" onClick={onOpenChat}>
-        {bubble.text}
-      </button>
-      <div className="proactive-bubble__actions">
         <button
           type="button"
-          className="proactive-bubble__action"
-          onClick={() => {
-            onHush(hushMinutes);
-            onDismiss();
-          }}
+          className="proactive-bubble__close"
+          aria-label={t("pet.bubbleClose")}
+          onClick={onDismiss}
         >
-          {t("pet.bubbleHush", { minutes: hushMinutes })}
+          ×
         </button>
+        <button type="button" className="proactive-bubble__text" onClick={onOpenChat}>
+          {bubble.text}
+        </button>
+        <div className="proactive-bubble__tail" aria-hidden />
       </div>
-      <div className="proactive-bubble__tail" aria-hidden />
-    </div>
-  );
-}
+    );
+  }
+);

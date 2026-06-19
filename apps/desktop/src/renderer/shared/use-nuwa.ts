@@ -37,6 +37,7 @@ interface NuwaWindow {
         model?: string;
         estimatedCostUsd?: number;
         error?: string;
+        requestFields?: string[];
       }>;
       clearKey(): Promise<void>;
     };
@@ -120,7 +121,7 @@ interface NuwaWindow {
       undoLastChange(): Promise<{ ok: boolean; profile?: import("../../shared/ipc-contract.js").UserProfile; reason?: string }>;
     };
     pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(tab?: import("../../shared/ipc-contract.js").SettingsTab): Promise<void>; hide(): Promise<void>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
-    proactiveBubble: { dismiss(): Promise<void> };
+    proactiveBubble: { dismiss(): Promise<void>; resize(size: { width: number; height: number }): Promise<void> };
     proactive: {
       getSettings(): Promise<ProactiveSettings>;
       setSettings(input: ProactiveSettings): Promise<ProactiveSettings>;
@@ -310,7 +311,8 @@ function makeNuwaStub(): NuwaWindow["nuwa"] {
       dragEnd: async () => undefined
     },
     proactiveBubble: {
-      dismiss: async () => undefined
+      dismiss: async () => undefined,
+      resize: async () => undefined
     },
     proactive: {
       getSettings: async () => ({

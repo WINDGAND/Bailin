@@ -21,7 +21,9 @@ import type { ProactiveOrchestrator } from "../proactive/proactive-orchestrator.
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 import { DEFAULT_VISION_MODEL, DEFAULT_WEB_SEARCH_MODEL } from "../adapters/llm-adapter.js";
 import {
+  buildTierRequestBody,
   DEFAULT_IMAGE_GENERATION_CONFIG,
+  modelSupportsTransparent,
   type ImageGenerationAdapter,
   type ImageGenerationConfig
 } from "../adapters/image-generation-adapter.js";
@@ -53,6 +55,7 @@ export interface IpcDeps {
   hidePet: () => void;
   setPetContextMenuOpen: (open: boolean) => "left" | "right" | null;
   dismissProactiveBubble: () => void;
+  resizeProactiveBubble: (size: { width: number; height: number }) => void;
   movePet: (x: number, y: number) => { x: number; y: number };
   ensurePetOnScreen: () => void;
   ensureSettingsWindow: (tab?: SettingsTab) => void;
@@ -216,9 +219,20 @@ export function registerIpc(deps: IpcDeps): void {
     if (!cap.ok) {
       return { ok: false, error: cap.reason };
     }
+    const cfg = imageGen.getConfig();
+    const tierName = tier ?? cfg.defaultTier;
+    const tierCfg = cfg.tiers[tierName];
+    const testPrompt =
+      "A friendly chibi mascot facing forward, transparent background, cell-safe pose.";
+    const previewBody = buildTierRequestBody(
+      tierCfg,
+      testPrompt,
+      {},
+      { transparentBackground: modelSupportsTransparent(tierCfg.model) }
+    );
+    const requestFields = Object.keys(previewBody);
     const res = await imageGen.generate({
-      prompt:
-        "A friendly chibi mascot facing forward, transparent background, cell-safe pose.",
+      prompt: testPrompt,
       tier,
       transparentBackground: true
     });
@@ -226,7 +240,8 @@ export function registerIpc(deps: IpcDeps): void {
       return {
         ok: false,
         latencyMs: Date.now() - startedAt,
-        error: `${res.code}: ${res.message}`
+        error: `${res.code}: ${res.message}`,
+        requestFields
       };
     }
     return {
@@ -234,7 +249,8 @@ export function registerIpc(deps: IpcDeps): void {
       latencyMs: res.durationMs,
       tier: res.tier,
       model: res.model,
-      estimatedCostUsd: res.estimatedCostUsd
+      estimatedCostUsd: res.estimatedCostUsd,
+      requestFields
     };
   });
 
@@ -755,6 +771,9 @@ export function registerIpc(deps: IpcDeps): void {
   });
   ipcMain.handle(IPC.ProactiveBubbleDismiss, () => {
     deps.dismissProactiveBubble();
+  });
+  ipcMain.handle(IPC.ProactiveBubbleResize, (_e, size: { width: number; height: number }) => {
+    deps.resizeProactiveBubble(size);
   });
 
   // ===== 拖动（主进程全程用 screen 坐标，规避渲染进程 CSS 像素 / DPI 差异） =====

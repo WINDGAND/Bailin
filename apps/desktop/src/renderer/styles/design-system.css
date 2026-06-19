@@ -2228,12 +2228,31 @@ body {
 }
 
 .tier-row {
-  display: grid;
-  grid-template-columns: 120px minmax(180px, 1fr) 104px 116px 84px 76px;
-  gap: 10px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 0;
   border-bottom: 1px solid var(--grid);
+}
+
+.tier-row__main {
+  display: grid;
+  grid-template-columns: 112px minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.tier-list__lede {
+  margin: -4px 0 10px;
+}
+
+.tier-list__head {
+  display: grid;
+  grid-template-columns: 112px minmax(160px, 1fr) auto;
+  gap: 10px;
+  padding: 0 0 6px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
 }
 
 .tier-row__label {
@@ -2241,9 +2260,79 @@ body {
   gap: 2px;
 }
 
-.tier-row__label span {
+.tier-row__cost {
   color: var(--ink-faint);
   font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.tier-row__expand.is-open {
+  color: var(--magenta);
+}
+
+.tier-row__hint {
+  margin: 0;
+  padding-left: 2px;
+}
+
+.tier-row__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 88%, var(--grid));
+  border: 1px solid var(--grid);
+}
+
+.tier-row__mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.tier-row__mode-label {
+  margin-bottom: 0;
+}
+
+.tier-row__mode-control {
+  flex: 1 1 280px;
+}
+
+.tier-row__openai-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.tier-row__custom-size {
+  margin-top: 8px;
+}
+
+.tier-row__custom-json {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tier-row__json-input {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  min-height: 108px;
+  resize: vertical;
+}
+
+.bl-field-hint--error {
+  color: var(--danger, #c0392b);
+}
+
+.provider-readiness-meter__hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-faint);
 }
 
 .input--inline,
@@ -2323,7 +2412,11 @@ body {
     opacity: 0;
   }
   .settings-row,
-  .tier-row {
+  .tier-row__main {
+    grid-template-columns: 1fr;
+  }
+
+  .tier-row__openai-grid {
     grid-template-columns: 1fr;
   }
 }
