@@ -431,7 +431,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         >
           <div className="forge-section__head">
             <span className="bl-field-label">{t("forge.referenceLabel")}</span>
-            <span className="forge-section__lede">{t("forge.referenceLede")}</span>
+
           </div>
           <div className="apple-dropzone">
             <div style={{ marginBottom: 10 }}>

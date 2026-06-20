@@ -291,6 +291,9 @@ export function PetApp(): JSX.Element {
               }}
               onPointerDown={onPetPointerDown}
               onPointerEnter={() => void nuwa.pet.setMouseIgnore(false)}
+              onPointerLeave={() => {
+                if (!draggingRef.current) void nuwa.pet.setMouseIgnore(true);
+              }}
               onPointerMove={onPetPointerMove}
               onPointerUp={onPetPointerUp}
               onPointerCancel={onPetPointerUp}
