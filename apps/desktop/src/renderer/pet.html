@@ -23,7 +23,8 @@
         background: var(--magenta-tint);
       }
       .pet-menu-item:active {
-        background: rgba(178, 24, 88, 0.14);
+        /* 比 hover 略深的 magenta tint；用 magenta-deep 透明叠加，dark mode 自动跟随 token */
+        background: color-mix(in srgb, var(--magenta-deep) 14%, transparent);
       }
       .pet-menu-item:focus-visible {
         background: var(--magenta-tint);
@@ -79,10 +80,15 @@
         pointer-events: auto;
         background: var(--paper);
         border: 1px solid var(--grid-strong);
-        border-radius: 12px;
+        border-radius: 14px;
         font-family: var(--font-body);
         font-size: 13px;
         color: var(--ink);
+        /* high-end-visual-design：inset 高光 + 两层柔阴影，模拟"嵌在桌面上的玻璃片" */
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.65),
+          0 1px 0 rgba(31, 58, 58, 0.04),
+          0 12px 28px -16px rgba(31, 58, 58, 0.28);
       }
       .pet-column {
         display: flex;

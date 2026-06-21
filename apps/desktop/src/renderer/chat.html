@@ -108,26 +108,35 @@
         height: 34px;
         padding: 0;
         border-radius: 999px;
-        border: 1px solid var(--grid);
+        border: 1px solid var(--grid-strong);
         background: color-mix(in srgb, var(--paper) 92%, transparent);
         backdrop-filter: blur(8px);
         box-shadow:
           0 6px 18px -8px rgba(23, 38, 38, 0.28),
-          inset 0 1px 0 rgba(255, 255, 255, 0.65);
+          inset 0 1px 0 rgba(255, 255, 255, 0.7);
         color: var(--ink);
         cursor: pointer;
+        /* 弹簧 cubic-bezier 替代 ease；hover 时 scale 微变化 + 边框 magenta */
         transition:
-          transform 120ms ease,
-          box-shadow 120ms ease,
-          background 120ms ease;
+          transform var(--motion-base) var(--ease-spring),
+          box-shadow var(--motion-fast) var(--ease-out),
+          background var(--motion-fast) var(--ease-out),
+          border-color var(--motion-fast) var(--ease-out);
       }
       .chat-scroll-down:hover {
         background: var(--paper);
-        box-shadow: 0 8px 22px -8px rgba(23, 38, 38, 0.32);
-        transform: translateX(-50%) translateY(-1px);
+        border-color: var(--magenta-soft);
+        box-shadow:
+          0 10px 24px -8px rgba(31, 58, 58, 0.34),
+          inset 0 1px 0 rgba(255, 255, 255, 0.75);
+        transform: translateX(-50%) translateY(-2px) scale(1.04);
       }
       .chat-scroll-down:active {
-        transform: translateX(-50%) translateY(0);
+        transform: translateX(-50%) translateY(0) scale(0.98);
+      }
+      .chat-scroll-down:focus-visible {
+        outline: 2px solid var(--magenta);
+        outline-offset: 3px;
       }
 
       .chat-panel__footer {
@@ -274,7 +283,7 @@
         padding-left: 0.15em;
       }
       .chat-md li::marker {
-        color: var(--ink-faint);
+        color: var(--magenta);
         font-weight: 600;
       }
       .chat-md strong {

@@ -309,7 +309,7 @@ export function CharacterLibrary({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t("library.searchPlaceholder")}
-                  aria-label={t("library.searchPlaceholder")}
+                  aria-label={t("library.searchAria")}
                 />
               </div>
             </div>

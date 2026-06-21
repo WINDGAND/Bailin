@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type {
   ImageGenerationConfigDTO,
   ImageTierConfigDTO,
@@ -6,6 +6,7 @@ import type {
 } from "../../../shared/ipc-contract.js";
 import { BlSelect } from "../../shared/BlSelect.js";
 import { FieldLabel } from "../../shared/FieldHelp.js";
+import { OptionGroup } from "../../shared/option-group.js";
 import { ReadinessChecklist } from "./ReadinessChecklist.js";
 import type { ReadinessMap } from "./apply-recommended-bundle.js";
 import { ImageTierRow } from "./ImageTierRow.js";
@@ -49,6 +50,7 @@ export interface CustomConfigSectionProps {
 
 export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Element {
   const t = useT();
+  const reuseLLMId = useId();
   const [imageGenOpen, setImageGenOpen] = useState(false);
   const [optionalOpen, setOptionalOpen] = useState(false);
   const [expandedTiers, setExpandedTiers] = useState<Record<ImageTierName, boolean>>({
@@ -195,8 +197,9 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
                   : t("provider.imageGenLedeIndependent")}
               </p>
 
-              <label className="row gap-2" style={{ alignItems: "center" }}>
+              <label htmlFor={reuseLLMId} className="row gap-2" style={{ alignItems: "center", cursor: "pointer" }}>
                 <input
+                  id={reuseLLMId}
                   type="checkbox"
                   checked={props.imageConfig.useLLMProvider}
                   onChange={(e) =>
@@ -251,24 +254,20 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
                 <FieldLabel help={t("provider.help.defaultTier")} className="bl-default-tier-row__label">
                   {t("provider.defaultTierLabel")}
                 </FieldLabel>
-                <div className="segmented bl-default-tier-row__control">
-                  {IMAGE_TIERS.map((tier) => (
-                    <button
-                      key={tier}
-                      type="button"
-                      className={
-                        props.imageConfig.defaultTier === tier
-                          ? "segmented__item is-active"
-                          : "segmented__item"
-                      }
-                      onClick={() =>
-                        props.onImageConfigChange((prev) => ({ ...prev, defaultTier: tier }))
-                      }
-                    >
-                      {tierLabel(tier)}
-                    </button>
-                  ))}
-                </div>
+                <OptionGroup<ImageTierName>
+                  value={props.imageConfig.defaultTier}
+                  onChange={(tier) =>
+                    props.onImageConfigChange((prev) => ({ ...prev, defaultTier: tier }))
+                  }
+                  ariaLabel={t("provider.defaultTierLabel")}
+                  className="segmented bl-default-tier-row__control"
+                  itemClassName="segmented__item"
+                  options={IMAGE_TIERS.map((tier) => ({
+                    value: tier,
+                    label: tierLabel(tier)
+                  }))}
+                  renderItem={(opt) => <>{opt.label}</>}
+                />
               </div>
 
               <FieldLabel help={t("provider.help.imageTiers")}>{t("provider.imageGenTitle")}</FieldLabel>

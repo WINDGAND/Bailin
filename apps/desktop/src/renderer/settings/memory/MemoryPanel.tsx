@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ulid } from "ulid";
 import type {
   MemorySettings,
@@ -18,6 +18,7 @@ import { useConfirm, useToast } from "../../shared/feedback.js";
 import { useDirtyTracker } from "../app/dirty-context.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
 import { formatChatTime } from "../../shared/format-chat-time.js";
+import { Icon } from "../../shared/icon.js";
 
 const MAX_NAME = 24;
 const UNDO_WINDOW_MS = 10 * 60 * 1000;
@@ -67,6 +68,7 @@ export function MemoryPanel(): JSX.Element {
   const [clearing, setClearing] = useState(false);
   const [pendingAutoBanner, setPendingAutoBanner] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const autoLearnToggleId = useId();
 
   const groupedFacts = useMemo(() => groupFactsByCategory(profile.facts), [profile.facts]);
   const hasAnyFacts = profile.facts.length > 0;
@@ -289,6 +291,8 @@ export function MemoryPanel(): JSX.Element {
       <div style={{ maxWidth: 760 }}>
         {pendingAutoBanner ? (
           <div
+            role="status"
+            aria-live="polite"
             style={{
               marginBottom: 16,
               display: "flex",
@@ -322,8 +326,9 @@ export function MemoryPanel(): JSX.Element {
                 {t("memory.autoLearnInterval", { n: settings.extractEveryNTurns })}
               </p>
             </div>
-            <label className="row gap-2" style={{ alignItems: "center", cursor: "pointer" }}>
+            <label htmlFor={autoLearnToggleId} className="row gap-2" style={{ alignItems: "center", cursor: "pointer" }}>
               <input
+                id={autoLearnToggleId}
                 type="checkbox"
                 checked={settings.autoLearnEnabled}
                 onChange={(e) => void toggleAutoLearn(e.target.checked)}
@@ -567,6 +572,7 @@ function FactGroup({
 function AddFactButton({ onAdd }: { onAdd: (category: ProfileFactCategory) => void }): JSX.Element {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const groupId = useId();
 
   return (
     <div className="row gap-2 row--wrap" style={{ position: "relative" }}>
@@ -574,11 +580,14 @@ function AddFactButton({ onAdd }: { onAdd: (category: ProfileFactCategory) => vo
         type="button"
         className="btn btn--ghost btn--sm"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={open ? groupId : undefined}
       >
         {t("memory.addFact")}
       </button>
       {open ? (
         <div
+          id={groupId}
           className="row gap-2 row--wrap"
           role="group"
           aria-label={t("memory.addFact")}
@@ -644,7 +653,7 @@ function FactRow({
             transition: "opacity var(--motion-fast) var(--ease-out)"
           }}
         >
-          ×
+          <Icon name="close" size={14} strokeWidth={2} />
         </button>
       </div>
       <div className="row gap-2" style={{ paddingLeft: 2 }}>

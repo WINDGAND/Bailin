@@ -68,6 +68,7 @@ export const zh = {
     title: "角色仓库",
     subtitle: "管理已经上桌的角色。这里不是数据库，是你的桌面生命管理台。",
     searchPlaceholder: "搜索角色名…",
+    searchAria: "按名字搜索角色",
     searchNoResults: "没有匹配的角色",
     paginationSummary: "共 {{total}} 个 · 第 {{page}} / {{pages}} 页",
     paginationPrev: "上一页",
@@ -948,7 +949,7 @@ export const zh = {
     trackCompanion: "陪伴",
     historyHint: "历史对话",
     historyAria: "历史对话",
-    newChatHint: "新对话 · Ctrl+L",
+    newChatHint: "新对话 · {{mod}}+L",
     newChatAria: "新对话",
     closeHint: "关闭 · Esc",
     closeAria: "关闭",
@@ -966,6 +967,8 @@ export const zh = {
     charInfoMmLabel: "思维框架",
     placeholderStreaming: "正在回答…（按 Enter 中断）",
     placeholderIdle: "想跟{{name}}说点什么？",
+    inputAria: "对话输入框",
+    emptyInputHint: "请先输入内容",
     cancelHint: "中断 · Enter",
     cancelAria: "中断",
     sendHint: "发送 · Enter",
@@ -1017,8 +1020,9 @@ export const zh = {
   pet: {
     dragHint: "左键点击唤起 · 拖动移动 · 右键菜单",
     ariaLabel: "桌宠角色 {{name}}；回车唤起对话，Shift+F10 打开菜单",
-    emptyTitle: "还没有角色，点这里挑一只",
-    emptyBody: "桌面还空着 · 点这里挑一只",
+    emptyEyebrow: "BAILIN · 待孵化",
+    emptyTitle: "挑一只角色入驻桌面",
+    emptyBody: "从角色仓库选一个内置示例，或自己造一只",
     menuCloseChat: "关闭对话",
     menuOpenChat: "唤起对话",
     menuHush: "安静 {{minutes}} 分钟",
@@ -1029,7 +1033,7 @@ export const zh = {
     menuBuiltInStarters: "内置示例",
     menuOpenSettings: "打开设置 / 角色仓库",
     menuHideToTray: "隐藏到托盘",
-    summonShortcut: "Ctrl+Shift+P"
+    summonShortcut: "{{mod}}+Shift+P"
   },
   time: {
     justNow: "刚刚",

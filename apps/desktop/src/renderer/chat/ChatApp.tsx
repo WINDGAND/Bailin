@@ -13,6 +13,8 @@ import { useToast } from "../shared/feedback.js";
 import { ChatBubble } from "../shared/chat-bubble.js";
 import { useChatSession } from "../shared/use-chat-session.js";
 import { useChatScroll } from "../shared/use-chat-scroll.js";
+import { copyToClipboard } from "../shared/copy-to-clipboard.js";
+import { usePlatformModKey } from "../shared/use-platform-mod-key.js";
 import { ChatResizeHandles } from "./ChatResizeHandles.js";
 import { ChatHistoryPanel } from "./ChatHistoryPanel.js";
 import type { ProfileChange, ProfileUpdatedEvent } from "../../shared/ipc-contract.js";
@@ -21,20 +23,45 @@ import { useT } from "../shared/i18n/index.js";
 export function ChatApp(): JSX.Element {
   const nuwa = useNuwa();
   const t = useT();
+  const modKey = usePlatformModKey();
   const { bundle } = useActiveCharacter();
   const { showToast } = useToast();
 
   const [input, setInput] = useState<string>("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [emptyShake, setEmptyShake] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const historyButtonRef = useRef<HTMLButtonElement | null>(null);
+  const emptyShakeTimerRef = useRef<number | null>(null);
 
   const closeHistory = useCallback(() => {
     setHistoryOpen(false);
     // 关闭后焦点还原到 history 触发按钮，满足 a11y dialog 焦点管理。
     window.setTimeout(() => historyButtonRef.current?.focus(), 0);
   }, []);
+
+  /**
+   * 提交空 input 时触发：抖动 form + 给屏幕阅读器 announce 提示。
+   * 用 rAF "强制"重置 → 设值，让连按 Enter 时第二次也能再触发动画。
+   */
+  const triggerEmptyShake = useCallback(() => {
+    if (emptyShakeTimerRef.current !== null) {
+      window.clearTimeout(emptyShakeTimerRef.current);
+    }
+    setEmptyShake(false);
+    requestAnimationFrame(() => {
+      setEmptyShake(true);
+      emptyShakeTimerRef.current = window.setTimeout(() => setEmptyShake(false), 500);
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (emptyShakeTimerRef.current !== null) window.clearTimeout(emptyShakeTimerRef.current);
+    },
+    []
+  );
   const chat = useChatSession(bundle, {
     surface: "chat",
     onInfo: (text) => showToast({ kind: "info", text }),
@@ -157,11 +184,8 @@ export function ChatApp(): JSX.Element {
   function onTextareaKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      if (chat.streaming) {
-        void chat.cancel();
-      } else {
-        void submit(input);
-      }
+      // 走 form 的 onSubmit 统一逻辑（含空检查 + shake / streaming 取消）
+      e.currentTarget.form?.requestSubmit();
       return;
     }
     if (e.key === "ArrowUp" && input.trim().length === 0) {
@@ -264,7 +288,7 @@ export function ChatApp(): JSX.Element {
             type="button"
             onClick={() => void startNewSession()}
             className="btn btn--icon"
-            data-hint={t("chat.newChatHint")}
+            data-hint={t("chat.newChatHint", { mod: modKey })}
             data-hint-placement="bottom"
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             aria-label={t("chat.newChatAria")}
@@ -326,8 +350,11 @@ export function ChatApp(): JSX.Element {
                   : undefined
               }
               onCopy={() => {
-                void navigator.clipboard.writeText(turn.content).then(() => {
-                  showToast({ kind: "info", text: t("feedback.toastCopiedShort") });
+                void copyToClipboard(turn.content, {
+                  onSuccess: () =>
+                    showToast({ kind: "info", text: t("feedback.toastCopiedShort") }),
+                  onFailure: () =>
+                    showToast({ kind: "error", text: t("feedback.toastCopyFailed") })
                 });
               }}
               onDelete={() => {
@@ -387,23 +414,26 @@ export function ChatApp(): JSX.Element {
 
         {/* Input */}
         <form
-          className="chat-panel__footer"
+          className={`chat-panel__footer${emptyShake ? " shake-once" : ""}`}
           onSubmit={(e) => {
             e.preventDefault();
-            if (streaming) void chat.cancel();
-            else void submit(input);
+            if (streaming) {
+              void chat.cancel();
+              return;
+            }
+            if (input.trim().length === 0) {
+              // 不再 disabled send 按钮；空提交反馈：抖动 form + SR live 区提示。
+              triggerEmptyShake();
+              textareaRef.current?.focus();
+              return;
+            }
+            void submit(input);
           }}
         >
           <textarea
             ref={textareaRef}
             className="textarea"
-            aria-label={
-              streaming
-                ? t("chat.placeholderStreaming")
-                : t("chat.placeholderIdle", {
-                    name: bundle?.card.meta.name ?? t("chat.defaultName")
-                  })
-            }
+            aria-label={t("chat.inputAria")}
             placeholder={
               streaming
                 ? t("chat.placeholderStreaming")
@@ -431,13 +461,16 @@ export function ChatApp(): JSX.Element {
             <button
               type="submit"
               className="btn btn--magenta btn--send"
-              disabled={input.trim().length === 0}
               data-hint={t("chat.sendHint")}
               aria-label={t("chat.sendAria")}
             >
               <SendIcon />
             </button>
           )}
+          {/* SR-only live 区：空提交时朗读"请先输入内容"。键盘 / 鼠标用户看 form 抖动。 */}
+          <span className="sr-only" aria-live="polite" aria-atomic="true">
+            {emptyShake ? t("chat.emptyInputHint") : ""}
+          </span>
         </form>
 
         {bundle && historyOpen ? (

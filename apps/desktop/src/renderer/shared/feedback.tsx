@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "./i18n/index.js";
+import { copyToClipboard } from "./copy-to-clipboard.js";
 
 /**
  * 通用反馈组件层：Toast / ConfirmDialog / Skeleton / StatusDot / CopyButton。
@@ -424,15 +425,17 @@ export function CopyButton({
   }, []);
 
   const onClick = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      if (timer.current != null) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => setCopied(false), 1200);
-      showToast({ kind: "success", text: t("feedback.toastCopied") });
-    } catch {
-      showToast({ kind: "warn", text: t("feedback.toastCopyFailed") });
-    }
+    await copyToClipboard(text, {
+      onSuccess: () => {
+        setCopied(true);
+        if (timer.current != null) window.clearTimeout(timer.current);
+        timer.current = window.setTimeout(() => setCopied(false), 1200);
+        showToast({ kind: "success", text: t("feedback.toastCopied") });
+      },
+      onFailure: () => {
+        showToast({ kind: "warn", text: t("feedback.toastCopyFailed") });
+      }
+    });
   }, [text, showToast, t]);
 
   return (

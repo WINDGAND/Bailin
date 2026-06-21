@@ -530,6 +530,20 @@ body {
   gap: var(--space-4);
 }
 
+/* visually-hidden / screen-reader-only：仅供 SR 朗读，视觉完全隐藏。
+   配合 aria-live 区域使用，向键盘 / SR 用户提示非可视的状态（如表单错误）。 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Kept for backward compatibility — intentionally empty.
  * Previously rendered grain / scanline overlays; removed because they
  * reduced contrast and hurt readability without serving any function.
@@ -3736,7 +3750,9 @@ body {
 }
 
 [data-theme="dark"] .modal-backdrop {
-  background: rgba(26, 22, 19, 0.62);
+  /* 提升到 0.72：之前 0.62 在暗模式下让 modal 边缘不够"漂浮"，
+     用户视线容易被背景内容拽走。0.72 视觉聚焦更明确。 */
+  background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(6px);
 }
 
@@ -3926,33 +3942,127 @@ body {
 }
 
 [data-theme="dark"] .chat-scroll-down:hover {
-  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.4);
+  background: var(--paper-warm);
+  border-color: var(--magenta-soft);
+  box-shadow:
+    0 10px 24px -8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 248, 240, 0.08);
 }
 
-/* —— 桌宠空状态 CTA —— */
-/* —— 桌宠空状态 CTA —— */
+/* —— 桌宠空状态 CTA ——
+ *
+ * 设计意图（high-end-visual-design 风格）：
+ * - 不再用突兀的黑底白字（之前与暖纸主色系完全脱节）
+ * - 暖纸 paper-warm 背景 + magenta hairline + magenta sparkle pip
+ * - 三栏排版：eyebrow（mono uppercase）/ display serif title / body subtitle
+ * - hover：translateY(-1px) + 加强 shadow，弹簧 cubic-bezier
+ * - sparkle pip 放右上角，提示"待孵化"
+ */
 .pet-empty-cta {
+  position: relative;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px 14px;
-  background: rgba(23, 38, 38, 0.92);
-  color: var(--paper);
-  border-radius: 14px;
-  border: 1px solid rgba(245, 239, 226, 0.18);
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px 36px 14px 16px;
+  background: var(--paper-warm);
+  color: var(--ink);
+  border-radius: 16px;
+  border: 1px solid var(--magenta-soft);
   font-family: var(--font-body);
-  font-size: 13px;
   cursor: pointer;
-  box-shadow: 0 18px 36px -16px rgba(0, 0, 0, 0.5);
+  max-width: 280px;
+  text-align: left;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 14px 32px -16px rgba(31, 58, 58, 0.32);
+  transition:
+    transform var(--motion-fast) var(--ease-spring),
+    box-shadow var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.pet-empty-cta:hover {
+  transform: translateY(-1px);
+  border-color: var(--magenta);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 18px 38px -16px rgba(31, 58, 58, 0.42);
+}
+
+.pet-empty-cta:active {
+  transform: translateY(0);
+}
+
+.pet-empty-cta:focus-visible {
+  outline: 2px solid var(--magenta);
+  outline-offset: 3px;
+}
+
+.pet-empty-cta__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--magenta);
+  line-height: 1;
+}
+
+.pet-empty-cta__title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.pet-empty-cta__body {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.pet-empty-cta__pip {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(178, 24, 88, 0.10);
+  color: var(--magenta);
+  transition: transform var(--motion-base) var(--ease-spring);
+}
+
+.pet-empty-cta:hover .pet-empty-cta__pip {
+  transform: rotate(15deg) scale(1.08);
 }
 
 [data-theme="dark"] .pet-empty-cta {
   background: rgba(46, 40, 36, 0.94);
+  border-color: rgba(212, 103, 148, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 36px -16px rgba(0, 0, 0, 0.42);
+}
+
+[data-theme="dark"] .pet-empty-cta__eyebrow {
+  color: var(--magenta-soft);
+}
+
+[data-theme="dark"] .pet-empty-cta__title {
   color: var(--ink);
-  border-color: rgba(236, 230, 223, 0.12);
-  box-shadow: 0 18px 36px -16px rgba(0, 0, 0, 0.42);
+}
+
+[data-theme="dark"] .pet-empty-cta__pip {
+  background: rgba(212, 103, 148, 0.16);
+  color: var(--magenta-soft);
 }
 
 /* —— 自绘下拉（替代原生 select，避免 Windows 系统蓝高亮） —— */
@@ -4094,3 +4204,46 @@ body {
   color: var(--ink);
   box-shadow: inset 2px 0 0 rgba(212, 103, 148, 0.48);
 }
+
+/* =============================================================
+ * Phase 5 · Dark mode 补漏
+ *
+ * 以下样式在内联 <style>（pet.html / chat.html）里用了 hardcoded
+ * rgba(23/31, 38/58, 38/58, ...) 暗墨青阴影色，在 dark 模式下不会
+ * 自动变深 → 看不出立体感。这里补 dark override，用 rgba(0,0,0,...)
+ * 或 paper-warm/magenta tokens 适配。
+ * ============================================================= */
+
+/* —— Pet menu panel：暗模式更深的 outer shadow + 弱化白色 inset —— */
+[data-theme="dark"] .pet-menu-panel {
+  border-color: var(--hairline-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 240, 0.06),
+    0 1px 0 rgba(0, 0, 0, 0.3),
+    0 12px 28px -16px rgba(0, 0, 0, 0.55);
+}
+
+/* —— Chat history 抽屉面板：左侧分隔 + 漂浮阴影 —— */
+[data-theme="dark"] .chat-history__panel {
+  background: var(--paper);
+  border-left-color: var(--hairline-strong);
+  box-shadow: -12px 0 32px -20px rgba(0, 0, 0, 0.55);
+}
+
+/* —— Chat history 抽屉背后 backdrop：light 是 rgba(23,38,38,0.18)
+   在 dark 下既不会变深，也丢失语义。改用更深的纯黑 + blur，
+   同时保留 backdrop-blur(3px) 跟随 inline style 设置（不在这里覆盖）。 */
+[data-theme="dark"] .chat-history__backdrop {
+  background: rgba(0, 0, 0, 0.42);
+}
+
+/* —— Markdown bold：light 用 --ink 已经够强，dark 下 --ink 是奶油色，
+   bold 用同色弱区分；提亮一点 weight 让 strong 更明确 —— */
+[data-theme="dark"] .chat-md strong {
+  color: #f5efe6; /* 比 --ink 再亮一档，确保 bold 视觉上"重" */
+}
+
+/* —— Proactive bubble tail：dark 下 paper 是深棕，tail border 用 grid-strong
+   自动跟随，但 tail 本身 background 需要从 hardcoded var(--paper) 适配；
+   因为 tail 的 background 是 light/dark 都用 var(--paper)，token 已经
+   自动重定义为深棕，所以无需 override。这里仅注释占位。 */

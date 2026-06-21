@@ -1,9 +1,10 @@
 import { useCallback } from "react";
-import { StreamCursor } from "./feedback.js";
+import { StreamCursor, useToast } from "./feedback.js";
 import { formatChatTime } from "./format-chat-time.js";
 import { ChatMarkdown } from "./chat-markdown.js";
 import { useT, useI18n } from "./i18n/index.js";
 import type { StreamPhase } from "./use-chat-session.js";
+import { copyToClipboard } from "./copy-to-clipboard.js";
 
 export interface ChatBubbleProps {
   role: "user" | "assistant";
@@ -25,6 +26,7 @@ export interface ChatBubbleProps {
 export function ChatBubble(props: ChatBubbleProps): JSX.Element {
   const t = useT();
   const { locale } = useI18n();
+  const { showToast } = useToast();
   const {
     role,
     content,
@@ -43,17 +45,18 @@ export function ChatBubble(props: ChatBubbleProps): JSX.Element {
   } = props;
   const isUser = role === "user";
 
-  const copyToClipboard = useCallback(async () => {
+  // 默认复制：调用 onCopy 由父组件统一处理 toast（ChatApp 已接 copyToClipboard）；
+  // 未传 onCopy 时本地直接调 copyToClipboard 并显式 toast 失败。
+  const handleCopy = useCallback(async () => {
     if (onCopy) {
       onCopy();
       return;
     }
-    try {
-      await navigator.clipboard.writeText(content);
-    } catch {
-      // ignore
-    }
-  }, [content, onCopy]);
+    await copyToClipboard(content, {
+      onSuccess: () => showToast({ kind: "info", text: t("feedback.toastCopiedShort") }),
+      onFailure: () => showToast({ kind: "error", text: t("feedback.toastCopyFailed") })
+    });
+  }, [content, onCopy, showToast, t]);
 
   if (error) {
     return (
@@ -97,11 +100,11 @@ export function ChatBubble(props: ChatBubbleProps): JSX.Element {
   const userActions = [
     { key: "delete", label: t("chat.actionDelete"), icon: <IconTrash />, onClick: onDelete },
     { key: "edit", label: t("chat.actionEdit"), icon: <IconEdit />, onClick: onEdit },
-    { key: "copy", label: t("chat.actionCopy"), icon: <IconCopy />, onClick: () => void copyToClipboard() }
+    { key: "copy", label: t("chat.actionCopy"), icon: <IconCopy />, onClick: () => void handleCopy() }
   ];
 
   const assistantActions = [
-    { key: "copy", label: t("chat.actionCopy"), icon: <IconCopy />, onClick: () => void copyToClipboard() },
+    { key: "copy", label: t("chat.actionCopy"), icon: <IconCopy />, onClick: () => void handleCopy() },
     { key: "quote", label: t("chat.actionQuote"), icon: <IconQuote />, onClick: onQuote },
     { key: "regen", label: t("chat.actionRegenerate"), icon: <IconRegenerate />, onClick: onRegenerate },
     { key: "delete", label: t("chat.actionDelete"), icon: <IconTrash />, onClick: onDelete }

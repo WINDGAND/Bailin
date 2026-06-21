@@ -75,27 +75,30 @@
         position: absolute;
         top: 4px;
         right: 4px;
-        width: 20px;
-        height: 20px;
+        width: 22px;
+        height: 22px;
         padding: 0;
         border: none;
         border-radius: 999px;
         background: transparent;
-        font-family: var(--font-body);
-        font-size: 15px;
-        font-weight: 400;
-        line-height: 1;
         color: var(--ink-faint);
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: background var(--motion-fast) var(--ease-out),
-                    color var(--motion-fast) var(--ease-out);
+        transition:
+          background var(--motion-fast) var(--ease-out),
+          color var(--motion-fast) var(--ease-out),
+          transform var(--motion-fast) var(--ease-spring);
       }
       .proactive-bubble__close:hover {
-        color: var(--ink);
-        background: var(--paper-deep);
+        /* magenta-tint 比 paper-deep 更清晰地标示 destructive 意图 */
+        color: var(--magenta);
+        background: var(--magenta-tint);
+        transform: scale(1.08);
+      }
+      .proactive-bubble__close:active {
+        transform: scale(0.94);
       }
       .proactive-bubble__close:focus-visible {
         outline: 2px solid var(--magenta-soft);

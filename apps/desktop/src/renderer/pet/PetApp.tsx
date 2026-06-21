@@ -9,6 +9,10 @@ import {
   resolveDslPetPixelSize
 } from "../../shared/pet-display-scale.js";
 import { useT, useI18n } from "../shared/i18n/index.js";
+import { useRafThrottle } from "../shared/use-raf-throttle.js";
+import { useReducedMotion } from "../shared/use-reduced-motion.js";
+import { Icon } from "../shared/icon.js";
+import { usePlatformModKey } from "../shared/use-platform-mod-key.js";
 import { usePetSpriteEvents } from "./use-pet-sprite-events.js";
 
 interface Starter {
@@ -70,6 +74,7 @@ export function PetApp(): JSX.Element {
   }, [bundle?.sprite, petDisplayScale]);
 
   // ===== 首次破壳 =====
+  const reducedMotion = useReducedMotion();
   const [hatchKey, setHatchKey] = useState<number>(0);
   const [hatching, setHatching] = useState(false);
   useEffect(() => {
@@ -79,6 +84,13 @@ export function PetApp(): JSX.Element {
       setHatching(false);
       return;
     }
+    // reduced-motion 用户跳过破壳动画：直接标记完成，立即显示桌宠。
+    // （不要让他们卡在 820ms 静止画面等待。）
+    if (reducedMotion) {
+      setHatching(false);
+      sessionStorage.setItem(k, "1");
+      return;
+    }
     setHatching(true);
     setHatchKey((n) => n + 1);
     const t = window.setTimeout(() => {
@@ -86,38 +98,43 @@ export function PetApp(): JSX.Element {
       sessionStorage.setItem(k, "1");
     }, 820);
     return () => window.clearTimeout(t);
-  }, [bundle?.card.id]);
+  }, [bundle?.card.id, reducedMotion]);
 
   // ===== 鼠标穿透（仅在桌宠像素 BBox 内才接收事件） =====
+  // 用 rAF 节流：每帧最多 1 次 getBoundingClientRect + setMouseIgnore IPC，
+  // 避免高频 mousemove（每秒 60+ 次）压主进程。
   const draggingRef = useRef(false);
-  useEffect(() => {
-    let mouseInside = false;
-    let ignored = true;
-    const handler = (e: MouseEvent) => {
-      if (draggingRef.current) return;
-      const hitTargets = [wrapRef.current, menuLayerRef.current].filter(Boolean) as HTMLElement[];
-      const inside = hitTargets.some((el) => {
-        const rect = el.getBoundingClientRect();
-        return (
-          e.clientX >= rect.left &&
-          e.clientX <= rect.right &&
-          e.clientY >= rect.top &&
-          e.clientY <= rect.bottom
-        );
-      });
-      if (inside !== mouseInside) {
-        mouseInside = inside;
-        const nextIgnored = !inside;
-        if (nextIgnored !== ignored) {
-          ignored = nextIgnored;
-          void nuwa.pet.setMouseIgnore(nextIgnored);
-        }
+  const checkMouseIgnore = useRafThrottle((clientX: number, clientY: number) => {
+    if (draggingRef.current) return;
+    const hitTargets = [wrapRef.current, menuLayerRef.current].filter(Boolean) as HTMLElement[];
+    const inside = hitTargets.some((el) => {
+      const rect = el.getBoundingClientRect();
+      return (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      );
+    });
+    if (inside !== mouseInsideRef.current) {
+      mouseInsideRef.current = inside;
+      const nextIgnored = !inside;
+      if (nextIgnored !== ignoredRef.current) {
+        ignoredRef.current = nextIgnored;
+        void nuwa.pet.setMouseIgnore(nextIgnored);
       }
+    }
+  });
+  const mouseInsideRef = useRef(false);
+  const ignoredRef = useRef(true);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      checkMouseIgnore(e.clientX, e.clientY);
     };
     window.addEventListener("mousemove", handler, { passive: true });
     void nuwa.pet.setMouseIgnore(true);
     return () => window.removeEventListener("mousemove", handler);
-  }, [nuwa]);
+  }, [nuwa, checkMouseIgnore]);
 
   // ===== 拖动 + 单击唤起 =====
   const dragStateRef = useRef<{
@@ -407,15 +424,14 @@ function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element
         type="button"
         onClick={onPickStarter}
         className="fade-in-up pet-empty-cta"
-        title={t("pet.emptyTitle")}
+        aria-label={t("pet.emptyTitle")}
       >
-        <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">
-          <rect x="9" y="3" width="6" height="6" fill="rgba(245,239,226,0.7)" />
-          <rect x="7" y="9" width="10" height="8" fill="rgba(245,239,226,0.4)" />
-          <rect x="8" y="17" width="3" height="4" fill="rgba(245,239,226,0.3)" />
-          <rect x="13" y="17" width="3" height="4" fill="rgba(245,239,226,0.3)" />
-        </svg>
-        <span style={{ fontWeight: 500 }}>{t("pet.emptyBody")}</span>
+        <span className="pet-empty-cta__eyebrow">{t("pet.emptyEyebrow")}</span>
+        <span className="pet-empty-cta__title">{t("pet.emptyTitle")}</span>
+        <span className="pet-empty-cta__body">{t("pet.emptyBody")}</span>
+        <span className="pet-empty-cta__pip" aria-hidden="true">
+          <Icon name="sparkle" size={14} strokeWidth={1.6} />
+        </span>
       </button>
     </div>
   );
@@ -439,6 +455,7 @@ interface MenuProps {
 
 function PetContextMenu(props: MenuProps): JSX.Element {
   const t = useT();
+  const modKey = usePlatformModKey();
   const {
     chatOpen,
     characters,
@@ -518,7 +535,7 @@ function PetContextMenu(props: MenuProps): JSX.Element {
     >
       <MenuItem
         label={chatOpen ? t("pet.menuCloseChat") : t("pet.menuOpenChat")}
-        hint={t("pet.summonShortcut")}
+        hint={t("pet.summonShortcut", { mod: modKey })}
         onClick={onSummon}
         delay={0}
       />
@@ -552,7 +569,8 @@ function PetContextMenu(props: MenuProps): JSX.Element {
             characters.map((c, i) => (
               <MenuItem
                 key={c.id}
-                label={`${c.isActive ? "● " : "  "}${c.name}`}
+                label={c.name}
+                active={c.isActive}
                 sub={
                   c.track === "utility" ? t("chat.trackUtility") : t("chat.trackCompanion")
                 }
@@ -601,6 +619,7 @@ function MenuItem({
   sub,
   hint,
   hasSubmenu,
+  active,
   onClick,
   delay = 0
 }: {
@@ -608,6 +627,8 @@ function MenuItem({
   sub?: string;
   hint?: string;
   hasSubmenu?: boolean;
+  /** 标记当前 active（替代原来的 "● " 前导字符 + 空白对齐 hack）。 */
+  active?: boolean;
   onClick: () => void;
   delay?: number;
 }): JSX.Element {
@@ -617,6 +638,7 @@ function MenuItem({
       type="button"
       onClick={onClick}
       onMouseDown={(e) => e.stopPropagation()}
+      aria-current={active ? "true" : undefined}
       className="fade-in-up pet-menu-item"
       style={{
         display: "flex",
@@ -635,9 +657,33 @@ function MenuItem({
         animationDelay: `${delay}ms`
       }}
     >
-      <span>{label}</span>
-      <span style={{ color: "var(--ink-faint)", fontSize: 11, marginLeft: 12 }}>
-        {hint ?? sub ?? (hasSubmenu ? "▸" : "")}
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        {/* active 小圆点；inactive 也占位（统一对齐，不再依赖空白字符 hack）。 */}
+        <span
+          aria-hidden="true"
+          style={{
+            display: "inline-flex",
+            width: 8,
+            justifyContent: "center",
+            color: "var(--magenta)"
+          }}
+        >
+          {active ? <Icon name="dot" size={6} /> : null}
+        </span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {label}
+        </span>
+      </span>
+      <span
+        style={{
+          color: "var(--ink-faint)",
+          fontSize: 11,
+          marginLeft: 12,
+          display: "inline-flex",
+          alignItems: "center"
+        }}
+      >
+        {hint ?? sub ?? (hasSubmenu ? <Icon name="chevron-right" size={12} /> : null)}
       </span>
     </button>
   );

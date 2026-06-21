@@ -4,6 +4,8 @@ import { formatSessionListTime } from "../shared/format-chat-time.js";
 import { useConfirm } from "../shared/feedback.js";
 import { useNuwa } from "../shared/use-nuwa.js";
 import { useT, useI18n } from "../shared/i18n/index.js";
+import { useFocusTrap } from "../shared/use-focus-trap.js";
+import { Icon } from "../shared/icon.js";
 
 export interface ChatHistoryPanelProps {
   open: boolean;
@@ -101,42 +103,14 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, renamingId, menuSessionId]);
 
-  // dialog 打开时把焦点移入「新对话」按钮。
-  useEffect(() => {
-    if (!open) return;
-    const id = window.setTimeout(() => newButtonRef.current?.focus(), 0);
-    return () => window.clearTimeout(id);
-  }, [open]);
-
-  // dialog focus trap：Tab / Shift+Tab 在 panel 内循环；
-  // 当三点菜单已展开时跳过此处理，让下方 menu 导航 useEffect 接管。
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return;
-      if (menuSessionId) return; // 让 menu navigation 接管 Tab
-      const panel = panelRef.current;
-      if (!panel) return;
-      const focusables = Array.from(
-        panel.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
-      );
-      if (focusables.length === 0) return;
-      const first = focusables[0]!;
-      const last = focusables[focusables.length - 1]!;
-      const active = document.activeElement;
-      if (e.shiftKey && active === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, menuSessionId]);
+  // dialog 打开时把焦点移入「新对话」按钮 + Tab/Shift+Tab 在 panel 内 trap；
+  // 三点菜单展开时让位，由下方 menu 导航 useEffect 接管 Tab。
+  useFocusTrap({
+    enabled: open,
+    containerRef: panelRef,
+    initialFocusRef: newButtonRef,
+    paused: menuSessionId !== null
+  });
 
   // 三点菜单打开时：焦点入首项 + Arrow/Home/End/Tab 在菜单内循环。
   useEffect(() => {
@@ -356,7 +330,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
                           setMenuSessionId((cur) => (cur === session.id ? null : session.id));
                         }}
                       >
-                        ⋯
+                        <Icon name="more-horizontal" size={16} />
                       </button>
                       {menuSessionId === session.id ? (
                         <div

@@ -1,5 +1,6 @@
 import { useCallback, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { useNuwa } from "../shared/use-nuwa.js";
+import { useRafThrottle } from "../shared/use-raf-throttle.js";
 
 type ResizeEdge = "e" | "s" | "se";
 
@@ -20,6 +21,12 @@ const NO_DRAG = { WebkitAppRegion: "no-drag" } as CSSProperties;
 export function ChatResizeHandles(): JSX.Element {
   const nuwa = useNuwa();
   const dragRef = useRef<DragState | null>(null);
+
+  // rAF 节流 IPC 调用：高频 pointermove（每秒 60+）只发最后一帧的尺寸。
+  // 拖完时再发一次 final（onPointerEnd 内调），保证最终尺寸落地。
+  const resizeIpc = useRafThrottle((width: number, height: number) => {
+    void nuwa.chat.resize({ width, height });
+  });
 
   const onPointerDown = useCallback(
     (edge: ResizeEdge, e: ReactPointerEvent<HTMLDivElement>) => {
@@ -51,15 +58,17 @@ export function ChatResizeHandles(): JSX.Element {
       if (s.edge === "s" || s.edge === "se") {
         height = s.startHeight + (e.screenY - s.startScreenY);
       }
-      void nuwa.chat.resize({ width, height });
+      resizeIpc(width, height);
     },
-    [nuwa]
+    [resizeIpc]
   );
 
   const onPointerEnd = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
+    // useRafThrottle 会在下一帧把最后一次参数 flush 给 IPC，
+    // 组件挂载期间无需额外手动 flush。
     dragRef.current = null;
   }, []);
 

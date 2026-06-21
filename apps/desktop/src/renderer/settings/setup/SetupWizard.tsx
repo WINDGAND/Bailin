@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { STARTER_BUNDLES } from "@nuwa-pet/starter-library";
 import { stripRoleSuffix, type CharacterBundle } from "@nuwa-pet/character-protocol";
+import { usePlatformModKey } from "../../shared/use-platform-mod-key.js";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
@@ -39,6 +40,7 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
   const [step, setStep] = useState<Step>("welcome");
   const stepIndex = STEP_ORDER.indexOf(step);
   const stepTitle = t(STEP_KEYS[step]);
+  const modKeyLabel = usePlatformModKey();
 
   function next() {
     const i = STEP_ORDER.indexOf(step);
@@ -76,7 +78,7 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
           {HAS_STARTERS ? t("setup.introWithStarters") : t("setup.introWithoutStarters")}
         </p>
         <div className="row gap-1 body-sm">
-          <span className="kbd">Ctrl</span>
+          <span className="kbd">{modKeyLabel}</span>
           <span className="kbd">Shift</span>
           <span className="kbd">P</span>
           <span style={{ marginLeft: 6 }}>{t("setup.shortcutHint")}</span>
@@ -208,6 +210,20 @@ function ProviderStep({
     | { kind: "error"; message: string }
   >({ kind: "idle" });
 
+  /** 防止用户在 connect 异步 / 500ms 延迟期间 back 后还触发 onNext。 */
+  const mountedRef = useRef(true);
+  const nextTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+      if (nextTimerRef.current !== null) {
+        window.clearTimeout(nextTimerRef.current);
+        nextTimerRef.current = null;
+      }
+    },
+    []
+  );
+
   const selectedBundle = getRecommendedBundle(selectedBundleId)!;
 
   async function connect(): Promise<void> {
@@ -221,12 +237,14 @@ function ProviderStep({
       selectedBundle,
       apiKey.trim(),
       (key, state) => {
+        if (!mountedRef.current) return;
         if (state.status === "running" && key === "chat") {
           setOneClickProgress(t("provider.oneClickProgressChat"));
         }
         setReadiness((prev) => ({ ...prev, [key]: state }));
       }
     );
+    if (!mountedRef.current) return;
     setBusy(false);
     setOneClickProgress(null);
 
@@ -247,7 +265,11 @@ function ProviderStep({
       kind: "success",
       text: t("provider.toastChatReady", { latency: chat.latencyMs ?? "?" })
     });
-    setTimeout(onNext, 500);
+    // 500ms 后自动 next；用 ref 跟踪 timer，组件 unmount / back 时 cleanup 取消。
+    nextTimerRef.current = window.setTimeout(() => {
+      nextTimerRef.current = null;
+      if (mountedRef.current) onNext();
+    }, 500);
   }
 
   return (
