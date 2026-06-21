@@ -562,14 +562,14 @@ export function CharacterLibrary({
                   style={{
                     fontFamily: "var(--font-display)",
                     fontStyle: "italic",
-                    fontSize: 18,
-                    lineHeight: 1.5,
+                    fontSize: 17,
+                    lineHeight: 1.6,
                     margin: 0,
-                    padding: "12px 16px",
-                    borderLeft: "3px solid var(--magenta)",
+                    padding: "16px 20px",
+                    border: "1px solid var(--grid)",
                     color: "var(--ink)",
-                    background: "var(--paper)",
-                    borderRadius: 4
+                    background: "var(--paper-warm)",
+                    borderRadius: "var(--radius-md)"
                   }}
                 >
                   「{selected.card.meta.quoteOneLiner}」
@@ -870,9 +870,10 @@ export function CharacterLibrary({
                         className="body-sm"
                         style={{
                           margin: "6px 0",
-                          padding: 10,
+                          padding: "10px 12px",
                           background: "var(--paper-deep)",
-                          borderLeft: "3px solid var(--ink-ghost)"
+                          border: "1px solid var(--grid)",
+                          borderRadius: "var(--radius-sm)"
                         }}
                       >
                         {qualityReport.voiceTest.sample}

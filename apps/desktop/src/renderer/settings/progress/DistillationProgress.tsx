@@ -643,9 +643,10 @@ function QualityReportCard({
             className="body-sm"
             style={{
               margin: "8px 0",
-              padding: 10,
-              background: "rgba(31,58,58,0.04)",
-              borderLeft: "3px solid var(--magenta)"
+              padding: "10px 12px",
+              background: "var(--paper-deep)",
+              border: "1px solid var(--grid)",
+              borderRadius: "var(--radius-sm)"
             }}
           >
             {report.voiceTest.sample}

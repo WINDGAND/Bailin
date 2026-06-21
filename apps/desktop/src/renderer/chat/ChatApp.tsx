@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent
 } from "react";
+import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import { useToast } from "../shared/feedback.js";
@@ -190,7 +191,7 @@ export function ChatApp(): JSX.Element {
       <ChatResizeHandles />
       <div className="chat-panel">
         {/* Header */}
-        <div className="chat-panel__header">
+          <div className="chat-panel__header" style={{ position: "relative" }}>
           <div className="chat-panel__avatar" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
             {bundle ? (
               <PetRenderer program={bundle.sprite} width={36} height={36} />
@@ -205,17 +206,23 @@ export function ChatApp(): JSX.Element {
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              className="display display--section"
-              style={{
-                fontSize: 15,
-                lineHeight: 1.1,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap"
-              }}
-            >
-              {bundle?.card.meta.name ?? t("chat.noCharacter")}
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div
+                className="display display--section"
+                style={{
+                  fontSize: 15,
+                  lineHeight: 1.1,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  minWidth: 0
+                }}
+              >
+                {bundle?.card.meta.name ?? t("chat.noCharacter")}
+              </div>
+              {bundle && bundle.card.mentalModels.length > 0 ? (
+                <CharacterInfoButton bundle={bundle} t={t} />
+              ) : null}
             </div>
             <div className="mono" style={{ fontSize: 11, marginTop: 2 }}>
               {bundle?.card.meta.sourceName ?? ""}
@@ -268,9 +275,15 @@ export function ChatApp(): JSX.Element {
           </button>
         </div>
 
-        {/* Body */}
-        <div className="chat-panel__body-wrap">
-          <div ref={listRef} className="chat-panel__body">
+          {/* Body */}
+          <div className="chat-panel__body-wrap">
+            <div
+              ref={listRef}
+              className="chat-panel__body"
+              role="log"
+              aria-live="polite"
+              aria-label={t("chat.messageListAria")}
+            >
           {chat.turns.length === 0 && !chat.pending && chat.phase === "idle" ? (
             <div className="stack fade-in-up" style={{ marginTop: 4 }}>
               <div className="eyebrow">{t("chat.suggestionsEyebrow")}</div>
@@ -279,6 +292,7 @@ export function ChatApp(): JSX.Element {
                   key={s.id}
                   className="suggestion fade-in-up"
                   style={{ animationDelay: `${i * 60}ms` }}
+                  aria-label={`${s.title}：${s.hint}`}
                   onClick={() => void submit(s.prompt)}
                 >
                   <span className="suggestion__title">{s.title}</span>
@@ -373,6 +387,13 @@ export function ChatApp(): JSX.Element {
           <textarea
             ref={textareaRef}
             className="textarea"
+            aria-label={
+              streaming
+                ? t("chat.placeholderStreaming")
+                : t("chat.placeholderIdle", {
+                    name: bundle?.card.meta.name ?? t("chat.defaultName")
+                  })
+            }
             placeholder={
               streaming
                 ? t("chat.placeholderStreaming")
@@ -551,5 +572,96 @@ function StopIcon(): JSX.Element {
     <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
       <rect x="6" y="6" width="12" height="12" rx="1.5" />
     </svg>
+  );
+}
+
+function InfoIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="12"
+      height="12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8h.01M11 12h1v4h1" />
+    </svg>
+  );
+}
+
+function CharacterInfoButton({
+  bundle,
+  t
+}: {
+  bundle: CharacterBundle;
+  t: (key: string, params?: Record<string, string>) => string;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (btnRef.current && !btnRef.current.closest(".char-info-popover") && !btnRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("mousedown", handler);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", handler);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const mms = bundle.card.mentalModels.slice(0, 3);
+  const quote = bundle.card.meta.quoteOneLiner;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className="char-info-btn"
+        aria-label={t("chat.charInfoAria")}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <InfoIcon />
+      </button>
+      {open ? (
+        <div className="char-info-popover" role="tooltip">
+          <div className="char-info-popover__name">{bundle.card.meta.name}</div>
+          {bundle.card.meta.sourceName ? (
+            <div className="char-info-popover__source">{bundle.card.meta.sourceName}</div>
+          ) : null}
+          {mms.length > 0 ? (
+            <>
+              <div className="char-info-popover__section">{t("chat.charInfoMmLabel")}</div>
+              <div className="char-info-popover__mm">
+                {mms.map((mm) => (
+                  <div key={mm.name} className="char-info-popover__mm-item">
+                    <div className="char-info-popover__mm-name">{mm.name}</div>
+                    <div className="char-info-popover__mm-liner">{mm.oneLiner}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+          {quote ? (
+            <>
+              <div className="char-info-popover__divider" />
+              <div className="char-info-popover__quote">「{quote}」</div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   );
 }

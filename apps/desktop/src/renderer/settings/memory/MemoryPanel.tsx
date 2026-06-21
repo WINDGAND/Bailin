@@ -310,7 +310,7 @@ export function MemoryPanel(): JSX.Element {
 
         <div
           className="apple-list-row"
-          style={{ marginBottom: 24, paddingBottom: 20, borderBottom: "1px solid var(--line-soft)" }}
+          style={{ marginBottom: 24, paddingBottom: 20, borderBottom: "1px solid var(--grid)" }}
         >
           <div className="row row--between gap-3" style={{ alignItems: "flex-start" }}>
             <div>
@@ -580,6 +580,8 @@ function AddFactButton({ onAdd }: { onAdd: (category: ProfileFactCategory) => vo
       {open ? (
         <div
           className="row gap-2 row--wrap"
+          role="group"
+          aria-label={t("memory.addFact")}
           style={{ marginTop: 4 }}
         >
           {PROFILE_FACT_CATEGORY_ORDER.map((cat) => (

@@ -19,11 +19,17 @@
         height: 100%;
         -webkit-app-region: no-drag;
       }
+      .pet-menu-item:hover {
+        background: var(--magenta-tint);
+      }
+      .pet-menu-item:active {
+        background: rgba(178, 24, 88, 0.14);
+      }
       .pet-menu-item:focus {
         outline: none;
       }
       .pet-menu-item:focus-visible {
-        background: rgba(178, 24, 88, 0.08);
+        background: var(--magenta-tint);
         outline: 2px solid var(--magenta-soft);
         outline-offset: -2px;
       }

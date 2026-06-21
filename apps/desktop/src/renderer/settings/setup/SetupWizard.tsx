@@ -172,12 +172,12 @@ function SimpleStep({
       <div className="row row--between gap-2" style={{ marginTop: 22 }}>
         <div>
           {onBack ? (
-            <button className="btn btn--ghost btn--sm" onClick={onBack}>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}>
               {t("setup.back")}
             </button>
           ) : null}
         </div>
-        <button className="btn btn--magenta" onClick={onNext}>
+        <button type="button" className="btn btn--magenta" onClick={onNext}>
           {cta}
         </button>
       </div>
@@ -296,7 +296,7 @@ function ProviderStep({
       ) : null}
 
       <div className="row row--between gap-2" style={{ marginTop: 12 }}>
-        <button className="btn btn--ghost btn--sm" onClick={onBack}>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}>
           {t("setup.back")}
         </button>
       </div>
@@ -412,10 +412,10 @@ function StarterStep({
         ))}
       </div>
       <div className="row row--between gap-2" style={{ marginTop: 16 }}>
-        <button className="btn btn--ghost btn--sm" onClick={onBack}>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}>
           {t("setup.back")}
         </button>
-        <button className="btn btn--ghost" onClick={() => void onDone()}>
+        <button type="button" className="btn btn--ghost" onClick={() => void onDone()}>
           {t("setup.starterSkip")}
         </button>
       </div>

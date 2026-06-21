@@ -2059,25 +2059,31 @@ body {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  padding: 10px 10px 10px 0;
-  border-left: 3px solid var(--grid-strong);
-  padding-left: 10px;
+  padding: 10px 12px;
+  background: var(--paper-deep);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--grid);
+  border-top: 2px solid var(--grid-stronger);
 }
 
 .provider-role-spectrum__item--chat {
-  border-left-color: var(--magenta-soft);
+  border-top-color: var(--magenta-soft);
+  background: var(--magenta-tint);
 }
 
 .provider-role-spectrum__item--vision {
-  border-left-color: var(--amber);
+  border-top-color: var(--amber);
+  background: var(--amber-tint);
 }
 
 .provider-role-spectrum__item--webSearch {
-  border-left-color: var(--emerald);
+  border-top-color: var(--emerald);
+  background: var(--emerald-tint);
 }
 
 .provider-role-spectrum__item--imageGen {
-  border-left-color: var(--magenta-deep);
+  border-top-color: var(--magenta-deep);
+  background: rgba(138, 17, 63, 0.06);
 }
 
 .provider-role-spectrum__index {

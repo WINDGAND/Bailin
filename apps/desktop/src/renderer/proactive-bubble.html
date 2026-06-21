@@ -6,6 +6,7 @@
     <meta name="color-scheme" content="light dark" />
     <title>百灵 Bailin · 陪伴气泡</title>
     <script src="./shared/theme-init.js"></script>
+    <link rel="stylesheet" href="./styles/design-system.css" />
     <style>
       html,
       body,
@@ -45,32 +46,53 @@
         max-width: min(300px, calc(100vw - 16px));
         min-width: 120px;
         padding: 14px 16px 12px;
-        background: #ffffff;
-        border: 1.5px solid rgba(0, 0, 0, 0.12);
-        border-radius: 16px;
+        background: var(--paper);
+        border: 1px solid var(--grid-strong);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-card);
         pointer-events: auto;
         box-sizing: border-box;
+        animation: bubble-appear 200ms var(--ease-out) both;
+      }
+      @keyframes bubble-appear {
+        from {
+          opacity: 0;
+          transform: translateY(6px) scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
       }
       .proactive-bubble__close {
         position: absolute;
-        top: 2px;
-        right: 2px;
-        width: 18px;
-        height: 18px;
+        top: 4px;
+        right: 4px;
+        width: 20px;
+        height: 20px;
         padding: 0;
         border: none;
         border-radius: 999px;
         background: transparent;
-        font-family: "Yuanti SC", "YouYuan", "PingFang SC", sans-serif;
-        font-size: 14px;
-        font-weight: 700;
+        font-family: var(--font-body);
+        font-size: 15px;
+        font-weight: 400;
         line-height: 1;
-        color: rgba(0, 0, 0, 0.45);
+        color: var(--ink-faint);
         cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background var(--motion-fast) var(--ease-out),
+                    color var(--motion-fast) var(--ease-out);
       }
       .proactive-bubble__close:hover {
-        color: #000000;
-        background: rgba(0, 0, 0, 0.06);
+        color: var(--ink);
+        background: var(--paper-deep);
+      }
+      .proactive-bubble__close:focus-visible {
+        outline: 2px solid var(--magenta-soft);
+        outline-offset: 1px;
       }
       .proactive-bubble__text {
         display: block;
@@ -79,21 +101,26 @@
         padding: 0 4px;
         background: none;
         border: none;
-        font-family: "Yuanti SC", "YouYuan", "STYuanti", "PingFang SC", "Microsoft YaHei UI",
-          sans-serif;
+        font-family: var(--font-body);
         font-size: 14px;
-        font-weight: 700;
-        line-height: 1.55;
-        color: #000000;
+        font-weight: 600;
+        line-height: 1.6;
+        color: var(--ink);
         text-align: center;
         cursor: pointer;
-        letter-spacing: 0.02em;
+        letter-spacing: 0.01em;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         word-break: break-word;
+        transition: color var(--motion-fast) var(--ease-out);
       }
       .proactive-bubble__text:hover {
-        opacity: 0.82;
+        color: var(--magenta);
+      }
+      .proactive-bubble__text:focus-visible {
+        outline: 2px solid var(--magenta-soft);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
       }
       .proactive-bubble__tail {
         position: absolute;
@@ -101,17 +128,17 @@
         transform: translateX(-50%) rotate(45deg);
         width: 10px;
         height: 10px;
-        background: #ffffff;
+        background: var(--paper);
       }
       .proactive-bubble--above .proactive-bubble__tail {
         bottom: -6px;
-        border-right: 1.5px solid rgba(0, 0, 0, 0.12);
-        border-bottom: 1.5px solid rgba(0, 0, 0, 0.12);
+        border-right: 1px solid var(--grid-strong);
+        border-bottom: 1px solid var(--grid-strong);
       }
       .proactive-bubble--below .proactive-bubble__tail {
         top: -6px;
-        border-left: 1.5px solid rgba(0, 0, 0, 0.12);
-        border-top: 1.5px solid rgba(0, 0, 0, 0.12);
+        border-left: 1px solid var(--grid-strong);
+        border-top: 1px solid var(--grid-strong);
       }
     </style>
   </head>

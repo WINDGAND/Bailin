@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ProactiveBubblePlacement, ProactiveWhisperEvent } from "../../shared/ipc-contract.js";
 import { ProactiveBubble, type ProactiveBubbleState } from "../pet/proactive-bubble.js";
 import { useNuwa } from "../shared/use-nuwa.js";

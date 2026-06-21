@@ -49,12 +49,15 @@ export interface CustomConfigSectionProps {
 
 export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Element {
   const t = useT();
-  const [imageGenOpen, setImageGenOpen] = useState(true);
+  const [imageGenOpen, setImageGenOpen] = useState(false);
+  const [optionalOpen, setOptionalOpen] = useState(false);
   const [expandedTiers, setExpandedTiers] = useState<Record<ImageTierName, boolean>>({
     economy: false,
     standard: false,
     premium: false
   });
+
+  const hasReadinessResults = Object.values(props.readiness).some((s) => s.status !== "idle");
 
   function tierLabel(tier: ImageTierName): string {
     return t(TIER_KEYS[tier]);
@@ -142,31 +145,41 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
                 placeholder={t("provider.mainModelPlaceholder")}
               />
             </div>
-            <div className="bl-provider-form-field">
-              <FieldLabel htmlFor="provider-vision" help={t("provider.help.visionModel")}>
-                {t("provider.visionModelLabel")}
-              </FieldLabel>
-              <input
-                id="provider-vision"
-                className="input"
-                value={props.visionModel}
-                onChange={(e) => props.onVisionModelChange(e.target.value)}
-                placeholder={t("provider.visionModelPlaceholder")}
-              />
-            </div>
-            <div className="bl-provider-form-field bl-provider-form-field--wide">
-              <FieldLabel htmlFor="provider-web" help={t("provider.help.webSearchModel")}>
-                {t("provider.webSearchModelLabel")}
-              </FieldLabel>
-              <input
-                id="provider-web"
-                className="input"
-                value={props.webSearchModel}
-                onChange={(e) => props.onWebSearchModelChange(e.target.value)}
-                placeholder={t("provider.webSearchModelPlaceholder")}
-              />
-            </div>
           </div>
+
+          <details
+            className="forge-disclosure"
+            open={optionalOpen}
+            onToggle={(e) => setOptionalOpen(e.currentTarget.open)}
+          >
+            <summary>{t("provider.optionalModelsTitle")}</summary>
+            <div className="bl-provider-form-grid" style={{ marginTop: 12 }}>
+              <div className="bl-provider-form-field">
+                <FieldLabel htmlFor="provider-vision" help={t("provider.help.visionModel")}>
+                  {t("provider.visionModelLabel")}
+                </FieldLabel>
+                <input
+                  id="provider-vision"
+                  className="input"
+                  value={props.visionModel}
+                  onChange={(e) => props.onVisionModelChange(e.target.value)}
+                  placeholder={t("provider.visionModelPlaceholder")}
+                />
+              </div>
+              <div className="bl-provider-form-field bl-provider-form-field--wide">
+                <FieldLabel htmlFor="provider-web" help={t("provider.help.webSearchModel")}>
+                  {t("provider.webSearchModelLabel")}
+                </FieldLabel>
+                <input
+                  id="provider-web"
+                  className="input"
+                  value={props.webSearchModel}
+                  onChange={(e) => props.onWebSearchModelChange(e.target.value)}
+                  placeholder={t("provider.webSearchModelPlaceholder")}
+                />
+              </div>
+            </div>
+          </details>
 
           <details
             className="forge-disclosure"
@@ -319,7 +332,9 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
             <p className="bl-one-click-progress">{props.verifyProgress}</p>
           ) : null}
 
-          <ReadinessChecklist readiness={props.readiness} />
+          {hasReadinessResults ? (
+            <ReadinessChecklist readiness={props.readiness} />
+          ) : null}
         </div>
       </div>
     </section>

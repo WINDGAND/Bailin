@@ -166,7 +166,7 @@ export function QuickStartSection({
 
             {oneClickProgress ? <p className="bl-one-click-progress">{oneClickProgress}</p> : null}
 
-            {!compact ? (
+            {!compact && Object.values(readiness).some((s) => s.status !== "idle") ? (
               <ReadinessChecklist
                 readiness={readiness}
                 rows={["chat"]}

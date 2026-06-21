@@ -73,7 +73,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const [saving, setSaving] = useState(false);
   const [llmTesting, setLlmTesting] = useState(false);
   const [hushDraftMinutes, setHushDraftMinutes] = useState<ProactiveSettings["defaultHushMinutes"]>(30);
-  const [advancedOpen, setAdvancedOpen] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(true);
 
   const refreshStatus = useCallback(async () => {
@@ -456,23 +456,33 @@ export function DesktopBehaviorPanel(): JSX.Element {
                   />
                   <span className="body-sm">{t("desktop.quietHoursEnable")}</span>
                 </label>
-                <input
-                  className="input"
-                  type="time"
-                  value={settings.quietHoursStart}
-                  onChange={(e) => void save({ ...settings, quietHoursStart: e.currentTarget.value })}
-                  style={{ maxWidth: 140 }}
-                  disabled={!settings.quietHoursEnabled}
-                />
+                <label className="row gap-1" style={{ alignItems: "center" }}>
+                  <span className="body-sm" style={{ whiteSpace: "nowrap" }}>
+                    {t("desktop.quietHoursFrom")}
+                  </span>
+                  <input
+                    className="input"
+                    type="time"
+                    value={settings.quietHoursStart}
+                    onChange={(e) => void save({ ...settings, quietHoursStart: e.currentTarget.value })}
+                    style={{ maxWidth: 140 }}
+                    disabled={!settings.quietHoursEnabled}
+                  />
+                </label>
                 <span className="body-sm">{t("desktop.quietHoursTo")}</span>
-                <input
-                  className="input"
-                  type="time"
-                  value={settings.quietHoursEnd}
-                  onChange={(e) => void save({ ...settings, quietHoursEnd: e.currentTarget.value })}
-                  style={{ maxWidth: 140 }}
-                  disabled={!settings.quietHoursEnabled}
-                />
+                <label className="row gap-1" style={{ alignItems: "center" }}>
+                  <span className="body-sm" style={{ whiteSpace: "nowrap" }}>
+                    {t("desktop.quietHoursUntil")}
+                  </span>
+                  <input
+                    className="input"
+                    type="time"
+                    value={settings.quietHoursEnd}
+                    onChange={(e) => void save({ ...settings, quietHoursEnd: e.currentTarget.value })}
+                    style={{ maxWidth: 140 }}
+                    disabled={!settings.quietHoursEnabled}
+                  />
+                </label>
               </div>
             </Field>
           </div>

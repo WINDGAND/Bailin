@@ -371,9 +371,11 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
           <div className="forge-section__head">
             <span className="bl-field-label">{t("forge.modeLabel")}</span>
           </div>
-          <div className="forge-mode">
+          <div className="forge-mode" role="radiogroup" aria-label={t("forge.modeLabel")}>
             <button
               type="button"
+              role="radio"
+              aria-checked={mode === "deep"}
               disabled={deepDisabled}
               className={`forge-mode__card ${mode === "deep" ? "is-active" : ""}`}
               onClick={() => !deepDisabled && setMode("deep")}
@@ -384,6 +386,8 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={mode === "quick"}
               className={`forge-mode__card ${mode === "quick" ? "is-active" : ""}`}
               onClick={() => setMode("quick")}
             >
@@ -398,16 +402,22 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                 <div className="bl-status-strip__title">{t("forge.deepDisabledTitle")}</div>
                 <div className="bl-status-strip__detail">
                   {t("forge.deepDisabledBodyBefore")}
-                  <a
-                    href="#"
-                    style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      nuwa.pet.openSettings();
+                  <button
+                    type="button"
+                    style={{
+                      color: "inherit",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 2,
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      font: "inherit",
+                      cursor: "pointer"
                     }}
+                    onClick={() => nuwa.pet.openSettings()}
                   >
                     {t("nav.key")}
-                  </a>
+                  </button>
                   {t("forge.deepDisabledBodyAfter")}
                 </div>
               </div>
@@ -459,6 +469,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             />
             <input
               className="input"
+              aria-label={t("forge.urlPlaceholder")}
               placeholder={t("forge.urlPlaceholder")}
               value={urlDraft}
               onChange={(e) => setUrlDraft(e.target.value)}

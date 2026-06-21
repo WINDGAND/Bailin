@@ -552,8 +552,6 @@ function MenuItem({
         transition: "background 120ms var(--ease-out)",
         animationDelay: `${delay}ms`
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(178, 24, 88, 0.08)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <span>{label}</span>
       <span style={{ color: "var(--ink-faint)", fontSize: 11, marginLeft: 12 }}>
