@@ -2,14 +2,17 @@
  * 方向：Editorial × Soft Pixel Studio
  * - Display: 系统 serif（ui-serif → Source Han Serif → Songti SC），无网络字体加载
  * - Body / UI: 系统 sans
- * - Mono: JetBrains Mono（仅用在 .kbd / .mono / .eyebrow）
+ * - Mono: 系统等宽（ui-monospace → Cascadia Code → SF Mono → Consolas）
+ *         JetBrains Mono 仅在用户本机已装时生效，绝不走网络下载
  * - Palette: 暖纸米色 + 深墨青 ink + 洋红 accent
  *
  * 取舍：删去全屏 grain / scanlines / 卡片噪点 mix-blend-mode 装饰，
  * 把视觉预算还给反馈 / 状态 / 微动效。
+ *
+ * 字体策略：本文件已彻底移除 @import url(fonts.googleapis.com/...)，
+ * 离线 / 断网 / GFW 阻断时不会出现首屏白屏。如需引入定制字体，
+ * 必须打包到 apps/desktop/src/renderer/styles/fonts/ 并用 @font-face local 引用。
  */
-
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap");
 
 :root {
   /* Palette */
@@ -59,7 +62,7 @@
   --font-body:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Microsoft YaHei UI", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "SF Mono", monospace;
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "JetBrains Mono", monospace;
 
   /* Sizing */
   --radius-sm: 6px;
