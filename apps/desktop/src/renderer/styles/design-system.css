@@ -12,6 +12,49 @@
  * 字体策略：本文件已彻底移除 @import url(fonts.googleapis.com/...)，
  * 离线 / 断网 / GFW 阻断时不会出现首屏白屏。如需引入定制字体，
  * 必须打包到 apps/desktop/src/renderer/styles/fonts/ 并用 @font-face local 引用。
+ *
+ * ============================================================================
+ *  TABLE OF CONTENTS  ——  用 IDE 的 "符号查找" 跳节，或 grep "/* \[N\]"
+ * ============================================================================
+ *  [01] :root tokens          (line ~30)   颜色 / 字体 / 间距 / 动画
+ *  [02] reset / base          (line ~100)  *, html, body, #root
+ *  [03] Display headings      (line ~124)  .display .display--hero
+ *  [04] Body / kbd / mono     (line ~148)  .body-md .kbd .mono .eyebrow
+ *  [05] Surfaces / cards      (line ~193)  .card .card--interactive .divider
+ *  [06] Buttons               (line ~229)  .btn .btn--ghost --magenta --danger --icon --sm
+ *  [07] Inputs                (line ~336)  .input .textarea .input-group .char-count
+ *  [08] Layout helpers        (line ~443)  .stack .row .row--end .gap-N .grain .pixel-canvas
+ *  [09] Badges                (line ~507)  .badge .badge--utility/companion/skeleton/active
+ *  [10] Status dot            (line ~543)
+ *  [11] Toast                 (line ~584)
+ *  [12] Modal / Dialog        (line ~636)  .modal-backdrop .modal
+ *  [13] Motion utilities      (line ~659)  .fade-in-up .fade-in .shake-once .shimmer
+ *  [14] Spinner               (line ~694)
+ *  [15] Stream cursor         (line ~715)  .stream-cursor--thinking/streaming
+ *  [16] Progress bar          (line ~751)
+ *  [17] Wizard steps          (line ~778)
+ *  [18] @keyframes            (line ~799)
+ *  [19] Hatch (pet appear)    (line ~936)
+ *  [20] Suggestion card       (line ~958)
+ *  [21] Empty state           (line ~998)
+ *  [22] Tooltip (data-hint)   (line ~1022)
+ *  [23] Scrollbars            (line ~1074)
+ *  [24] Settings language     (line ~1095)
+ *  [25] Provider UX           (line ~1460)  bundles / readiness / field help / quick start
+ *  [26] Create Character page (line ~2442)  forge-* 系列
+ *  [27] Section headings v2   (line ~2840)  替代 eyebrow + h2 双行
+ *  [28] Status strip          (line ~2878)  左侧 4px 实色竖条卡片
+ *  [29] Tag (彩色变体)        (line ~2969)
+ *  [30] Action bar            (line ~3021)  表单底部主操作条
+ *  [31] Chip group            (line ~3071)
+ *  [32] Sidebar nav 强化       (line ~3121)
+ *  [33] Dark theme overrides  (line ~3134)  data-theme="dark"
+ *  [34] App-specific          (line ~3562)  pet-empty / bl-select / pet-preview
+ *
+ * 维护提示：
+ * - 新增样式时请归入对应章节；如果是新业务模块，加新章节 [NN] 并更新本 ToC
+ * - 单文件 4000+ 行已经偏大，下版本（v0.1.x）建议拆 base.css / components.css /
+ *   windows/{pet,chat,settings,bubble}.css 模块化
  */
 
 :root {
@@ -373,6 +416,15 @@ body {
   background: var(--paper-deep);
   color: var(--ink-faint);
   cursor: not-allowed;
+}
+/* 原生 time / date / datetime 在 disabled 时浏览器默认视觉极弱
+   （Windows Chromium 几乎看不出来），用 opacity 强化区分。 */
+.input[type="time"]:disabled,
+.input[type="date"]:disabled,
+.input[type="datetime-local"]:disabled,
+.input[type="month"]:disabled,
+.input[type="week"]:disabled {
+  opacity: 0.55;
 }
 .input--invalid,
 .textarea--invalid {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import type {
   CompanionFrequency,
   ProactiveSettings,
@@ -75,6 +75,8 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const [hushDraftMinutes, setHushDraftMinutes] = useState<ProactiveSettings["defaultHushMinutes"]>(30);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(true);
+  const smartScreenshotId = useId();
+  const quietHoursEnabledId = useId();
 
   const refreshStatus = useCallback(async () => {
     setStatus(await nuwa.proactive.getStatus());
@@ -289,6 +291,8 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 max={Math.round(PET_DISPLAY_SCALE_MAX * 100)}
                 step={Math.round(PET_DISPLAY_SCALE_STEP * 100)}
                 value={scalePercent}
+                aria-label={t("desktop.petSizeLabel")}
+                aria-valuetext={t("desktop.petSizePercent", { percent: scalePercent })}
                 onChange={(e) => {
                   const nextScale = clampPetDisplayScale(Number(e.currentTarget.value) / 100);
                   void save({ ...settings, petDisplayScale: nextScale }, { silent: true });
@@ -344,8 +348,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
               background: "var(--bl-surface-muted, rgba(0, 0, 0, 0.03))"
             }}
           >
-            <label className="row gap-2" style={{ cursor: "pointer" }}>
+            <label htmlFor={smartScreenshotId} className="row gap-2" style={{ cursor: "pointer" }}>
               <input
+                id={smartScreenshotId}
                 type="checkbox"
                 checked={screenshotsOn}
                 onChange={(e) => void setSmartScreenshot(e.currentTarget.checked)}
@@ -446,8 +451,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
 
             <Field label={t("desktop.quietHoursTitle")}>
               <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-                <label className="row gap-2">
+                <label htmlFor={quietHoursEnabledId} className="row gap-2" style={{ cursor: "pointer" }}>
                   <input
+                    id={quietHoursEnabledId}
                     type="checkbox"
                     checked={settings.quietHoursEnabled}
                     onChange={(e) =>
@@ -598,9 +604,14 @@ function ScenarioToggle({
   checked: boolean;
   onChange: (v: boolean) => void;
 }): JSX.Element {
+  const id = useId();
+  // 用 htmlFor + id 显式关联，比依赖嵌套 <label><input> 在 Windows NVDA / Narrator
+  // 部分版本上更稳。span 上的 cursor: pointer 也有意义了 ——
+  // 点 label 文字也能切换 checkbox。
   return (
-    <label className="row gap-2" style={{ cursor: "pointer" }}>
+    <label htmlFor={id} className="row gap-2" style={{ cursor: "pointer" }}>
       <input
+        id={id}
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.currentTarget.checked)}

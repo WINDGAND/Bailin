@@ -27,7 +27,11 @@ function isLatinName(value: string): boolean {
   return trimmed.length > 0 && !hasCjk(trimmed) && LATIN_NAME_RE.test(trimmed);
 }
 
-function stripRoleSuffix(name: string): string {
+/**
+ * 去掉「· 视角助手 / · 灵感角色 / · 灵感视角 / · 思维顾问 / · 桌面陪伴」
+ * 等中文后缀。UI 展示场景应统一使用本函数，避免各处自写不完整的本地正则。
+ */
+export function stripRoleSuffix(name: string): string {
   return name.replace(ROLE_SUFFIX_RE, "").trim();
 }
 

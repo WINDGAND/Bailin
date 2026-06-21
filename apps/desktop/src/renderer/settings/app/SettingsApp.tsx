@@ -209,6 +209,15 @@ export function SettingsApp(): JSX.Element {
                 </button>
               </div>
 
+              {/*
+                设计选择 (S3 ARIA review):
+                我们走 "page navigation" 模式而不是 "tablist" 模式 ——
+                  - 每个 tab 切换近似独立 page（main 会 unmount/remount），不是页面内嵌的 tabpanel
+                  - aria-current="page" 是 W3C 推荐的 navigation 模式标记
+                  - 不接管 ArrowKeys：用户用 Tab 在按钮间移动，Cmd+1..6 数字键直达
+                如未来想换成 tablist 模式，记得同时改 main 为 role="tabpanel" + aria-labelledby
+                + 加 Arrow 键导航 + 取消 main 的 key={tab} 强制 remount。
+              */}
               <nav className="settings-nav" aria-label={t("common.settingsNav")}>
                 {TABS.map((tabDef) => (
                   <button
@@ -225,6 +234,14 @@ export function SettingsApp(): JSX.Element {
                 ))}
               </nav>
             </aside>
+            {/*
+              设计选择 (S7 ARIA review):
+              main 用 key={tab} 强制 unmount/remount。优点：state 自动重置，
+              避免 stale state；缺点：未保存 draft 会丢失。后者已被 tryGoTab 的
+              dirtyRef + confirm 模态拦截，因此 unmount 是可接受的取舍。
+              如未来想保留 panel state（visibility 切换而非 unmount），
+              需要每个 panel 显式处理 hidden 时的 lifecycle（取消订阅、暂停 polling 等）。
+            */}
             <main key={tab} className="settings-main fade-in-up">
               <div className="settings-page settings-page--centered">
                 {tab !== "create" ? (

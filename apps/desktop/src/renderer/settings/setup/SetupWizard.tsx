@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { STARTER_BUNDLES } from "@nuwa-pet/starter-library";
-import type { CharacterBundle } from "@nuwa-pet/character-protocol";
+import { stripRoleSuffix, type CharacterBundle } from "@nuwa-pet/character-protocol";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
@@ -381,7 +381,7 @@ function StarterStep({
                   className="display display--section"
                   style={{ fontSize: 14, lineHeight: 1.15 }}
                 >
-                  {bundle.card.meta.name.replace(/ · 视角助手| · 灵感陪伴/, "")}
+                  {stripRoleSuffix(bundle.card.meta.name)}
                 </span>
                 <span className={`badge badge--${bundle.card.meta.track}`}>
                   {bundle.card.meta.track === "utility"
