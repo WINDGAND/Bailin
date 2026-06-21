@@ -64,6 +64,13 @@
           transform: translateY(0) scale(1);
         }
       }
+      /* reduced-motion 用户：直接停在 to 状态，不要小幅震入；
+         比依赖 design-system.css 全局 animation-duration:0.001ms 兜底更明确。 */
+      @media (prefers-reduced-motion: reduce) {
+        .proactive-bubble {
+          animation: none;
+        }
+      }
       .proactive-bubble__close {
         position: absolute;
         top: 4px;
