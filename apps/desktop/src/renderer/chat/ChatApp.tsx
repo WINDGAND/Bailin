@@ -28,6 +28,13 @@ export function ChatApp(): JSX.Element {
   const [historyOpen, setHistoryOpen] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const historyButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const closeHistory = useCallback(() => {
+    setHistoryOpen(false);
+    // 关闭后焦点还原到 history 触发按钮，满足 a11y dialog 焦点管理。
+    window.setTimeout(() => historyButtonRef.current?.focus(), 0);
+  }, []);
   const chat = useChatSession(bundle, {
     surface: "chat",
     onInfo: (text) => showToast({ kind: "info", text }),
@@ -131,7 +138,7 @@ export function ChatApp(): JSX.Element {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (historyOpen) {
-          setHistoryOpen(false);
+          closeHistory();
           return;
         }
         void nuwa.chat.hide();
@@ -144,7 +151,7 @@ export function ChatApp(): JSX.Element {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [nuwa, startNewSession, historyOpen]);
+  }, [nuwa, startNewSession, historyOpen, closeHistory]);
 
   // ===== textarea 自动高度 + 快捷键 =====
   function onTextareaKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
@@ -239,6 +246,7 @@ export function ChatApp(): JSX.Element {
             </span>
           ) : null}
           <button
+            ref={historyButtonRef}
             type="button"
             onClick={() => setHistoryOpen(true)}
             className="btn btn--icon"
@@ -246,6 +254,8 @@ export function ChatApp(): JSX.Element {
             data-hint-placement="bottom"
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             aria-label={t("chat.historyAria")}
+            aria-haspopup="dialog"
+            aria-expanded={historyOpen}
             disabled={!bundle}
           >
             <HistoryIcon />
@@ -435,7 +445,7 @@ export function ChatApp(): JSX.Element {
             open={historyOpen}
             characterId={bundle.card.id}
             activeSessionId={chat.sessionId}
-            onClose={() => setHistoryOpen(false)}
+            onClose={closeHistory}
             onSwitch={(sessionId) => {
               forceScrollOnNextUpdate();
               void chat.switchSession(sessionId);
@@ -603,15 +613,25 @@ function CharacterInfoButton({
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (btnRef.current && !btnRef.current.closest(".char-info-popover") && !btnRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      // 点击落在按钮或 popover 内都不应关闭。
+      // 旧代码用 btnRef.current.closest('.char-info-popover') 永远 false（按钮不是 popover 后代），
+      // 导致点击 popover 内部时本应不关，实际全关。
+      if (btnRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
         setOpen(false);
+        btnRef.current?.focus();
       }
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     window.addEventListener("mousedown", handler);
     window.addEventListener("keydown", onKey);
     return () => {
@@ -630,13 +650,14 @@ function CharacterInfoButton({
         type="button"
         className="char-info-btn"
         aria-label={t("chat.charInfoAria")}
+        aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
         <InfoIcon />
       </button>
       {open ? (
-        <div className="char-info-popover" role="tooltip">
+        <div ref={popoverRef} className="char-info-popover" role="tooltip">
           <div className="char-info-popover__name">{bundle.card.meta.name}</div>
           {bundle.card.meta.sourceName ? (
             <div className="char-info-popover__source">{bundle.card.meta.sourceName}</div>

@@ -3989,15 +3989,16 @@ body {
   box-shadow: var(--focus-ring-soft, 0 0 0 3px rgba(178, 24, 88, 0.18));
 }
 
-/* 菜单展开时：高亮跟随 hover / 键盘焦点，当前值仅作弱标记 */
-.bl-select.is-open .bl-select__option.is-selected:not(:hover):not(:focus-visible) {
+/* 键盘虚拟焦点：trigger 始终拿物理焦点，option 高亮由 .is-active 类驱动
+   （aria-activedescendant 模式，配合 BlSelect.tsx 的 activeIndex state）。 */
+.bl-select.is-open .bl-select__option.is-selected:not(:hover):not(.is-active) {
   background: transparent;
   box-shadow: none;
   color: var(--ink-soft);
 }
 
 .bl-select.is-open .bl-select__option:hover,
-.bl-select.is-open .bl-select__option:focus-visible {
+.bl-select.is-open .bl-select__option.is-active {
   background: var(--magenta-tint);
   color: var(--ink);
   box-shadow: inset 2px 0 0 var(--magenta);
@@ -4026,14 +4027,14 @@ body {
   color: var(--ink);
 }
 
-[data-theme="dark"] .bl-select.is-open .bl-select__option.is-selected:not(:hover):not(:focus-visible) {
+[data-theme="dark"] .bl-select.is-open .bl-select__option.is-selected:not(:hover):not(.is-active) {
   background: transparent;
   box-shadow: none;
   color: var(--ink-soft);
 }
 
 [data-theme="dark"] .bl-select.is-open .bl-select__option:hover,
-[data-theme="dark"] .bl-select.is-open .bl-select__option:focus-visible {
+[data-theme="dark"] .bl-select.is-open .bl-select__option.is-active {
   background: rgba(212, 103, 148, 0.1);
   color: var(--ink);
   box-shadow: inset 2px 0 0 rgba(212, 103, 148, 0.48);

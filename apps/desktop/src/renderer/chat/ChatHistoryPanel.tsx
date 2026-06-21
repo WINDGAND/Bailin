@@ -33,6 +33,11 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
   const confirm = useConfirm();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const newButtonRef = useRef<HTMLButtonElement | null>(null);
+  /** 当前打开三点菜单对应的触发按钮（用于 Esc 关菜单后焦点还原）。 */
+  const openTriggerRef = useRef<HTMLButtonElement | null>(null);
+  /** 当前打开的三点菜单 panel（用于键盘 ArrowKeys 导航）。 */
+  const menuPanelRef = useRef<HTMLDivElement | null>(null);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [menuSessionId, setMenuSessionId] = useState<string | null>(null);
@@ -85,6 +90,8 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
         }
         if (menuSessionId) {
           setMenuSessionId(null);
+          // 关菜单后焦点回到对应三点按钮，满足 a11y menu 关闭后焦点还原。
+          window.setTimeout(() => openTriggerRef.current?.focus(), 0);
           return;
         }
         onClose();
@@ -93,6 +100,80 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, renamingId, menuSessionId]);
+
+  // dialog 打开时把焦点移入「新对话」按钮。
+  useEffect(() => {
+    if (!open) return;
+    const id = window.setTimeout(() => newButtonRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
+  }, [open]);
+
+  // dialog focus trap：Tab / Shift+Tab 在 panel 内循环；
+  // 当三点菜单已展开时跳过此处理，让下方 menu 导航 useEffect 接管。
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      if (menuSessionId) return; // 让 menu navigation 接管 Tab
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, menuSessionId]);
+
+  // 三点菜单打开时：焦点入首项 + Arrow/Home/End/Tab 在菜单内循环。
+  useEffect(() => {
+    if (!menuSessionId) return;
+    const focusFirst = window.setTimeout(() => {
+      const first = menuPanelRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+      first?.focus();
+    }, 0);
+    const onKey = (e: KeyboardEvent) => {
+      const panel = menuPanelRef.current;
+      if (!panel) return;
+      const items = Array.from(panel.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+      if (items.length === 0) return;
+      const activeIdx = items.indexOf(document.activeElement as HTMLElement);
+      const focusAt = (n: number): void => {
+        e.preventDefault();
+        items[n]?.focus();
+      };
+      if (e.key === "ArrowDown") {
+        focusAt(activeIdx < 0 ? 0 : (activeIdx + 1) % items.length);
+      } else if (e.key === "ArrowUp") {
+        focusAt(activeIdx < 0 ? items.length - 1 : (activeIdx - 1 + items.length) % items.length);
+      } else if (e.key === "Home") {
+        focusAt(0);
+      } else if (e.key === "End") {
+        focusAt(items.length - 1);
+      } else if (e.key === "Tab") {
+        const dir = e.shiftKey ? -1 : 1;
+        focusAt(activeIdx < 0 ? 0 : (activeIdx + dir + items.length) % items.length);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.clearTimeout(focusFirst);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menuSessionId]);
 
   useEffect(() => {
     if (!renamingId) return;
@@ -183,10 +264,12 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
         ref={panelRef}
         className="chat-history__panel fade-in-up"
         role="dialog"
+        aria-modal="true"
         aria-label={t("chat.historyPanelAria")}
         style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
       >
         <button
+          ref={newButtonRef}
           type="button"
           className="chat-history__new"
           onClick={() => {
@@ -264,17 +347,27 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
                         type="button"
                         className="btn btn--icon btn--ghost chat-history__menu-btn"
                         aria-label={t("chat.historyMoreActions")}
+                        aria-haspopup="menu"
+                        aria-expanded={menuSessionId === session.id}
                         onClick={(e) => {
                           e.stopPropagation();
+                          // 记下触发按钮以便 Esc 关菜单后还焦。
+                          openTriggerRef.current = e.currentTarget;
                           setMenuSessionId((cur) => (cur === session.id ? null : session.id));
                         }}
                       >
                         ⋯
                       </button>
                       {menuSessionId === session.id ? (
-                        <div className="chat-history__menu fade-in">
+                        <div
+                          ref={menuPanelRef}
+                          className="chat-history__menu fade-in"
+                          role="menu"
+                          aria-orientation="vertical"
+                        >
                           <button
                             type="button"
+                            role="menuitem"
                             className="chat-history__menu-item"
                             onClick={() => {
                               setRenamingId(session.id);
@@ -287,6 +380,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
                           </button>
                           <button
                             type="button"
+                            role="menuitem"
                             className="chat-history__menu-item chat-history__menu-item--danger"
                             onClick={() => void handleDelete(session)}
                           >
@@ -309,7 +403,16 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
 
 function NewChatIcon(): JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+      focusable="false"
+    >
       <path d="M12 5v14M5 12h14" strokeLinecap="round" />
     </svg>
   );
@@ -317,16 +420,42 @@ function NewChatIcon(): JSX.Element {
 
 function RenameIcon(): JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 
 function DeleteIcon(): JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
