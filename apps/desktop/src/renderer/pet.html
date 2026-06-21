@@ -25,9 +25,6 @@
       .pet-menu-item:active {
         background: rgba(178, 24, 88, 0.14);
       }
-      .pet-menu-item:focus {
-        outline: none;
-      }
       .pet-menu-item:focus-visible {
         background: var(--magenta-tint);
         outline: 2px solid var(--magenta-soft);
@@ -105,6 +102,16 @@
       }
       .pet-wrap {
         position: relative;
+      }
+      /* 键盘焦点环：仅在 :focus-visible 时显示，鼠标点击不会触发，
+         避免拖拽时持续出现一圈洋红色描边干扰像素美术。 */
+      .pet-wrap:focus {
+        outline: none;
+      }
+      .pet-wrap:focus-visible {
+        outline: 2px solid var(--magenta-soft);
+        outline-offset: 4px;
+        border-radius: 18px;
       }
     </style>
   </head>

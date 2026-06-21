@@ -1023,6 +1023,7 @@ export const en: TranslationTree = {
   },
   pet: {
     dragHint: "Left-click to chat · drag to move · right-click for menu",
+    ariaLabel: "Pet character {{name}}; press Enter to chat, Shift+F10 to open the menu",
     emptyTitle: "No character yet—pick one here",
     emptyBody: "Desktop is empty · pick a character",
     menuCloseChat: "Close chat",

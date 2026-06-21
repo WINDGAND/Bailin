@@ -235,28 +235,55 @@ export function PetApp(): JSX.Element {
   const [starters, setStarters] = useState<Starter[]>([]);
   const [submenu, setSubmenu] = useState<null | "switch">(null);
 
+  const openContextMenu = useCallback(async () => {
+    await resyncLocale();
+    const [list, st, chatOpen] = await Promise.all([
+      nuwa.characters.list(),
+      nuwa.characters.listStarters(),
+      nuwa.chat.isVisible()
+    ]);
+    const side = await nuwa.pet.setContextMenuOpen(true);
+    setMenu({ chatOpen, side: side ?? "right" });
+    setSubmenu(null);
+    setCharacters(list);
+    setStarters(st);
+  }, [nuwa, resyncLocale]);
+
   const onPetContextMenu = useCallback(
-    async (e: React.MouseEvent) => {
+    (e: React.MouseEvent | React.KeyboardEvent) => {
       e.preventDefault();
-      await resyncLocale();
-      const [list, st, chatOpen] = await Promise.all([
-        nuwa.characters.list(),
-        nuwa.characters.listStarters(),
-        nuwa.chat.isVisible()
-      ]);
-      const side = await nuwa.pet.setContextMenuOpen(true);
-      setMenu({ chatOpen, side: side ?? "right" });
-      setSubmenu(null);
-      setCharacters(list);
-      setStarters(st);
+      void openContextMenu();
     },
-    [nuwa, resyncLocale]
+    [openContextMenu]
+  );
+
+  const onPetKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // 拖拽工程是鼠标语义；键盘等价：Enter / Space 唤起聊天。
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        sendSpriteEvent("click");
+        window.setTimeout(() => {
+          void nuwa.pet.openChat();
+          sendSpriteEvent("chatOpen");
+        }, 420);
+        return;
+      }
+      // Shift+F10 / ContextMenu 键：a11y 标准的右键替代触发。
+      if ((e.key === "F10" && e.shiftKey) || e.key === "ContextMenu") {
+        e.preventDefault();
+        void openContextMenu();
+      }
+    },
+    [nuwa, sendSpriteEvent, openContextMenu]
   );
 
   const closeMenu = useCallback(() => {
     setMenu(null);
     setSubmenu(null);
     void nuwa.pet.setContextMenuOpen(false);
+    // 菜单关闭后焦点回到桌宠，避免键盘用户焦点丢到 body。
+    window.setTimeout(() => wrapRef.current?.focus(), 0);
   }, [nuwa]);
 
   useEffect(() => {
@@ -282,6 +309,13 @@ export function PetApp(): JSX.Element {
               ref={wrapRef}
               key={`pet-wrap-${nudgeNonce}`}
               className={`pet-wrap ${hatching ? "hatch" : ""} ${nudgeNonce > 0 ? "nudge-once" : ""}`}
+              role="button"
+              tabIndex={0}
+              aria-label={
+                bundle ? t("pet.ariaLabel", { name: bundle.card.meta.name }) : t("pet.dragHint")
+              }
+              aria-haspopup="menu"
+              aria-expanded={menu !== null}
               style={{
                 pointerEvents: "auto",
                 padding: 4,
@@ -297,7 +331,8 @@ export function PetApp(): JSX.Element {
               onPointerMove={onPetPointerMove}
               onPointerUp={onPetPointerUp}
               onPointerCancel={onPetPointerUp}
-              onContextMenu={(e) => void onPetContextMenu(e)}
+              onContextMenu={onPetContextMenu}
+              onKeyDown={onPetKeyDown}
               title={t("pet.dragHint")}
             >
               <PetRenderer
@@ -419,19 +454,66 @@ function PetContextMenu(props: MenuProps): JSX.Element {
     onImportStarter,
     onClose
   } = props;
+  const menuRef = useRef<HTMLDivElement>(null);
 
+  // 实时查询当前可见的 menuitem（submenu 展开 / 收起会变）。
+  const getMenuItems = useCallback((): HTMLElement[] => {
+    if (!menuRef.current) return [];
+    return Array.from(
+      menuRef.current.querySelectorAll<HTMLElement>('[role="menuitem"]')
+    );
+  }, []);
+
+  // 打开时把焦点移入首项；setTimeout 0 让 DOM 渲染稳定后再 focus。
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const items = getMenuItems();
+      items[0]?.focus();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [getMenuItems]);
+
+  // 键盘导航：Esc 关闭；Arrow / Home / End 在 menuitem 间环形移动；
+  // Tab / Shift+Tab 当作方向键（即焦点 trap 在 menu 内）。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      const items = getMenuItems();
+      if (items.length === 0) return;
+      const activeIdx = items.indexOf(document.activeElement as HTMLElement);
+
+      const focusAt = (next: number): void => {
+        e.preventDefault();
+        items[next]?.focus();
+      };
+
+      if (e.key === "ArrowDown") {
+        focusAt(activeIdx < 0 ? 0 : (activeIdx + 1) % items.length);
+      } else if (e.key === "ArrowUp") {
+        focusAt(activeIdx < 0 ? items.length - 1 : (activeIdx - 1 + items.length) % items.length);
+      } else if (e.key === "Home") {
+        focusAt(0);
+      } else if (e.key === "End") {
+        focusAt(items.length - 1);
+      } else if (e.key === "Tab") {
+        const dir = e.shiftKey ? -1 : 1;
+        focusAt(activeIdx < 0 ? 0 : (activeIdx + dir + items.length) % items.length);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, getMenuItems]);
 
   return (
     <div
+      ref={menuRef}
       onMouseDown={(e) => e.stopPropagation()}
       role="menu"
+      aria-orientation="vertical"
       className="pet-menu-panel fade-in-up"
     >
       <MenuItem

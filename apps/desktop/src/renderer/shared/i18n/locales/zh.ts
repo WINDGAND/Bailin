@@ -1016,6 +1016,7 @@ export const zh = {
   },
   pet: {
     dragHint: "左键点击唤起 · 拖动移动 · 右键菜单",
+    ariaLabel: "桌宠角色 {{name}}；回车唤起对话，Shift+F10 打开菜单",
     emptyTitle: "还没有角色，点这里挑一只",
     emptyBody: "桌面还空着 · 点这里挑一只",
     menuCloseChat: "关闭对话",
