@@ -1012,15 +1012,21 @@ body {
   }
 }
 
-/* ---------- Suggestion card hover affordance ---------- */
-
+/* ---------- Suggestion card · editorial hover affordance ----------
+ *
+ * 设计意图（high-end editorial）：
+ * - numbered eyebrow (01 / 02 / 03) 强化序列感 + 杂志排版气质
+ * - title 用 display serif 略放大，hint 用 body sans 反差
+ * - 右侧 chevron 默认隐藏，hover 显现 + 整卡片轻微上浮
+ * - 左 magenta accent stripe hover 时变粗 + 渐变到 magenta-deep
+ */
 .suggestion {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 12px 10px 14px;
+  padding: 12px 14px 12px 16px;
   border-left: 3px solid transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--paper-deep);
   cursor: pointer;
   text-align: left;
@@ -1028,28 +1034,77 @@ body {
   transition:
     border-color var(--motion-fast) var(--ease-out),
     background var(--motion-fast) var(--ease-out),
-    transform var(--motion-fast) var(--ease-out);
+    transform var(--motion-base) var(--ease-spring),
+    box-shadow var(--motion-base) var(--ease-out);
 }
 .suggestion:hover {
-  border-left-color: var(--magenta);
+  border-left: 3px solid var(--magenta);
   background: var(--paper);
-  transform: translateX(2px);
+  transform: translateX(2px) translateY(-1px);
+  box-shadow: 0 8px 18px -12px rgba(31, 58, 58, 0.28);
 }
 .suggestion:focus-visible {
   outline: 2px solid var(--magenta);
   outline-offset: 2px;
 }
+
+.suggestion__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.suggestion__index {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--magenta);
+  /* 与 title 基线对齐 */
+  align-self: baseline;
+}
+
 .suggestion__title {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink);
   line-height: 1.3;
+  letter-spacing: -0.005em;
 }
+
+.suggestion__arrow {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--magenta);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity var(--motion-base) var(--ease-out),
+    transform var(--motion-base) var(--ease-spring);
+}
+.suggestion:hover .suggestion__arrow,
+.suggestion:focus-visible .suggestion__arrow {
+  opacity: 0.85;
+  transform: translateX(0);
+}
+
 .suggestion__hint {
+  /* 左侧缩进 = index 宽度（约 22px）+ row gap 10px，让 hint 与 title 视觉对齐 */
+  padding-left: 32px;
   font-size: 12px;
   color: var(--ink-faint);
-  line-height: 1.4;
+  line-height: 1.45;
+}
+
+[data-theme="dark"] .suggestion:hover {
+  background: var(--paper-warm);
+  box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.45);
 }
 
 /* ---------- Empty state ---------- */
@@ -4203,6 +4258,48 @@ body {
   background: rgba(212, 103, 148, 0.1);
   color: var(--ink);
   box-shadow: inset 2px 0 0 rgba(212, 103, 148, 0.48);
+}
+
+/* =============================================================
+ * Settings sidebar · keyboard shortcuts discoverability hint
+ *
+ * 让用户发现按 `?` 能看快捷键。放在侧栏最底（margin-top: auto
+ * 配合 settings-sidebar flex column）。点击直接弹 HelpOverlay。
+ * collapsed 模式不显示（节省空间）。
+ * ============================================================= */
+.settings-sidebar__shortcuts-hint {
+  margin-top: auto;
+  margin: auto 12px 16px;
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed var(--grid-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
+}
+.settings-sidebar__shortcuts-hint:hover {
+  border-color: var(--magenta-soft);
+  background: var(--magenta-tint);
+  color: var(--ink-soft);
+}
+.settings-sidebar__shortcuts-hint:focus-visible {
+  outline: 2px solid var(--magenta);
+  outline-offset: 2px;
+}
+[data-theme="dark"] .settings-sidebar__shortcuts-hint:hover {
+  border-color: var(--magenta-soft);
+  background: rgba(212, 103, 148, 0.1);
+  color: var(--ink);
 }
 
 /* =============================================================

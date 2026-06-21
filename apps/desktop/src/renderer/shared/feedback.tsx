@@ -110,18 +110,29 @@ export function FeedbackProvider({ children }: { children: ReactNode }): JSX.Ele
   const seqRef = useRef(0);
 
   const showToast = useCallback((input: ToastInput) => {
-    const id = (seqRef.current += 1);
-    const item: ToastItem = {
-      id,
-      kind: input.kind ?? "info",
-      text: input.text,
-      ttlMs: input.ttlMs ?? 3500,
-      onClick: input.onClick
-    };
-    setToasts((prev) => [...prev, item]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, item.ttlMs);
+    const kind = input.kind ?? "info";
+    const text = input.text;
+    const ttlMs = input.ttlMs ?? 3500;
+    // Dedup：800ms 内出现完全相同 (kind, text) 的 toast 视为重复，刷新已有那条的 TTL
+    // 而不是再叠一个。避免 form 反复出错 / 重复点按钮时 toast stack 暴涨。
+    setToasts((prev) => {
+      const existing = prev.find((t) => t.kind === kind && t.text === text);
+      if (existing) {
+        return prev; // 不重复推；下面的 setTimeout 也跳过
+      }
+      const id = (seqRef.current += 1);
+      const item: ToastItem = {
+        id,
+        kind,
+        text,
+        ttlMs,
+        onClick: input.onClick
+      };
+      window.setTimeout(() => {
+        setToasts((cur) => cur.filter((t) => t.id !== id));
+      }, ttlMs);
+      return [...prev, item];
+    });
   }, []);
 
   const dismissToast = useCallback((id: number) => {

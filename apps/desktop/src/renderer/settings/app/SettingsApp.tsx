@@ -161,9 +161,29 @@ export function SettingsApp(): JSX.Element {
   }, []);
 
   if (firstRun === null || !i18nReady) {
+    // 启动闪现的加载态：用 eyebrow + display + skeleton 行配色调，
+    // 跟 panel 的视觉语言一致，避免「光秃秃一行字」的廉价感。
     return (
-      <div style={{ padding: 40 }}>
-        <div className="display display--page">{t("common.loading")}</div>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        aria-label={t("common.loading")}
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 12,
+          padding: 40,
+          background: "var(--paper)"
+        }}
+      >
+        <div className="eyebrow">Bailin · 0.0.1</div>
+        <div className="display display--section" style={{ color: "var(--ink-faint)" }}>
+          {t("common.loading")}
+        </div>
       </div>
     );
   }
@@ -233,6 +253,19 @@ export function SettingsApp(): JSX.Element {
                   </button>
                 ))}
               </nav>
+
+              {/* 侧栏底部：键盘快捷键 discoverability hint。collapsed 时藏起来。 */}
+              {!sidebarCollapsed ? (
+                <button
+                  type="button"
+                  className="settings-sidebar__shortcuts-hint"
+                  onClick={() => kb.openHelp()}
+                  title={t("keyboard.discoverHint")}
+                >
+                  <span className="kbd">?</span>
+                  <span>{t("keyboard.discoverHint")}</span>
+                </button>
+              ) : null}
             </aside>
             {/*
               设计选择 (S7 ARIA review):

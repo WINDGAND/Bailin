@@ -1,5 +1,15 @@
 {
+  // IDE-only project root：让 TypeScript LSP / Cursor 把整个 src 树
+  // 当成同一个 ts 上下文处理。命令行 build 仍走 tsconfig.main.json /
+  // tsconfig.preload.json / tsconfig.renderer.json 三个独立 config。
+  //
+  // 之前空 include 导致 Cursor 把渲染层 tsx 文件 fallback 到 inferred project
+  // 用默认 jsx=react，所有 JSX 都报「React 指 UMD 全局」假阳性。
+  // 继承 base 的 jsx=react-jsx 后，IDE 与命令行 build 行为一致。
   "extends": "../../tsconfig.base.json",
-  "files": [],
-  "include": []
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src"]
 }

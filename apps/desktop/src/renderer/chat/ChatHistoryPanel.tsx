@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ChatSessionSummary } from "../../shared/ipc-contract.js";
 import { formatSessionListTime } from "../shared/format-chat-time.js";
 import { useConfirm } from "../shared/feedback.js";
@@ -45,6 +45,19 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
   const [menuSessionId, setMenuSessionId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  /** 按标题过滤会话；空查询返回全部。 */
+  const filteredSessions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => s.title.toLowerCase().includes(q));
+  }, [sessions, searchQuery]);
+
+  /** 打开 panel 时清空搜索（避免上一次搜索的残留影响新会话查找）。 */
+  useEffect(() => {
+    if (open) setSearchQuery("");
+  }, [open]);
 
   const loadSessions = useCallback(async () => {
     setLoading(true);
@@ -255,6 +268,23 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
           {t("chat.historyNewChat")}
         </button>
 
+        {/* 搜索框：仅在会话数 > 4 时显示，避免少量会话时占空间。 */}
+        {sessions.length > 4 ? (
+          <div className="chat-history__search">
+            <span className="chat-history__search-icon" aria-hidden="true">
+              <Icon name="search" size={14} />
+            </span>
+            <input
+              type="search"
+              className="input chat-history__search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t("chat.historySearchPlaceholder")}
+              aria-label={t("chat.historySearchAria")}
+            />
+          </div>
+        ) : null}
+
         <div className="chat-history__list">
           {loading && sessions.length === 0 ? (
             <div className="chat-history__empty">{t("chat.historyLoading")}</div>
@@ -262,7 +292,10 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
           {!loading && sessions.length === 0 ? (
             <div className="chat-history__empty">{t("chat.historyEmpty")}</div>
           ) : null}
-          {sessions.map((session) => {
+          {!loading && sessions.length > 0 && filteredSessions.length === 0 ? (
+            <div className="chat-history__empty">{t("chat.historySearchNoResults")}</div>
+          ) : null}
+          {filteredSessions.map((session) => {
             const active = session.id === activeSessionId;
             const renaming = renamingId === session.id;
             return (

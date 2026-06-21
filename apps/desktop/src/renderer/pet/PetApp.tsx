@@ -582,13 +582,14 @@ function PetContextMenu(props: MenuProps): JSX.Element {
           {starters.length > 0 ? (
             <>
               <div
+                className="eyebrow"
                 style={{
+                  // 复用 .eyebrow 排版（mono + uppercase + tracking），但菜单上下文里
+                  // 用 --ink-faint 替代默认 --magenta：避免与 active 角色的 magenta dot
+                  // 视觉撞色（一个菜单不该出现两个 magenta 焦点）。
                   padding: "6px 14px 2px",
                   color: "var(--ink-faint)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10.5,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase"
+                  fontSize: 10
                 }}
               >
                 {t("pet.menuBuiltInStarters")}

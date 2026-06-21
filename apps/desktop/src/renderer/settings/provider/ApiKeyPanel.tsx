@@ -228,10 +228,13 @@ export function ApiKeyPanel(): JSX.Element {
       setImageConfig({ ...bundle.image });
 
       if (result.allRequiredPassed) {
+        // allRequiredPassed=true 时 chat 必为 ok 状态；TS 无法跨返回值 narrow，显式取。
+        const chat = result.readiness.chat;
+        const latency = chat.status === "ok" ? chat.latencyMs : undefined;
         showToast({
           kind: "success",
           text: t("provider.toastChatReady", {
-            latency: result.readiness.chat.latencyMs ?? "?"
+            latency: latency ?? "?"
           })
         });
       } else {

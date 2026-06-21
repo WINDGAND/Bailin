@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "./i18n/index.js";
+import { Icon } from "./icon.js";
 
 /**
  * 全局快捷键作用域 + 帮助面板。
@@ -245,7 +246,7 @@ function HelpOverlay({
             aria-label={t("keyboard.close")}
             data-hint="Esc"
           >
-            ×
+            <Icon name="close" size={14} strokeWidth={2} />
           </button>
         </div>
         <div className="display display--section" style={{ marginBottom: 14 }}>

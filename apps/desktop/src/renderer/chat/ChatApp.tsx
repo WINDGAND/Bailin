@@ -9,12 +9,13 @@ import {
 import type { CharacterBundle } from "@nuwa-pet/character-protocol";
 import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
-import { useToast } from "../shared/feedback.js";
+import { useConfirm, useToast } from "../shared/feedback.js";
 import { ChatBubble } from "../shared/chat-bubble.js";
 import { useChatSession } from "../shared/use-chat-session.js";
 import { useChatScroll } from "../shared/use-chat-scroll.js";
 import { copyToClipboard } from "../shared/copy-to-clipboard.js";
 import { usePlatformModKey } from "../shared/use-platform-mod-key.js";
+import { Icon } from "../shared/icon.js";
 import { ChatResizeHandles } from "./ChatResizeHandles.js";
 import { ChatHistoryPanel } from "./ChatHistoryPanel.js";
 import type { ProfileChange, ProfileUpdatedEvent } from "../../shared/ipc-contract.js";
@@ -26,6 +27,7 @@ export function ChatApp(): JSX.Element {
   const modKey = usePlatformModKey();
   const { bundle } = useActiveCharacter();
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const [input, setInput] = useState<string>("");
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -329,7 +331,15 @@ export function ChatApp(): JSX.Element {
                   aria-label={`${s.title}：${s.hint}`}
                   onClick={() => void submit(s.prompt)}
                 >
-                  <span className="suggestion__title">{s.title}</span>
+                  <span className="suggestion__row">
+                    <span className="suggestion__index" aria-hidden="true">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="suggestion__title">{s.title}</span>
+                    <span className="suggestion__arrow" aria-hidden="true">
+                      <Icon name="chevron-right" size={14} strokeWidth={1.6} />
+                    </span>
+                  </span>
                   <span className="suggestion__hint">{s.hint}</span>
                 </button>
               ))}
@@ -359,8 +369,19 @@ export function ChatApp(): JSX.Element {
               }}
               onDelete={() => {
                 if (turn.role === "user") {
-                  void chat.deleteTurnsFrom(turn.id);
+                  // 用户消息删除会级联删除后续所有 turns（不可逆），必须 confirm。
+                  void (async () => {
+                    const ok = await confirm({
+                      title: t("chat.deleteUserTurnTitle"),
+                      body: t("chat.deleteUserTurnBody"),
+                      confirmLabel: t("common.confirmDelete"),
+                      cancelLabel: t("common.thinkAgain"),
+                      danger: true
+                    });
+                    if (ok) void chat.deleteTurnsFrom(turn.id);
+                  })();
                 } else {
+                  // 助手消息删除可通过 regenerate 恢复，单击即删（参考 ChatGPT / Claude 体验）。
                   void chat.deleteTurn(turn.id);
                 }
               }}

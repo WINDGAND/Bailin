@@ -395,6 +395,25 @@
         color: var(--magenta-deep);
         transform: translateY(-1px);
       }
+      .chat-history__search {
+        position: relative;
+        margin: 0 14px 8px;
+      }
+      .chat-history__search-icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: inline-flex;
+        color: var(--ink-faint);
+        pointer-events: none;
+      }
+      .chat-history__search-input {
+        width: 100%;
+        padding-left: 32px;
+        font-size: 13px;
+        height: 32px;
+      }
       .chat-history__list {
         flex: 1;
         overflow: auto;
