@@ -3,9 +3,9 @@
 > **桌面上的百变魂灵 —— 把你心目中的那个「他/她/它」装进桌面，常驻陪你 60 秒可造，随手可唤起。**
 
 <p align="center">
-  <!-- TODO(@you): 上线前在 assets/ 放一张 hero.png（推荐 1600×900，桌面 + 桌宠 + 聊天窗同框）；暂用 logo.png -->
-  <img src="assets/logo.png" alt="百灵 Bailin · 桌面上的百变魂灵" width="820" />
+  <img src="assets/hero.png" alt="百灵 Bailin · 角色仓库、创建向导与聊天窗" width="820" />
 </p>
+<p align="center"><sub>角色仓库 · 创建向导 · 桌宠聊天 —— 从造人到上桌，一屏看清</sub></p>
 
 <p align="center">
   <a href="#-30-秒体验">30 秒体验</a> ·
@@ -55,29 +55,49 @@
 ## 🎬 30 秒体验
 
 <p align="center">
-  <!-- TODO(@you): 录一个 30 秒 GIF：从首启 → 选示例 → 桌宠上桌 → 唤起聊天，放到 assets/demo.gif -->
-  <img src="assets/demo.gif" alt="从安装到桌宠上桌的 30 秒演示" width="640" />
+  <img src="assets/demo.gif" alt="角色仓库 → 创建 → 桌宠上桌 → 唤起聊天" width="640" />
 </p>
+<p align="center"><sub>四步闭环：管理已有角色 → 新建 → 像素桌宠常驻桌面 → <code>Ctrl + Shift + P</code> 随时聊</sub></p>
 
 ### 1. 首启配置，然后造一只
 
-安装后走首启向导：免责声明 → 配置 API Key → 输入角色名 → 选身份与定位 → （可选）上传参考图 → 「快速创建」。
+安装后走首启向导：免责声明 → 配置 API Key → 输入角色名 → 选来源与定位 → （可选）上传参考图 → 「快速创建」或「深度创建」。
 
-约 60 秒后，ta 就在你桌面上了。
+约 60 秒（快速）或 5–15 分钟（深度）后，ta 的心智框架与像素形象就准备好了。
 
 <p align="center">
-  <img src="assets/create.png" alt="创建角色 · 60 秒快速模式 / 5-15 分钟深度模式" width="640" />
+  <img src="assets/create.png" alt="创建角色 · 来源 / 定位 / 快速与深度两种模式" width="640" />
 </p>
+<p align="center"><sub>填名字、选「公众人物 / 虚构 / 原创」与「思维顾问 / 情感陪伴」，可选参考图辅助生成形象</sub></p>
 
 > 开发者可在 `apps/desktop/src/shared/starters.ts` 追加 `CharacterBundle` 作为内置 starter；开源版默认列表为空。
 
-### 2. 随手唤起
+### 2. 在角色仓库里管理 ta
+
+所有已创建的角色集中在「角色仓库」：搜索、切换当前桌宠、查看心智模型摘要，或重画形象 / 换参考图。
+
+<p align="center">
+  <img src="assets/library.png" alt="角色仓库 · 列表 + 详情 + 设为当前桌宠" width="720" />
+</p>
+<p align="center"><sub>左侧列表选角色，右侧看心智模型与操作；「当前」标记表示正在桌面陪伴的那一只</sub></p>
+
+### 3. 桌宠上桌，常驻屏幕
+
+角色激活后，像素小人会出现在桌面右下角 —— 可拖拽、可穿透透明区域，不挡你干活。
+
+<p align="center">
+  <img src="assets/pet.png" alt="像素桌宠 · 三笠·阿克曼 chibi 立绘" width="280" />
+</p>
+<p align="center"><sub>DSL 驱动的 chibi 像素形象；状态机切换 idle / walk / talk 等动画</sub></p>
+
+### 4. 随手唤起
 
 `Ctrl + Shift + P` 或点击桌宠 → 聊天窗弹出在桌宠旁边，不抢工作焦点。`Esc` 收起，回到屏幕的安静状态。
 
 <p align="center">
-  <img src="assets/chat.png" alt="聊天窗紧贴桌宠，气泡式对话" width="640" />
+  <img src="assets/chat.png" alt="聊天窗 · 流式对话紧贴桌宠" width="640" />
 </p>
+<p align="center"><sub>用 ta 的视角看你的问题 —— 上图：把文档砍到核心的写作建议</sub></p>
 
 ---
 
@@ -250,7 +270,7 @@ bailin/
 │   ├── prompts/                    # 蒸馏 / 调研 / 外貌 / 对话 / hatch-pet prompt
 │   └── pet-atlas-tools/            # hatch-pet atlas 裁帧 / 拼图 / 校验
 ├── apps/desktop/src/shared/starters.ts  # 可选内置 starter 列表（默认空）
-├── assets/                         # README 用图与 logo
+├── assets/                         # README 用图（hero / demo / 各功能截图）
 ├── docs/
 │   └── skills/                     # 与女娲 Skill 的关系说明
 └── scripts/
@@ -276,6 +296,14 @@ node ./scripts/a11y-scan.mjs     # 扫 pet / chat / settings / bubble 四窗口
 ```
 
 期望无 critical / serious violation。axe 扫不了焦点流转与屏幕阅读器朗读，UI 大改后仍需手测。
+
+**重新生成 README 配图**（需先 `pnpm dev`，Vite 在 `http://127.0.0.1:5173` 可访问）：
+
+```bash
+node apps/desktop/scripts/readme-screenshots.mjs
+```
+
+脚本会从本地 vault 读取角色数据，截取设置页 / 聊天窗 / 桌宠，并合成 `assets/hero.png` 与 `assets/demo.gif`。
 
 ### 架构
 
@@ -377,7 +405,7 @@ node ./scripts/a11y-scan.mjs     # 扫 pet / chat / settings / bubble 四窗口
 
 | 阶段 | 主题 | 代表能力 |
 | --- | --- | --- |
-| **v0.x**（现在） | MVP 闭环 | 快速造人、DSL 桌宠、本地记忆、6 示例、Windows |
+| **v0.x**（现在） | MVP 闭环 | 快速造人、DSL 桌宠、本地记忆、Windows、自带 API Key |
 | **v1.0** | 体验提升 | 深度造人、形象丰富化、对话 UX、严格模式、自动更新（opt-in） |
 | **v1.1** | 多角色 | 多只桌宠同时在桌、角色切换优化 |
 | **v1.2** | 关系养成 | 长期记忆、好感度 / 关系阶段 |
