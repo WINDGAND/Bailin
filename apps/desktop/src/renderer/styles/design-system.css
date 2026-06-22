@@ -1251,19 +1251,57 @@ body {
     border-color var(--sidebar-fade-duration) var(--ease-out);
 }
 
+.settings-brand {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-brand__logo {
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.brand-logo--hero {
+  margin-bottom: 4px;
+}
+
 .settings-sidebar.is-collapsed .settings-sidebar__header {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 8px;
   min-height: 0;
   padding: 0 0 8px;
   margin-bottom: 8px;
   border-bottom-color: transparent;
 }
 
+.settings-sidebar.is-collapsed .settings-brand {
+  justify-content: center;
+}
+
+.settings-sidebar.is-collapsed .settings-brand__logo {
+  width: 28px;
+  height: 28px;
+}
+
+.settings-sidebar.is-collapsed .settings-sidebar__toggle {
+  grid-column: unset;
+  grid-row: unset;
+  align-self: center;
+  justify-self: center;
+  margin: 0;
+}
+
 .settings-brand__copy {
-  grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-column: unset;
+  grid-row: unset;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
@@ -2522,6 +2560,9 @@ body {
     padding: 0 0 22px;
     margin-bottom: 18px;
     border-bottom-color: var(--grid-strong);
+  }
+  .settings-sidebar.is-collapsed .settings-brand {
+    justify-content: flex-start;
   }
   .settings-sidebar.is-collapsed .settings-brand__copy {
     grid-column: 1;

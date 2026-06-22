@@ -7,7 +7,15 @@
     "moduleResolution": "Node",
     "target": "ES2022",
     "lib": ["ES2022"],
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@nuwa-pet/character-protocol": ["../../packages/character-protocol/dist/index.d.ts"],
+      "@nuwa-pet/nuwa-prompts": ["../../packages/nuwa-prompts/dist/index.d.ts"],
+      "@nuwa-pet/pet-atlas-tools": ["../../packages/pet-atlas-tools/dist/index.d.ts"],
+      "@nuwa-pet/sprite-runtime": ["../../packages/sprite-runtime/dist/index.d.ts"],
+      "@nuwa-pet/starter-library": ["../../packages/starter-library/dist/index.d.ts"]
+    }
   },
   "include": ["src/main/**/*", "src/shared/**/*"]
 }

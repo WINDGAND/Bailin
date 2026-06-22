@@ -58,6 +58,7 @@ import {
   type ChatWindowSize
 } from "./windows/chat-window.js";
 import { createSettingsWindow } from "./windows/settings-window.js";
+import { loadAppIcon } from "./app-icon.js";
 import { AmbientMonitor } from "./ambient/ambient-monitor.js";
 import { ProactiveOrchestrator } from "./proactive/proactive-orchestrator.js";
 import { ProactiveBubbleHost } from "./proactive/proactive-bubble-host.js";
@@ -652,8 +653,8 @@ void app.whenReady().then(() => {
     log.warn("[main] global shortcut Ctrl+Shift+P registration failed");
   }
 
-  const trayIcon = nativeImage.createEmpty();
-  tray = new Tray(trayIcon);
+  const trayIcon = loadAppIcon(16);
+  tray = new Tray(trayIcon.isEmpty() ? nativeImage.createEmpty() : trayIcon);
   tray.on("click", () => summonPetBubble());
   rebuildTrayMenu();
 

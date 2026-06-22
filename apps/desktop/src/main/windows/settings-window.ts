@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import { join } from "node:path";
+import { loadAppIcon } from "../app-icon.js";
 
 export function createSettingsWindow(devUrl: string | undefined): BrowserWindow {
   const win = new BrowserWindow({
@@ -12,6 +13,7 @@ export function createSettingsWindow(devUrl: string | undefined): BrowserWindow 
     show: false,
     backgroundColor: "#fbfaf7",
     title: "百灵 Bailin · 设置",
+    icon: loadAppIcon(256),
     webPreferences: {
       preload: join(__dirname, "../../../preload/preload/index.js"),
       contextIsolation: true,

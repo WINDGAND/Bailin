@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { STARTER_BUNDLES } from "@nuwa-pet/starter-library";
 import { stripRoleSuffix, type CharacterBundle } from "@nuwa-pet/character-protocol";
 import { usePlatformModKey } from "../../shared/use-platform-mod-key.js";
+import { BrandLogo } from "../../shared/brand-logo.js";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
@@ -68,6 +69,7 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
           gap: 22
         }}
       >
+        <BrandLogo size={44} className="brand-logo brand-logo--hero" />
         <div className="eyebrow">{t("setup.eyebrow")}</div>
         <h1 className="display display--hero">
           {t("setup.heroLine1")}

@@ -8,6 +8,33 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(__dirname, "..");
 const repoRoot = resolve(appRoot, "../..");
 
+/** Windows 终端默认 GBK，Electron/Node 日志为 UTF-8 时会乱码。 */
+if (process.platform === "win32") {
+  spawnSync("chcp", ["65001"], { shell: true, stdio: "ignore" });
+}
+
+const WORKSPACE_PACKAGES = [
+  ["@nuwa-pet/character-protocol", "packages/character-protocol/dist/index.d.ts"],
+  ["@nuwa-pet/nuwa-prompts", "packages/nuwa-prompts/dist/index.d.ts"],
+  ["@nuwa-pet/pet-atlas-tools", "packages/pet-atlas-tools/dist/index.d.ts"],
+  ["@nuwa-pet/sprite-runtime", "packages/sprite-runtime/dist/index.d.ts"],
+  ["@nuwa-pet/starter-library", "packages/starter-library/dist/index.d.ts"]
+];
+
+function assertWorkspacePackagesBuilt() {
+  const missing = [];
+  for (const [name, relPath] of WORKSPACE_PACKAGES) {
+    const abs = resolve(repoRoot, relPath);
+    if (!existsSync(abs)) missing.push(`${name} (${relPath})`);
+  }
+  if (missing.length > 0) {
+    console.error("[dev] workspace packages are not built. Missing:");
+    for (const line of missing) console.error(`  - ${line}`);
+    console.error("[dev] run: pnpm -r --filter \"./packages/*\" run build");
+    process.exit(1);
+  }
+}
+
 function run(cmd, args, env = {}) {
   return spawn(cmd, args, {
     cwd: appRoot,
@@ -48,6 +75,7 @@ runChecked(
   ],
   repoRoot
 );
+assertWorkspacePackagesBuilt();
 
 console.log("[dev] building main + preload (initial sync)…");
 runChecked("pnpm", ["run", "build:main"], appRoot);
@@ -232,14 +260,13 @@ void waitForVite(DEV_VITE_URL).then(() => {
 function setupManualRestart() {
   if (autoRestart) {
     console.log(
-      "[dev] main process auto-restart: ON。" +
-        " 改主进程代码会自动重启 Electron（设 NUWA_PET_DEV_AUTO_RESTART=0 可关闭）。"
+      "[dev] main process auto-restart: ON. " +
+        "Main/preload edits restart Electron (NUWA_PET_DEV_AUTO_RESTART=0 to disable)."
     );
   } else {
     console.log(
-      "[dev] main process auto-restart: OFF。" +
-        " Renderer 走 Vite HMR；主进程改动不会自动重启。" +
-        " 在本终端输入 r + Enter 可手动重启 Electron。"
+      "[dev] main process auto-restart: OFF. " +
+        "Renderer uses Vite HMR; type r + Enter in this terminal to restart Electron."
     );
   }
   if (!process.stdin.isTTY) return;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNuwa } from "../../shared/use-nuwa.js";
 import { useShortcut, useKeyboard } from "../../shared/keyboard.js";
+import { BrandLogo } from "../../shared/brand-logo.js";
 import { useConfirm } from "../../shared/feedback.js";
 import { SetupWizard } from "../setup/SetupWizard.js";
 import { CharacterLibrary } from "../library/CharacterLibrary.js";
@@ -180,6 +181,7 @@ export function SettingsApp(): JSX.Element {
           background: "var(--paper)"
         }}
       >
+        <BrandLogo size={48} className="brand-logo brand-logo--hero" />
         <div className="eyebrow">Bailin · 0.0.1</div>
         <div className="display display--section" style={{ color: "var(--ink-faint)" }}>
           {t("common.loading")}
@@ -210,10 +212,13 @@ export function SettingsApp(): JSX.Element {
               aria-expanded={!sidebarCollapsed}
             >
               <div className="settings-sidebar__header">
-                <div className="settings-brand__copy" aria-hidden={sidebarCollapsed}>
-                  <div className="eyebrow">Bailin · 0.0.1</div>
-                  <div className="display display--section" style={{ marginTop: 4 }}>
-                    百灵
+                <div className="settings-brand">
+                  <BrandLogo size={32} className="settings-brand__logo" alt="百灵 Bailin" />
+                  <div className="settings-brand__copy" aria-hidden={sidebarCollapsed}>
+                    <div className="eyebrow">Bailin · 0.0.1</div>
+                    <div className="display display--section" style={{ marginTop: 4 }}>
+                      百灵
+                    </div>
                   </div>
                 </div>
                 <button

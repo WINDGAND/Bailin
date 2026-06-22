@@ -23,13 +23,13 @@ export function applyDevSetup(vault: LocalVault): void {
   loadDotEnvDev();
 
   if (process.env.NUWA_PET_DEV_SKIP_SETUP === "0") {
-    log.info("[dev-setup] NUWA_PET_DEV_SKIP_SETUP=0，跳过开发期凭据注入");
+    log.info("[dev-setup] NUWA_PET_DEV_SKIP_SETUP=0, skipping dev credential injection");
     return;
   }
 
   const apiKey = process.env.NUWA_PET_LLM_API_KEY?.trim();
   if (!apiKey) {
-    log.info("[dev-setup] 未提供 NUWA_PET_LLM_API_KEY，保持标准 Wizard 流程");
+    log.info("[dev-setup] NUWA_PET_LLM_API_KEY not set, using standard setup wizard");
     return;
   }
 
@@ -50,7 +50,7 @@ export function applyDevSetup(vault: LocalVault): void {
   vault.setSetting("first_run_done", "1");
 
   log.info(
-    `[dev-setup] 已注入开发期凭据：kind=${kind}, baseUrl=${baseUrl}, model=${model}, visionModel=${visionModel}, key=*****${apiKey.slice(-4)}`
+    `[dev-setup] injected dev credentials: kind=${kind}, baseUrl=${baseUrl}, model=${model}, visionModel=${visionModel}, key=*****${apiKey.slice(-4)}`
   );
 
   seedStarterLibraryIfEmpty(vault);
@@ -65,9 +65,9 @@ export function applyDevSetup(vault: LocalVault): void {
     );
     if (match) {
       vault.setSetting("active_character_id", match.id);
-      log.info(`[dev-setup] 已激活角色：${match.name}（匹配 NUWA_PET_DEV_ACTIVE=${activeHint}）`);
+      log.info(`[dev-setup] activated character: ${match.name} (NUWA_PET_DEV_ACTIVE=${activeHint})`);
     } else {
-      log.warn(`[dev-setup] 未找到匹配 NUWA_PET_DEV_ACTIVE=${activeHint} 的角色`);
+      log.warn(`[dev-setup] no character matched NUWA_PET_DEV_ACTIVE=${activeHint}`);
     }
   }
 }
@@ -78,7 +78,7 @@ const STARTER_SEED_VERSION = "v6-no-starters";
 function seedStarterLibraryIfEmpty(vault: LocalVault): void {
   if (STARTER_BUNDLES.length === 0) {
     vault.setSetting("starter_seed_version", STARTER_SEED_VERSION);
-    log.info("[dev-setup] 无内置 starter，跳过种子导入");
+    log.info("[dev-setup] no bundled starters, skipping seed import");
     return;
   }
 
@@ -99,12 +99,14 @@ function seedStarterLibraryIfEmpty(vault: LocalVault): void {
     }
     if (firstId) vault.setSetting("active_character_id", firstId);
     vault.setSetting("starter_seed_version", STARTER_SEED_VERSION);
-    log.info(`[dev-setup] 仓库为空，已导入 ${STARTER_BUNDLES.length} 个 starter；默认激活 ${firstId}`);
+    log.info(`[dev-setup] empty vault, imported ${STARTER_BUNDLES.length} starters; active=${firstId}`);
     return;
   }
 
   if (prevVersion === STARTER_SEED_VERSION) {
-    log.info(`[dev-setup] 仓库已有 ${existing.length} 个角色，且 starter 已是 ${STARTER_SEED_VERSION}，跳过 seed`);
+    log.info(
+      `[dev-setup] vault has ${existing.length} characters and starter seed is ${STARTER_SEED_VERSION}, skipping seed`
+    );
     return;
   }
 
@@ -128,7 +130,7 @@ function seedStarterLibraryIfEmpty(vault: LocalVault): void {
   }
   vault.setSetting("starter_seed_version", STARTER_SEED_VERSION);
   log.info(
-    `[dev-setup] starter 升级到 ${STARTER_SEED_VERSION}：覆盖 ${updated} 个 starter（用户自造角色未动）`
+    `[dev-setup] starter upgraded to ${STARTER_SEED_VERSION}: updated ${updated} bundled characters (user-created unchanged)`
   );
 }
 
@@ -166,10 +168,10 @@ function loadDotEnvDev(): void {
           process.env[key] = value;
         }
       }
-      log.info(`[dev-setup] 已加载 ${path}`);
+      log.info("[dev-setup] loaded .env.dev");
       return;
     } catch (e) {
-      log.warn(`[dev-setup] 读取 ${path} 失败：${e instanceof Error ? e.message : String(e)}`);
+      log.warn(`[dev-setup] failed to read .env.dev: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 }

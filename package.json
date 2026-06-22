@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "pnpm -r --filter=./packages/* run build && pnpm --filter=./apps/desktop run build",
+    "postinstall": "pnpm -r --filter \"./packages/*\" run build",
     "dev": "pnpm --filter=./apps/desktop run dev",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
