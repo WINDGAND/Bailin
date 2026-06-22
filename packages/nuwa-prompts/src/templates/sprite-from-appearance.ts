@@ -3,7 +3,7 @@ import type { AppearanceSpec } from "@nuwa-pet/character-protocol";
 /**
  * Sprite 转译 prompt：把结构化 AppearanceSpec 翻成 SpriteProgram。
  * 模型不再凭训练印象画桌宠，而是按 appearance.json 转译为像素部件。
- * 详见 docs/product/CHARACTER-PROTOCOL.md §3。
+ * 详见 README「角色协议」与 packages/character-protocol（SpriteProgram）。
  */
 
 export interface SpriteFromAppearanceInput {

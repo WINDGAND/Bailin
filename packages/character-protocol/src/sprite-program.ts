@@ -10,7 +10,7 @@ import { AtlasPetSchema } from "./atlas-pet.js";
  *   - js-sandbox   受限 JS 渲染（默认禁用，未来开关）
  *   - atlas        hatch-pet 兼容的精灵图集（1536×1872 / 8×9 / 192×208）
  *
- * 详细规范见 docs/product/CHARACTER-PROTOCOL.md §3。
+ * 详细规范见 README「角色协议」与 packages/character-protocol（SpriteProgram）。
  */
 
 export {

@@ -38,7 +38,7 @@ export interface SystemPromptInput {
 }
 
 /**
- * 组装对话 system prompt（详见 CHARACTER-PROTOCOL.md §5.1）。
+ * 组装对话 system prompt（详见 README「角色协议」与 packages/nuwa-prompts）。
  * 注意：免责声明仅在 isFirstActivation = true 时显式提示模型可以说一次。
  */
 export function buildSystemPrompt(input: SystemPromptInput): string {

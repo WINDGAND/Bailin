@@ -1,6 +1,6 @@
 /**
  * 给桌宠窗口判断"鼠标当前像素是否在 alpha > 0 的实体区域"。
- * 用于决定是否启用鼠标穿透（详见 TECH-ROUTE §3.3）。
+ * 用于决定是否启用鼠标穿透（详见 README「架构」· Pet 窗口）。
  */
 
 export function buildAlphaMask(

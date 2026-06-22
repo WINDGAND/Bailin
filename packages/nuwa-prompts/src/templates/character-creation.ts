@@ -2,7 +2,7 @@
  * 人格卡 prompt：女娲流程中 Phase·人格的独立调用。
  * 输出严格 JSON，仅包含 CharacterCard 的人格部分（不含 sprite / 不含 appearance）。
  * 外貌由 buildAppearanceResearchPrompt() 单独产出。
- * 详见 docs/product/CHARACTER-PROTOCOL.md §2 与 PRD §13bis。
+ * 详见 README「角色协议」与 packages/character-protocol（CharacterCard）。
  */
 
 export interface CharacterCardInput {

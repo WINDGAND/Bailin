@@ -26,7 +26,7 @@
  *   - 焦点管理（dialog / menu / popover 开关时焦点流转）
  *   - 键盘导航（ArrowKeys / Home/End / Esc）
  *   - reduced-motion / dark mode 切换
- *   → 参见 docs/a11y/NVDA-TEST-SCRIPT.md
+ *   → 参见 README「无障碍验证」手测清单
  */
 
 import { writeFileSync } from "node:fs";

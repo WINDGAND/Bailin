@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * AppearanceSpec：女娲流程中"外貌调研阶段"的结构化产出。
  * 它是 sprite 生成的输入（不是输出），也是"重新生成形象"功能的复用依据。
- * 详见 docs/product/CHARACTER-PROTOCOL.md §3 与 PRD §13bis。
+ * 详见 README「角色协议」与 packages/character-protocol（AppearanceSpec）。
  */
 
 const ColorSchema = z.object({

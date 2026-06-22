@@ -1,7 +1,7 @@
 /**
  * 沙箱 guard 表达式求值器。
  * 只接受白名单标识符 / 运算符；任何字符外的内容都不会被求值。
- * 详细规范见 docs/product/CHARACTER-PROTOCOL.md §3.6。
+ * 详细规范见 README「角色协议」（SpriteProgram guard 白名单）。
  */
 
 export interface GuardContext {

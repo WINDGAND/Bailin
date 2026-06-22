@@ -4,7 +4,7 @@ import { AnswerProtocolSchema } from "./answer-protocol.js";
 
 /**
  * CharacterCard 描述一个角色"怎么想 / 怎么说"。
- * 这是女娲 SKILL.md 的结构化产品版本。详细对应见 docs/product/CHARACTER-PROTOCOL.md §2。
+ * 这是女娲 SKILL 的结构化产品版本。详见 README「角色协议」与 packages/character-protocol。
  */
 
 export const SCHEMA_VERSION = "0.1" as const;
