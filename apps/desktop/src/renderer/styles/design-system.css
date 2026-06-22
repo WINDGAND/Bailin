@@ -1241,6 +1241,7 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
   column-gap: 8px;
+  row-gap: 8px;
   align-items: start;
   padding: 0 0 22px;
   margin-bottom: 18px;
@@ -1248,7 +1249,9 @@ body {
   transition:
     padding var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
     margin var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
-    border-color var(--sidebar-fade-duration) var(--ease-out);
+    border-color var(--sidebar-fade-duration) var(--ease-out),
+    grid-template-columns var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
+    row-gap var(--sidebar-drawer-duration) var(--sidebar-drawer-ease);
 }
 
 .settings-brand {
@@ -1258,12 +1261,20 @@ body {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  min-height: 40px;
+  transition: gap var(--sidebar-drawer-duration) var(--sidebar-drawer-ease);
 }
 
 .settings-brand__logo {
   flex-shrink: 0;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
   border-radius: 8px;
+  transition:
+    width var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
+    height var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
+    margin var(--sidebar-drawer-duration) var(--sidebar-drawer-ease);
 }
 
 .brand-logo--hero {
@@ -1271,11 +1282,10 @@ body {
 }
 
 .settings-sidebar.is-collapsed .settings-sidebar__header {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  column-gap: 0;
   min-height: 0;
   padding: 0 0 8px;
   margin-bottom: 8px;
@@ -1283,52 +1293,58 @@ body {
 }
 
 .settings-sidebar.is-collapsed .settings-brand {
+  grid-row: 1;
+  grid-column: 1;
   justify-content: center;
+  gap: 0;
+  width: 100%;
+  min-height: 28px;
 }
 
 .settings-sidebar.is-collapsed .settings-brand__logo {
   width: 28px;
   height: 28px;
-}
-
-.settings-sidebar.is-collapsed .settings-sidebar__toggle {
-  grid-column: unset;
-  grid-row: unset;
-  align-self: center;
-  justify-self: center;
-  margin: 0;
+  margin-inline: auto;
 }
 
 .settings-brand__copy {
   grid-column: unset;
   grid-row: unset;
-  min-width: 0;
   flex: 1 1 auto;
+  min-width: 0;
+  max-width: 12rem;
   overflow: hidden;
   visibility: visible;
   opacity: 1;
-  max-width: 12rem;
-  max-height: 96px;
   transition:
     flex var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
     max-width var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
-    max-height var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
-    opacity calc(var(--sidebar-drawer-duration) * 0.55) var(--sidebar-drawer-ease);
+    opacity var(--sidebar-fade-duration) var(--sidebar-drawer-ease),
+    visibility 0ms linear calc(var(--sidebar-fade-duration) * 0.35);
+}
+
+.settings-brand__copy .eyebrow,
+.settings-brand__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-brand__title {
+  margin-top: 4px;
+}
+
+.settings-sidebar:not(.is-collapsed) .settings-brand__copy {
+  transition-delay: 0ms, 0ms, 180ms, 0ms;
 }
 
 .settings-sidebar.is-collapsed .settings-brand__copy {
   flex: 0 0 0;
-  width: 0;
-  height: 0;
   max-width: 0;
-  max-height: 0;
-  margin: 0;
-  padding: 0;
   opacity: 0;
-  overflow: hidden;
   visibility: hidden;
   pointer-events: none;
-  transition-duration: 0ms;
+  transition-delay: 0ms, 100ms, 0ms, 0ms;
 }
 
 .settings-sidebar.is-collapsed .settings-nav {
@@ -1371,9 +1387,9 @@ body {
 }
 
 .settings-sidebar.is-collapsed .settings-sidebar__toggle {
+  grid-column: 1;
+  grid-row: 2;
   margin: 0;
-  grid-column: auto;
-  grid-row: auto;
   align-self: center;
   justify-self: center;
 }
@@ -2562,19 +2578,21 @@ body {
     border-bottom-color: var(--grid-strong);
   }
   .settings-sidebar.is-collapsed .settings-brand {
+    grid-row: 1 / span 2;
     justify-content: flex-start;
+    gap: 10px;
+    width: auto;
+    min-height: 40px;
   }
   .settings-sidebar.is-collapsed .settings-brand__copy {
     grid-column: 1;
     grid-row: 1 / span 2;
     flex: 1 1 auto;
-    width: auto;
-    height: auto;
     max-width: none;
-    max-height: 96px;
-    visibility: visible;
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
+    transition-delay: 0ms;
   }
   .settings-sidebar.is-collapsed .settings-sidebar__toggle {
     grid-column: 2;

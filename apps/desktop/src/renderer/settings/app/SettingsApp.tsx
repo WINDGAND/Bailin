@@ -216,7 +216,7 @@ export function SettingsApp(): JSX.Element {
                   <BrandLogo size={32} className="settings-brand__logo" alt="百灵 Bailin" />
                   <div className="settings-brand__copy" aria-hidden={sidebarCollapsed}>
                     <div className="eyebrow">Bailin · 0.0.1</div>
-                    <div className="display display--section" style={{ marginTop: 4 }}>
+                    <div className="display display--section settings-brand__title">
                       百灵
                     </div>
                   </div>

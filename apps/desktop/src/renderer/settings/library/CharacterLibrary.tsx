@@ -32,7 +32,7 @@ const TRACK_KEYS: Record<LibraryItem["track"], "library.trackUtility" | "library
   companion: "library.trackCompanion"
 };
 
-const LIBRARY_PAGE_SIZE = 5;
+const LIBRARY_PAGE_SIZE = 6;
 
 function libraryItemMatchesSearch(item: LibraryItem, query: string): boolean {
   const q = query.trim().toLowerCase();
