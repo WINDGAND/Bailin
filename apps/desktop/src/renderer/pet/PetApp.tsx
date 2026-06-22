@@ -103,6 +103,10 @@ export function PetApp(): JSX.Element {
   // ===== 鼠标穿透（仅在桌宠像素 BBox 内才接收事件） =====
   // 用 rAF 节流：每帧最多 1 次 getBoundingClientRect + setMouseIgnore IPC，
   // 避免高频 mousemove（每秒 60+ 次）压主进程。
+  //
+  // 注意：rAF 节流只在 mouse 真在动时 fire 下一帧。如果鼠标静止 (如菜单展开后
+  // hover 在某菜单项上不动)，纠正逻辑不会触发。所以菜单 / 拖拽这类「全局可点击」
+  // 状态必须由下面的 useEffect 显式强制 setMouseIgnore(false)。
   const draggingRef = useRef(false);
   const checkMouseIgnore = useRafThrottle((clientX: number, clientY: number) => {
     if (draggingRef.current) return;
@@ -303,6 +307,23 @@ export function PetApp(): JSX.Element {
     window.setTimeout(() => wrapRef.current?.focus(), 0);
   }, [nuwa]);
 
+  // 菜单展开期间强制整窗接收 mouse events（设 ignore=false）。否则当 mouse
+  // 从桌宠移到菜单时，桌宠的 onPointerLeave 会先把 ignore 设回 true，菜单上
+  // hover/cursor 还是 CSS 视觉响应（因为 forward:true），但 click 全部被穿透
+  // 到下面的桌面 → 点不动菜单项。菜单关闭后 ignore 恢复默认 true，下一次
+  // mouse 移到桌宠区域时 checkMouseIgnore 会再把它设回 false。
+  useEffect(() => {
+    if (menu) {
+      ignoredRef.current = false;
+      mouseInsideRef.current = true;
+      void nuwa.pet.setMouseIgnore(false);
+    } else {
+      ignoredRef.current = true;
+      mouseInsideRef.current = false;
+      void nuwa.pet.setMouseIgnore(true);
+    }
+  }, [menu, nuwa]);
+
   useEffect(() => {
     if (!menu) return;
     const onBlur = () => closeMenu();
@@ -343,7 +364,10 @@ export function PetApp(): JSX.Element {
               onPointerDown={onPetPointerDown}
               onPointerEnter={() => void nuwa.pet.setMouseIgnore(false)}
               onPointerLeave={() => {
-                if (!draggingRef.current) void nuwa.pet.setMouseIgnore(true);
+                // 菜单展开 / 拖拽中时，整窗都需要可点击；不要在这里 ignore，
+                // 否则鼠标从桌宠移到菜单的瞬间会让菜单 click 失效。
+                if (draggingRef.current || menu) return;
+                void nuwa.pet.setMouseIgnore(true);
               }}
               onPointerMove={onPetPointerMove}
               onPointerUp={onPetPointerUp}
