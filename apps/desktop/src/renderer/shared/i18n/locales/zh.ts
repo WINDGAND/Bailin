@@ -914,7 +914,7 @@ export const zh = {
     saveAndTest: "保存并测试连通",
     saveTesting: "测试中…",
     testFailed: "测试失败",
-    starterIntro: "如果你不知道先创建谁，下面是我们内置的 6 只。",
+    starterIntro: "如果你不知道先创建谁，可以从内置 starter 里选一个（当前列表为空时可跳过）。",
     starterImporting: "导入中…",
     starterSkip: "跳过，自己创建 →",
     toastCharacterReady: "角色已上桌",

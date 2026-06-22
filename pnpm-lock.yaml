@@ -32,9 +32,6 @@ importers:
       '@nuwa-pet/sprite-runtime':
         specifier: workspace:*
         version: link:../../packages/sprite-runtime
-      '@nuwa-pet/starter-library':
-        specifier: workspace:*
-        version: link:../../packages/starter-library
       better-sqlite3:
         specifier: ^11.3.0
         version: 11.10.0
@@ -134,19 +131,6 @@ importers:
         version: 5.9.3
 
   packages/sprite-runtime:
-    dependencies:
-      '@nuwa-pet/character-protocol':
-        specifier: workspace:*
-        version: link:../character-protocol
-    devDependencies:
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(postcss@8.5.15)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-
-  packages/starter-library:
     dependencies:
       '@nuwa-pet/character-protocol':
         specifier: workspace:*

@@ -27,7 +27,7 @@ import {
   type ImageGenerationAdapter,
   type ImageGenerationConfig
 } from "../adapters/image-generation-adapter.js";
-import { findStarterById, STARTER_META } from "@nuwa-pet/starter-library";
+import { findStarterById, STARTER_META } from "../../shared/starters.js";
 import {
   DistillationJobConfigSchema,
   summarizeAppearance,

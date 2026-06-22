@@ -17,8 +17,7 @@ const WORKSPACE_PACKAGES = [
   ["@nuwa-pet/character-protocol", "packages/character-protocol/dist/index.d.ts"],
   ["@nuwa-pet/nuwa-prompts", "packages/nuwa-prompts/dist/index.d.ts"],
   ["@nuwa-pet/pet-atlas-tools", "packages/pet-atlas-tools/dist/index.d.ts"],
-  ["@nuwa-pet/sprite-runtime", "packages/sprite-runtime/dist/index.d.ts"],
-  ["@nuwa-pet/starter-library", "packages/starter-library/dist/index.d.ts"]
+  ["@nuwa-pet/sprite-runtime", "packages/sprite-runtime/dist/index.d.ts"]
 ];
 
 function assertWorkspacePackagesBuilt() {
@@ -68,8 +67,6 @@ runChecked(
     "@nuwa-pet/pet-atlas-tools",
     "--filter",
     "@nuwa-pet/sprite-runtime",
-    "--filter",
-    "@nuwa-pet/starter-library",
     "run",
     "build"
   ],

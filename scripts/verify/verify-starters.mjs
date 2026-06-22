@@ -8,8 +8,7 @@
 //   - animations 至少含 idle / idle-blink / walk-left / walk-right / talk /
 //     think / sleep / click-reaction / drag / signature / fidget-a / fidget-b
 //
-// 跑法（必须先 build:main 和 starter-library build）：
-//   pnpm --filter=./packages/starter-library run build
+// 跑法（必须先 build:main）：
 //   pnpm --filter=./apps/desktop run build:main
 //   node scripts/verify/verify-starters.mjs
 
@@ -21,7 +20,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
 
-const starterPath = resolve(repoRoot, "packages/starter-library/dist/index.cjs");
+const starterPath = resolve(repoRoot, "apps/desktop/dist/main/shared/starters.js");
 const builderPath = resolve(
   repoRoot,
   "apps/desktop/dist/main/main/runtime/sprite-builder.js"

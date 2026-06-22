@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { STARTER_BUNDLES } from "@nuwa-pet/starter-library";
+import { STARTER_BUNDLES } from "../../../shared/starters.js";
 import { stripRoleSuffix, type CharacterBundle } from "@nuwa-pet/character-protocol";
 import { usePlatformModKey } from "../../shared/use-platform-mod-key.js";
 import { BrandLogo } from "../../shared/brand-logo.js";

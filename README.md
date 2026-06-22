@@ -59,17 +59,9 @@
   <img src="assets/demo.gif" alt="从安装到桌宠上桌的 30 秒演示" width="640" />
 </p>
 
-### 1. 挑一只内置示例（最快上桌）
+### 1. 首启配置，然后造一只
 
-百灵自带 6 只手工调校好的示例角色 —— 既有思维顾问也有陪伴型角色。点一下就上桌。
-
-<p align="center">
-  <img src="assets/starters.png" alt="6 个内置示例角色 · 一键启用" width="640" />
-</p>
-
-### 2. 自己造一只
-
-输入角色名 → 选 ta 的身份（公众人物 / 虚构角色 / 原创） → 选 ta 的定位（思维顾问 / 灵感陪伴） → （可选）上传参考图 → 按下「快速创建」。
+安装后走首启向导：免责声明 → 配置 API Key → 输入角色名 → 选身份与定位 → （可选）上传参考图 → 「快速创建」。
 
 约 60 秒后，ta 就在你桌面上了。
 
@@ -77,7 +69,9 @@
   <img src="assets/create.png" alt="创建角色 · 60 秒快速模式 / 5-15 分钟深度模式" width="640" />
 </p>
 
-### 3. 随手唤起
+> 开发者可在 `apps/desktop/src/shared/starters.ts` 追加 `CharacterBundle` 作为内置 starter；开源版默认列表为空。
+
+### 2. 随手唤起
 
 `Ctrl + Shift + P` 或点击桌宠 → 聊天窗弹出在桌宠旁边，不抢工作焦点。`Esc` 收起，回到屏幕的安静状态。
 
@@ -124,7 +118,6 @@ LLM 拿到这套骨架后，**用 ta 的角度看你的问题**，给出**那个
 
 还要特别感谢：
 
-- 6 个内置示例角色基于女娲 examples 与社区 perspective skill 精简改编
 - 像素美术参考了开源 chibi sprite 风格惯例（非具体作品照搬）
 
 如果你觉得百灵有意思，**请去给上面两个上游项目点 star** —— 没有它们，就没有这只小桌宠。
@@ -185,14 +178,16 @@ LLM 拿到这套骨架后，**用 ta 的角度看你的问题**，给出**那个
 
 上传的图像在**本地处理**；当你启用了 Vision 模型时，图像会按你所配置的 LLM 服务商规则上传至其 API（请自行查阅该服务商的隐私政策）。
 
-### 5. 关于内置示例角色
+### 5. 关于内置示例角色（若提供）
 
-本仓库内置的 6 个示例角色基于**已充分进入公共讨论**的历史 / 公众人物，且：
+若仓库或发行版附带内置示例角色，其基于**已充分进入公共讨论**的历史 / 公众人物，且：
 
-- 全部使用**抽象化像素形象**，无任何对真人照片或官方艺术的精确复刻
-- 全部标注「受其启发，非本人 / 非官方 / 非授权」
+- 使用**抽象化像素形象**，无任何对真人照片或官方艺术的精确复刻
+- 标注「受其启发，非本人 / 非官方 / 非授权」
 - 仅作**功能演示**，不作任何商业用途
 - 如有原型本人 / 监护人 / 法务代表认为相关示例不合适，请联系下方下架渠道，我们将**立即响应**
+
+当前开源版默认**不包含**内置示例（`STARTER_BUNDLES` 为空）；你可自行在 `apps/desktop/src/shared/starters.ts` 追加。
 
 ### 6. 关于本工具作者的责任范围
 
@@ -251,10 +246,10 @@ bailin/
 │   └── desktop/                    # Electron 应用（main / preload / renderer）
 ├── packages/
 │   ├── character-protocol/         # CharacterCard / AppearanceSpec / SpriteProgram schema
-│   ├── sprite-runtime/             # DSL 渲染器 + 状态机 + guard 沙箱
+│   ├── sprite-runtime/             # DSL 渲染器 + 状态机 + guard 沙箱 + dsl-presets
 │   ├── nuwa-prompts/               # 蒸馏 / 调研 / 外貌 / 对话 / hatch-pet prompt
-│   ├── pet-atlas-tools/            # hatch-pet atlas 裁帧 / 拼图 / 校验
-│   └── starter-library/            # 6 个内置示例角色
+│   └── pet-atlas-tools/            # hatch-pet atlas 裁帧 / 拼图 / 校验
+├── apps/desktop/src/shared/starters.ts  # 可选内置 starter 列表（默认空）
 ├── assets/                         # README 用图与 logo
 ├── docs/
 │   └── skills/                     # 与女娲 Skill 的关系说明
@@ -318,7 +313,7 @@ node ./scripts/a11y-scan.mjs     # 扫 pet / chat / settings / bubble 四窗口
 
 - 默认 **DSL 模式**（纯 JSON，不存图片）；`mode: 'dsl' | 'js-sandbox'`
 - 状态机驱动 idle / walk / talk / think / click 等；`guard` 表达式在 Worker 内白名单求值
-- 内置示例 sprite 在 `starter-library`；用户新建走 `sprite-builder` + hatch-pet atlas 流水线
+- 共用动画预设见 `sprite-runtime` 的 `dsl-presets`；用户新建走 `sprite-builder` + hatch-pet atlas 流水线
 
 提示词模板（快速/深度造人、外貌调研、system prompt 组装）在 `packages/nuwa-prompts/`。
 
@@ -344,7 +339,7 @@ node ./scripts/a11y-scan.mjs     # 扫 pet / chat / settings / bubble 四窗口
 
 - **协议优先** —— `character-protocol` 定义角色长什么样、怎么思考、怎么动；字段变更须升 `schemaVersion` + 写迁移器
 - **沙箱大于自由** —— SpriteProgram 在 Web Worker 中执行，guard 表达式走白名单 AST 校验
-- **内置 vs 生成** —— `starter-library` 为手写精品 sprite；用户新建走 `sprite-builder`
+- **内置 vs 生成** —— 可选 starter 在 `apps/desktop/src/shared/starters.ts`；用户新建走 `sprite-builder` + `dsl-presets`
 - **Vision-first 外貌** —— 参考图 → vision 读图 → JSON 结构化 → vision 自检 → 程序化 sprite
 
 ### 无障碍验证

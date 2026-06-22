@@ -12,7 +12,7 @@ import {
   standardShadow,
   standardStateMachine,
   withFidgetVariants
-} from "@nuwa-pet/starter-library";
+} from "@nuwa-pet/sprite-runtime";
 
 /**
  * 程序化 sprite 生成器 v2（96×96 高精度版）。

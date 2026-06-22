@@ -160,15 +160,14 @@ export function useNuwa() {
 
 /** 仅用于 vite 单跑 / 测试环境的空安全 stub，绝不在 Electron 内被使用。
  *  为方便在浏览器里设计 / 截图：list / getActive / listStarters / get 直接返回
- *  starter-library 内置的真实 bundle，写操作仍是空 stub。 */
+ *  apps/desktop shared/starters 内置 bundle，写操作仍是空 stub。 */
 function makeNuwaStub(): NuwaWindow["nuwa"] {
   const noopOff = () => () => {};
-  // 动态拿真实 bundle 数据（同步 require 在 ESM 不行；这里走 Promise 包裹）
   let starterCache: any[] | null = null;
   async function loadStarters(): Promise<any[]> {
     if (starterCache) return starterCache;
     try {
-      const mod = await import("@nuwa-pet/starter-library");
+      const mod = await import("../../shared/starters.js");
       starterCache = (mod as any).STARTER_BUNDLES ?? [];
       return starterCache ?? [];
     } catch {

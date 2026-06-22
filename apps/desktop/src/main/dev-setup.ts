@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { ulid } from "ulid";
 import log from "electron-log/main";
-import { STARTER_BUNDLES } from "@nuwa-pet/starter-library";
+import { STARTER_BUNDLES } from "../shared/starters.js";
 import type { LocalVault } from "./store/local-vault.js";
 
 /**

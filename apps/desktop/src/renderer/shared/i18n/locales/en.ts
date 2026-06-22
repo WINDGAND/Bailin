@@ -920,7 +920,7 @@ export const en: TranslationTree = {
     saveAndTest: "Save & test connection",
     saveTesting: "Testing…",
     testFailed: "Test failed",
-    starterIntro: "Not sure who to create first? Here are our 6 built-in starters.",
+    starterIntro: "Not sure who to create first? Pick a built-in starter if any are available (skip when the list is empty).",
     starterImporting: "Importing…",
     starterSkip: "Skip, create my own →",
     toastCharacterReady: "Character is on your desktop",

@@ -6,7 +6,7 @@ import { AtlasPetSchema } from "./atlas-pet.js";
  * SpriteProgram 描述一只桌宠"长什么样 / 怎么动"。
  *
  * 支持三种 mode：
- *   - dsl          手写 / 程序化像素 DSL，starter-library 默认走这条
+ *   - dsl          手写 / 程序化像素 DSL；sprite-builder 与 dsl-presets 默认走这条
  *   - js-sandbox   受限 JS 渲染（默认禁用，未来开关）
  *   - atlas        hatch-pet 兼容的精灵图集（1536×1872 / 8×9 / 192×208）
  *

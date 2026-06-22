@@ -8,7 +8,7 @@
  *   4. 用真实凭据打一发 gpt-image-2 generate（economy 档省钱），
  *      验证 .env.dev 里的 OhMyGPT / OpenAI / 任意 provider 真能出图。
  *
- * 跑法：先 build:main + starter-library + nuwa-prompts + character-protocol：
+ * 跑法：先 build:main + nuwa-prompts + character-protocol：
  *   pnpm --filter=./packages/character-protocol run build
  *   pnpm --filter=./packages/nuwa-prompts run build
  *   pnpm --filter=./apps/desktop run build:main
