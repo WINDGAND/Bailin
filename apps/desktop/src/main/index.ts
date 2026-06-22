@@ -655,7 +655,7 @@ void app.whenReady().then(() => {
 
   const trayIcon = loadAppIcon(16);
   tray = new Tray(trayIcon.isEmpty() ? nativeImage.createEmpty() : trayIcon);
-  tray.on("click", () => summonPetBubble());
+  tray.on("click", () => ensureSettingsWindow("library"));
   rebuildTrayMenu();
 
   app.on("window-all-closed", () => {
