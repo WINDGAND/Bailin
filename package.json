@@ -14,7 +14,8 @@
     "dev": "pnpm --filter=./apps/desktop run dev",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test"
+    "test": "pnpm -r run test",
+    "package:win": "node apps/desktop/scripts/package-win.mjs"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",

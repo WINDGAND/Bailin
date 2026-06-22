@@ -72,7 +72,7 @@
 ## 快速开始
 
 > [!NOTE]
-> 当前版本以**源码构建**为主。预编译安装包见 [Releases](../../releases)（若已发布）。
+> 推荐从 [Releases](https://github.com/WINDGAND/Bailin/releases/latest) 下载 **Bailin-Setup-0.0.1.exe**（Windows x64）。亦可按下方步骤源码构建。
 
 ### 环境要求
 

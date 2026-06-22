@@ -72,7 +72,7 @@ Bailin is a **fully local**, open-source Windows desktop AI character companion.
 ## Quick Start
 
 > [!NOTE]
-> The current release is primarily **source-build**. Prebuilt installers appear under [Releases](../../releases) when published.
+> Download **Bailin-Setup-0.0.1.exe** (Windows x64) from [Releases](https://github.com/WINDGAND/Bailin/releases/latest), or build from source below.
 
 ### Requirements
 

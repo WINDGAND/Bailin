@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "Bailin (百灵) — Electron desktop shell.",
+  "author": "WINDGAND",
   "main": "./dist/main/main/index.js",
   "scripts": {
     "postinstall": "electron-rebuild -f -w better-sqlite3",
@@ -14,7 +15,7 @@
     "prestart": "pnpm run build:main && pnpm run build:preload",
     "start": "electron .",
     "typecheck": "pnpm --dir ../.. -r --filter @bailin/character-protocol --filter @bailin/prompts --filter @bailin/pet-atlas-tools --filter @bailin/sprite-runtime run build && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "package": "electron-builder"
+    "package": "node ./scripts/package-win.mjs"
   },
   "dependencies": {
     "@bailin/character-protocol": "workspace:*",
@@ -40,5 +41,57 @@
     "sharp": "^0.35.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.8"
+  },
+  "build": {
+    "appId": "app.bailin.desktop",
+    "productName": "百灵 Bailin",
+    "electronVersion": "32.3.3",
+    "copyright": "Copyright © 2026 WINDGAND",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "dist/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**",
+      "**/*.node"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": ["**/*"]
+      }
+    ],
+    "npmRebuild": true,
+    "buildDependenciesFromSource": false,
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "resources/logo.png",
+      "artifactName": "Bailin-Setup-${version}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerLanguages": ["zh_CN", "en_US"],
+      "language": "2052",
+      "shortcutName": "百灵 Bailin"
+    }
   }
 }

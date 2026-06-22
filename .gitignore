@@ -11,6 +11,9 @@ out/
 
 # Electron build artifacts
 release/
+apps/desktop/.pack-staging/
+apps/desktop/pack-out/
+apps/desktop/release/
 *.exe
 *.app
 *.dmg
