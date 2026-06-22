@@ -156,7 +156,7 @@ export const en: TranslationTree = {
     title: "Create Character",
     subtitle: "Enter a name and choose its source and role. You can fill in the rest later.",
     nameLabel: "Character name",
-    namePlaceholder: "Munger / Zhang Xiaolong / Rei Ayanami",
+    namePlaceholder: "Who do you want to create?",
     nameHint: "Suggested: 2–6 Chinese characters or ≤ 30 English characters",
     sourceLabel: "Source",
     sourceAria: "Character source type",

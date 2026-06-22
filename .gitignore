@@ -53,6 +53,9 @@ desktop.ini
 !.vscode/extensions.json
 .cursor/
 
+# Agent skills（本地安装缓存，锁文件见 skills-lock.json）
+.agents/
+
 # Local user vault (we never commit user data)
 **/AppData/
 **/NuwaPet/

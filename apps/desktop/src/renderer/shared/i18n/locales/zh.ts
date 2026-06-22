@@ -154,7 +154,7 @@ export const zh = {
     title: "创建角色",
     subtitle: "填一个名字，选择它的来源和用途。其余细节可以之后慢慢补。",
     nameLabel: "角色名",
-    namePlaceholder: "芒格 / 张小龙 / 绫波丽",
+    namePlaceholder: "你想创建谁？",
     nameHint: "建议中文 2-6 字 / 英文 ≤ 30 字",
     sourceLabel: "来源",
     sourceAria: "角色来源类型",
