@@ -276,9 +276,7 @@ bailin/
 ├── assets/                      # README 用截图
 ├── apps/desktop/src/shared/starters.ts  # 可选内置 starter（默认空）
 └── scripts/
-    ├── verify/                   # 离线回归脚本
-    ├── debug/                    # LLM 端到端调试
-    └── smoke/                    # 外部 provider 冒烟
+    └── verify/                   # 离线回归脚本（无需 Electron；多数需先 pnpm build）
 ```
 
 ### 常用命令
@@ -309,12 +307,37 @@ pnpm dev              # 开发模式
 
 ### 验证脚本
 
+先构建主进程与 packages 产物，再运行（均不启动 Electron）：
+
 ```bash
-node scripts/verify/verify-hatch-pet.mjs
-node scripts/verify/verify-sprite-builder.mjs
-node scripts/verify/verify-llm-multimodal.mjs
-node scripts/verify/verify-starters.mjs
+pnpm build
 ```
+
+**核心 smoke（改 atlas / sprite / adapter 后建议跑）：**
+
+```bash
+node scripts/verify/verify-hatch-pet.mjs          # atlas 裁帧 / 拼图 / schema
+node scripts/verify/verify-sprite-builder.mjs     # sprite-builder + schema
+node scripts/verify/verify-llm-multimodal.mjs     # 多模态请求体（mock fetch）
+node scripts/verify/verify-starters.mjs             # starter / 程序化 sprite 质量门槛
+```
+
+**更多离线回归：**
+
+```bash
+node scripts/verify/verify-character-names.mjs
+node scripts/verify/verify-character-quote.mjs
+node scripts/verify/verify-merge-research.mjs
+node scripts/verify/verify-profile-extraction.mjs
+node scripts/verify/verify-web-search-strictness.mjs
+node scripts/verify/verify-pet-window-bounds.mjs
+node scripts/verify/verify-pet-clamp-stability.mjs
+node scripts/verify/verify-chat-turn-delete.mjs
+node scripts/verify/verify-segment-buffer.mjs
+node scripts/verify/verify-create-pipeline-fallback.mjs   # 1–3 步离线；第 4 步生图需 .env.dev（可跳过）
+```
+
+`verify-hatch-pet` 会在 `.smoke-out/` 写出样例 PNG（已 gitignore，可删）。
 
 无障碍自动扫描（需 `pnpm dev` 已启动）：
 

@@ -276,9 +276,7 @@ bailin/
 ├── assets/                      # README screenshots
 ├── apps/desktop/src/shared/starters.ts  # optional built-in starters (empty by default)
 └── scripts/
-    ├── verify/                   # offline regression scripts
-    ├── debug/                    # LLM end-to-end debug
-    └── smoke/                    # external provider smoke tests
+    └── verify/                   # offline regression (no Electron; run after pnpm build)
 ```
 
 ### Common commands
@@ -309,12 +307,37 @@ One character = **`CharacterBundle = { card, sprite, runtime }`** (`packages/cha
 
 ### Verification scripts
 
+Build packages and the main process first, then run (Electron is not started):
+
 ```bash
-node scripts/verify/verify-hatch-pet.mjs
-node scripts/verify/verify-sprite-builder.mjs
-node scripts/verify/verify-llm-multimodal.mjs
-node scripts/verify/verify-starters.mjs
+pnpm build
 ```
+
+**Core smoke (after atlas / sprite / adapter changes):**
+
+```bash
+node scripts/verify/verify-hatch-pet.mjs          # atlas crop / compose / schema
+node scripts/verify/verify-sprite-builder.mjs     # sprite-builder + schema
+node scripts/verify/verify-llm-multimodal.mjs     # multimodal request bodies (mock fetch)
+node scripts/verify/verify-starters.mjs             # starter / procedural sprite quality bar
+```
+
+**Additional offline regression:**
+
+```bash
+node scripts/verify/verify-character-names.mjs
+node scripts/verify/verify-character-quote.mjs
+node scripts/verify/verify-merge-research.mjs
+node scripts/verify/verify-profile-extraction.mjs
+node scripts/verify/verify-web-search-strictness.mjs
+node scripts/verify/verify-pet-window-bounds.mjs
+node scripts/verify/verify-pet-clamp-stability.mjs
+node scripts/verify/verify-chat-turn-delete.mjs
+node scripts/verify/verify-segment-buffer.mjs
+node scripts/verify/verify-create-pipeline-fallback.mjs   # steps 1–3 offline; step 4 image API optional (.env.dev)
+```
+
+`verify-hatch-pet` writes sample PNGs under `.smoke-out/` (gitignored; safe to delete).
 
 Optional accessibility scan (requires `pnpm dev` running):
 
