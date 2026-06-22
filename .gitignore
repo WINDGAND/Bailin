@@ -51,6 +51,7 @@ desktop.ini
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+.cursor/
 
 # Local user vault (we never commit user data)
 **/AppData/
@@ -63,6 +64,3 @@ coverage/
 # Debug / smoke run artifacts（脚本本身受 git 管理，运行产物不进库）
 scripts/debug/_*
 scripts/verify/_*
-
-# Cursor plan / chat scratch
-.cursor/plans/scratch/
