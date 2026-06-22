@@ -23,7 +23,7 @@ export function createSettingsWindow(devUrl: string | undefined): BrowserWindow 
   if (devUrl) {
     void win.loadURL(`${devUrl}/settings.html`);
   } else {
-    void win.loadFile(join(__dirname, "../renderer/settings.html"));
+    void win.loadFile(join(__dirname, "../../../renderer/settings.html"));
   }
   return win;
 }

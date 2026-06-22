@@ -32,7 +32,7 @@ export function createProactiveBubbleWindow(devUrl: string | undefined): Browser
   if (devUrl) {
     void win.loadURL(`${devUrl}/proactive-bubble.html`);
   } else {
-    void win.loadFile(join(__dirname, "../renderer/proactive-bubble.html"));
+    void win.loadFile(join(__dirname, "../../../renderer/proactive-bubble.html"));
   }
 
   return win;

@@ -43,7 +43,7 @@ export function createChatWindow(devUrl: string | undefined): BW {
   if (devUrl) {
     void win.loadURL(`${devUrl}/chat.html`);
   } else {
-    void win.loadFile(join(__dirname, "../renderer/chat.html"));
+    void win.loadFile(join(__dirname, "../../../renderer/chat.html"));
   }
 
   return win;

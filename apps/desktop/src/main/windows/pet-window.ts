@@ -147,7 +147,7 @@ export function createPetWindow(
   if (devUrl) {
     void win.loadURL(`${devUrl}/pet.html`);
   } else {
-    void win.loadFile(join(__dirname, "../renderer/pet.html"));
+    void win.loadFile(join(__dirname, "../../../renderer/pet.html"));
   }
 
   return win;
