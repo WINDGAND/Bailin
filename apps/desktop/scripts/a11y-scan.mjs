@@ -103,9 +103,9 @@ async function scanOne(browser, axeSource, win, opts) {
   };
   await page.setViewport(sizes[win.id] ?? { width: 1024, height: 768 });
 
-  // 静默 nuwa preload API（renderer 在普通 Chromium 没有 window.nuwa）。
+  // 静默 bailin preload API（renderer 在普通 Chromium 没有 window.bailin）。
   await page.evaluateOnNewDocument(() => {
-    window.nuwa = new Proxy(
+    window.bailin = new Proxy(
       {},
       {
         get() {

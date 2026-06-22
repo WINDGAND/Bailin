@@ -1,1 +1,1 @@
-export { getCharacterDisplayNames } from "@nuwa-pet/character-protocol";
+export { getCharacterDisplayNames } from "@bailin/character-protocol";

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { getCharacterDisplayNames } from "../../shared/character-display-name.js";
 import { PetPreview } from "../../shared/pet-preview.js";
 import {
@@ -14,7 +14,7 @@ import type {
   QualityReport,
   ResearchDoc,
   SpriteProgram
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 import { useT } from "../../shared/i18n/index.js";
 import { useVisualJobs } from "../app/visual-job-context.js";
 
@@ -58,7 +58,7 @@ export function CharacterLibrary({
   onNewClick: () => void;
 }): JSX.Element {
   const t = useT();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const confirm = useConfirm();
   const { showToast } = useToast();
   const {
@@ -84,14 +84,14 @@ export function CharacterLibrary({
     setSelectedId(id);
     setOpenedAgentId(null);
     try {
-      const b = await nuwa.characters.get(id);
+      const b = await bailin.characters.get(id);
       if (!b) {
         showToast({ kind: "warn", text: t("library.toastNotFound") });
         setSelected(null);
         return;
       }
       setSelected(b);
-      const extra = await nuwa.characters.getResearchByCharacter(id);
+      const extra = await bailin.characters.getResearchByCharacter(id);
       setResearchDocs(extra.docs);
       setQualityReport(extra.qualityReport);
     } catch (e) {
@@ -107,7 +107,7 @@ export function CharacterLibrary({
   async function refreshList(keepSelected = true): Promise<void> {
     let list: LibraryItem[] = [];
     try {
-      list = (await nuwa.characters.list()) as LibraryItem[];
+      list = (await bailin.characters.list()) as LibraryItem[];
     } catch (e) {
       showToast({
         kind: "error",
@@ -124,9 +124,9 @@ export function CharacterLibrary({
       // 当前选中角色还在 → 同步详情；否则跳到 active 或第一个
       const stillExists = list.some((c) => c.id === selectedId);
       if (stillExists) {
-        const next = await nuwa.characters.get(selectedId);
+        const next = await bailin.characters.get(selectedId);
         setSelected(next);
-        const extra = await nuwa.characters.getResearchByCharacter(selectedId);
+        const extra = await bailin.characters.getResearchByCharacter(selectedId);
         setResearchDocs(extra.docs);
         setQualityReport(extra.qualityReport);
       } else {
@@ -150,19 +150,19 @@ export function CharacterLibrary({
   async function prefetchThumbnails(list: LibraryItem[]) {
     for (const item of list) {
       if (thumbnails[item.id]) continue;
-      const b = await nuwa.characters.get(item.id);
+      const b = await bailin.characters.get(item.id);
       setThumbnails((prev) => ({ ...prev, [item.id]: b?.sprite ?? null }));
     }
   }
 
   useEffect(() => {
     void refreshList(false);
-    const offActive = nuwa.on.activeCharacterChanged(() => void refreshList(true));
+    const offActive = bailin.on.activeCharacterChanged(() => void refreshList(true));
     const offSettled = subscribeJobSettled((characterId, outcome) => {
       if (outcome !== "success") return;
       void (async () => {
         await refreshList(true);
-        const next = await nuwa.characters.get(characterId);
+        const next = await bailin.characters.get(characterId);
         if (next) {
           setThumbnails((prev) => ({ ...prev, [characterId]: next.sprite ?? null }));
         }
@@ -172,12 +172,12 @@ export function CharacterLibrary({
       offActive();
       offSettled();
     };
-  }, [nuwa, subscribeJobSettled]);
+  }, [bailin, subscribeJobSettled]);
 
   async function activate(id: string): Promise<void> {
     setActivating(true);
     try {
-      const r = await nuwa.characters.activate(id);
+      const r = await bailin.characters.activate(id);
       if (!r.ok) {
         showToast({ kind: "error", text: t("library.toastActivateFailed") });
         return;
@@ -217,7 +217,7 @@ export function CharacterLibrary({
     });
     if (!ok) return;
     try {
-      await nuwa.characters.delete(id);
+      await bailin.characters.delete(id);
       showToast({ kind: "info", text: t("library.toastDeleted", { name }) });
       // 不立即清空 selected——等 refreshList 自动选下一个
       setSelectedId(null);

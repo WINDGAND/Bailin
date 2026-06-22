@@ -1,4 +1,4 @@
-import type { ResearchAgentId } from "@nuwa-pet/character-protocol";
+import type { ResearchAgentId } from "@bailin/character-protocol";
 import type { Locale } from "../../shared/i18n/types.js";
 import {
   APPEARANCE_PHASE_AUTO_SEARCH_VISION,

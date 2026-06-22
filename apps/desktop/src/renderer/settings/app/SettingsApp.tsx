@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { useShortcut, useKeyboard } from "../../shared/keyboard.js";
 import { BrandLogo } from "../../shared/brand-logo.js";
 import { useConfirm } from "../../shared/feedback.js";
@@ -53,7 +53,7 @@ const TABS: TabDef[] = [
 ];
 
 export function SettingsApp(): JSX.Element {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const { t, ready: i18nReady } = useI18n();
   const kb = useKeyboard();
   const confirm = useConfirm();
@@ -63,8 +63,8 @@ export function SettingsApp(): JSX.Element {
   const dirtyRef = useRef(false);
 
   useEffect(() => {
-    void nuwa.app.isFirstRun().then((v) => setFirstRun(v));
-  }, [nuwa]);
+    void bailin.app.isFirstRun().then((v) => setFirstRun(v));
+  }, [bailin]);
 
   const dirtyCtx = useMemo<DirtyContextValue>(
     () => ({
@@ -98,10 +98,10 @@ export function SettingsApp(): JSX.Element {
   tryGoTabRef.current = tryGoTab;
 
   useEffect(() => {
-    return nuwa.on.navigateSettings((evt) => {
+    return bailin.on.navigateSettings((evt) => {
       if (evt.tab) void tryGoTabRef.current(evt.tab);
     });
-  }, [nuwa]);
+  }, [bailin]);
 
   useShortcut({
     id: "tab-1",
@@ -194,7 +194,7 @@ export function SettingsApp(): JSX.Element {
     return (
       <SetupWizard
         onDone={async () => {
-          await nuwa.app.completeFirstRun();
+          await bailin.app.completeFirstRun();
           setFirstRun(false);
         }}
       />

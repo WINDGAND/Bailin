@@ -708,7 +708,7 @@ export class LLMAdapter {
    *   annotations=[]、正文也没有任何 URL，1255 tokens 的回答完全是编的。
    *
    * 修复策略（两层）：
-   *   1) prompt 层在 nuwa-prompts/research-agents.ts 顶部加强指令 + 候选 query
+   *   1) prompt 层在 packages/prompts/research-agents.ts 顶部加强指令 + 候选 query
    *      （让模型一开始就调用 web_search）。
    *   2) 适配器层：首次拿不到 citations 时，用**短 query** 重问一次——
    *      把 user 最后一条短指令重写为"请用 web_search 查 X 的 Y，给 5 个真实 URL"，

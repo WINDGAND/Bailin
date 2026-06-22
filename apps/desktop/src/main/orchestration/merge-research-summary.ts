@@ -1,4 +1,4 @@
-import type { ResearchDoc } from "@nuwa-pet/character-protocol";
+import type { ResearchDoc } from "@bailin/character-protocol";
 import type {
   MaterialModeUsed,
   ResearchReviewAgentRow,

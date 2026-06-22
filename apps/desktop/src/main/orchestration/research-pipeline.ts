@@ -1,10 +1,10 @@
-import type { ResearchAgentId, ResearchDoc } from "@nuwa-pet/character-protocol";
+import type { ResearchAgentId, ResearchDoc } from "@bailin/character-protocol";
 import {
   buildResearchAgentPrompt,
   RESEARCH_AGENT_ORDER,
   type ResearchAgentInput,
   type ResearchAgentSlug
-} from "@nuwa-pet/nuwa-prompts";
+} from "@bailin/prompts";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 
 const SLUG_TO_AGENT_ID: Record<ResearchAgentSlug, 1 | 2 | 3 | 4 | 5 | 6> = {

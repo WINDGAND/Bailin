@@ -5,41 +5,46 @@ import log from "electron-log/main";
 import { STARTER_BUNDLES } from "../shared/starters.js";
 import type { LocalVault } from "./store/local-vault.js";
 
+/** 读开发环境变量：优先 BAILIN_*，兼容旧版 NUWA_PET_*。 */
+function devEnv(name: string): string | undefined {
+  return process.env[`BAILIN_${name}`] ?? process.env[`NUWA_PET_${name}`];
+}
+
 /**
  * 开发期辅助：从 .env.dev 读取一份 DeepSeek（或其它 OpenAI 兼容提供商）的凭据，
  * 直接写入 LocalVault，并标记 first-run 完成，省得每次开 dev 都填一遍 Wizard。
  *
  * 触发条件：
- *   1. process.env.NUWA_PET_DEV === "1"（dev.mjs 已默认设置）
- *   2. NUWA_PET_DEV_SKIP_SETUP !== "0"
- *   3. .env.dev 文件存在或环境变量里已经有 NUWA_PET_LLM_API_KEY
+ *   1. process.env.BAILIN_DEV === "1"（dev.mjs 已默认设置）
+ *   2. BAILIN_DEV_SKIP_SETUP !== "0"
+ *   3. .env.dev 文件存在或环境变量里已经有 BAILIN_LLM_API_KEY
  *
  * 生产打包后这函数不会被调用（main 里只在 dev 模式里 import + run）。
  */
 export function applyDevSetup(vault: LocalVault): void {
-  if (process.env.NUWA_PET_DEV !== "1") return;
+  if (devEnv("DEV") !== "1") return;
 
   // 先尝试从 .env.dev 加载（项目根 / 当前工作目录 / 上溯）
   loadDotEnvDev();
 
-  if (process.env.NUWA_PET_DEV_SKIP_SETUP === "0") {
-    log.info("[dev-setup] NUWA_PET_DEV_SKIP_SETUP=0, skipping dev credential injection");
+  if (devEnv("DEV_SKIP_SETUP") === "0") {
+    log.info("[dev-setup] BAILIN_DEV_SKIP_SETUP=0, skipping dev credential injection");
     return;
   }
 
-  const apiKey = process.env.NUWA_PET_LLM_API_KEY?.trim();
+  const apiKey = devEnv("LLM_API_KEY")?.trim();
   if (!apiKey) {
-    log.info("[dev-setup] NUWA_PET_LLM_API_KEY not set, using standard setup wizard");
+    log.info("[dev-setup] BAILIN_LLM_API_KEY not set, using standard setup wizard");
     return;
   }
 
-  const kind = (process.env.NUWA_PET_LLM_KIND ?? "openai-compatible").trim() as
+  const kind = (devEnv("LLM_KIND") ?? "openai-compatible").trim() as
     | "openai-compatible"
     | "anthropic-compatible";
-  const baseUrl = (process.env.NUWA_PET_LLM_BASE_URL ?? "https://api.deepseek.com").trim();
-  const model = (process.env.NUWA_PET_LLM_MODEL ?? "deepseek-v4-flash").trim();
+  const baseUrl = (devEnv("LLM_BASE_URL") ?? "https://api.deepseek.com").trim();
+  const model = (devEnv("LLM_MODEL") ?? "deepseek-v4-flash").trim();
   const visionModel = (
-    process.env.NUWA_PET_VISION_MODEL ?? "bytedance/doubao-seed-2.0-lite-260428"
+    devEnv("VISION_MODEL") ?? "bytedance/doubao-seed-2.0-lite-260428"
   ).trim();
 
   vault.setSetting(
@@ -56,7 +61,7 @@ export function applyDevSetup(vault: LocalVault): void {
   seedStarterLibraryIfEmpty(vault);
 
   // 支持开发期通过环境变量指定激活哪个 starter（按 sourceName 部分匹配）
-  const activeHint = process.env.NUWA_PET_DEV_ACTIVE;
+  const activeHint = devEnv("DEV_ACTIVE");
   if (activeHint) {
     const cleaned = activeHint.toLowerCase().trim();
     const all = vault.listCharacters();
@@ -65,9 +70,9 @@ export function applyDevSetup(vault: LocalVault): void {
     );
     if (match) {
       vault.setSetting("active_character_id", match.id);
-      log.info(`[dev-setup] activated character: ${match.name} (NUWA_PET_DEV_ACTIVE=${activeHint})`);
+      log.info(`[dev-setup] activated character: ${match.name} (BAILIN_DEV_ACTIVE=${activeHint})`);
     } else {
-      log.warn(`[dev-setup] no character matched NUWA_PET_DEV_ACTIVE=${activeHint}`);
+      log.warn(`[dev-setup] no character matched BAILIN_DEV_ACTIVE=${activeHint}`);
     }
   }
 }

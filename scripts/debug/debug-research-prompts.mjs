@@ -16,7 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
 
-const promptsPath = resolve(repoRoot, "packages/nuwa-prompts/dist/index.cjs");
+const promptsPath = resolve(repoRoot, "packages/prompts/dist/index.cjs");
 const { buildResearchAgentPrompt, RESEARCH_AGENT_ORDER } = require(promptsPath);
 
 function loadEnv(path) {
@@ -38,8 +38,8 @@ function chatCompletionsUrl(baseUrl) {
 }
 
 const env = loadEnv(resolve(repoRoot, ".env.dev"));
-const baseUrl = env.NUWA_PET_LLM_BASE_URL;
-const apiKey = env.NUWA_PET_LLM_API_KEY;
+const baseUrl = env.BAILIN_LLM_BASE_URL;
+const apiKey = env.BAILIN_LLM_API_KEY;
 const url = chatCompletionsUrl(baseUrl);
 const MODEL = "gpt-4o-mini-search-preview";
 const characterName = process.argv[2] ?? "三笠";

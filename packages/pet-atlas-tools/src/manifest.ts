@@ -4,14 +4,14 @@ import {
   DEFAULT_ATLAS_CELL,
   DEFAULT_ATLAS_GRID,
   type HatchPetRowState
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 import { blankImage, encodePng, paste, resize, decodePng } from "./png.js";
 
 /**
  * hatch-pet manifest / layout guide。
  *
  * 这里只产出「确定性」资产：要做哪些 imagegen job、每个 job 的输入图列表、
- * 行级 layout guide 的 PNG buffer。Prompt 文本由 @nuwa-pet/nuwa-prompts 提供，
+ * 行级 layout guide 的 PNG buffer。Prompt 文本由 @bailin/prompts 提供，
  * 这样不会让 atlas 工具和 LLM prompt 工程耦合。
  */
 

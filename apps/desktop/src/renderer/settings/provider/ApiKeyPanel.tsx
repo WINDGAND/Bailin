@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { useConfirm, useToast } from "../../shared/feedback.js";
 import type {
   ImageGenerationConfigDTO,
@@ -58,7 +58,7 @@ function applyBundleToForm(
 
 export function ApiKeyPanel(): JSX.Element {
   const t = useT();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const confirm = useConfirm();
   const { showToast } = useToast();
 
@@ -92,7 +92,7 @@ export function ApiKeyPanel(): JSX.Element {
 
   useEffect(() => {
     void (async () => {
-      const p = (await nuwa.llm.getProvider()) as
+      const p = (await bailin.llm.getProvider()) as
         | {
             kind: string;
             baseUrl: string;
@@ -121,14 +121,14 @@ export function ApiKeyPanel(): JSX.Element {
           hasKey: !!p.apiKey
         });
         try {
-          const img = await nuwa.imageGen.getConfig();
+          const img = await bailin.imageGen.getConfig();
           if (img) setImageConfig(img);
         } catch {
           // ignore
         }
       }
     })();
-  }, [nuwa]);
+  }, [bailin]);
 
   const dirty = useMemo(() => {
     if (!baseline) {
@@ -200,7 +200,7 @@ export function ApiKeyPanel(): JSX.Element {
 
     try {
       const result = await applyOhMyGptBundle(
-        nuwa,
+        bailin,
         OHMYGPT_BUNDLE,
         apiKey.trim(),
         (key, state) => {
@@ -259,7 +259,7 @@ export function ApiKeyPanel(): JSX.Element {
 
     try {
       const result = await verifyCustomProvider(
-        nuwa,
+        bailin,
         {
           kind,
           baseUrl: baseUrl.trim(),
@@ -328,7 +328,7 @@ export function ApiKeyPanel(): JSX.Element {
     });
     if (!ok) return;
     try {
-      await nuwa.llm.clearKey();
+      await bailin.llm.clearKey();
       setApiKey("");
       setBaseline(null);
       setReadiness(IDLE_READINESS);
@@ -353,7 +353,7 @@ export function ApiKeyPanel(): JSX.Element {
     });
     if (!ok) return;
     try {
-      await nuwa.imageGen.clearKey();
+      await bailin.imageGen.clearKey();
       setImageApiKeyDraft("");
       showToast({ kind: "info", text: t("provider.toastImageKeyCleared") });
     } catch (e) {

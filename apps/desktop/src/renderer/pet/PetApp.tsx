@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SpriteEvent } from "@nuwa-pet/character-protocol";
-import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
+import type { SpriteEvent } from "@bailin/character-protocol";
+import { useActiveCharacter, useBailin } from "../shared/use-bailin.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import {
   PET_DISPLAY_SCALE_DEFAULT,
@@ -32,7 +32,7 @@ interface MyCharacter {
   isActive: boolean;
 }
 
-const HATCH_SS_KEY_PREFIX = "nuwa.hatched.";
+const HATCH_SS_KEY_PREFIX = "bailin.hatched.";
 /** 判定为「拖动」的最小位移（px）；略大于 0，避免手抖误触。 */
 const DRAG_START_PX = 3;
 
@@ -40,7 +40,7 @@ export function PetApp(): JSX.Element {
   const t = useT();
   const { resyncLocale } = useI18n();
   const { bundle } = useActiveCharacter();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const menuLayerRef = useRef<HTMLDivElement | null>(null);
 
@@ -48,15 +48,15 @@ export function PetApp(): JSX.Element {
   const [defaultHushMinutes, setDefaultHushMinutes] = useState(30);
 
   useEffect(() => {
-    void nuwa.proactive.getSettings().then((s) => {
+    void bailin.proactive.getSettings().then((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
       setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
     });
-    return nuwa.on.proactiveSettingsChanged((s) => {
+    return bailin.on.proactiveSettingsChanged((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
       setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
     });
-  }, [nuwa]);
+  }, [bailin]);
 
   const petSlotWidth = Math.round(PET_WINDOW_BASE_SIZE.width * petDisplayScale);
 
@@ -126,7 +126,7 @@ export function PetApp(): JSX.Element {
       const nextIgnored = !inside;
       if (nextIgnored !== ignoredRef.current) {
         ignoredRef.current = nextIgnored;
-        void nuwa.pet.setMouseIgnore(nextIgnored);
+        void bailin.pet.setMouseIgnore(nextIgnored);
       }
     }
   });
@@ -137,9 +137,9 @@ export function PetApp(): JSX.Element {
       checkMouseIgnore(e.clientX, e.clientY);
     };
     window.addEventListener("mousemove", handler, { passive: true });
-    void nuwa.pet.setMouseIgnore(true);
+    void bailin.pet.setMouseIgnore(true);
     return () => window.removeEventListener("mousemove", handler);
-  }, [nuwa, checkMouseIgnore]);
+  }, [bailin, checkMouseIgnore]);
 
   // ===== 拖动 + 单击唤起 =====
   const dragStateRef = useRef<{
@@ -170,9 +170,9 @@ export function PetApp(): JSX.Element {
         startScreenY: e.screenY,
         lastScreenX: e.screenX
       };
-      void nuwa.pet.setMouseIgnore(false);
+      void bailin.pet.setMouseIgnore(false);
     },
-    [nuwa]
+    [bailin]
   );
 
   const applyDragRunDelta = useCallback((deltaX: number) => {
@@ -205,17 +205,17 @@ export function PetApp(): JSX.Element {
           deltaX !== 0 ? deltaX : e.screenX - s.startScreenX
         );
         void (async () => {
-          await nuwa.pet.dragStart();
-          await nuwa.pet.dragMove();
+          await bailin.pet.dragStart();
+          await bailin.pet.dragMove();
         })();
         sendSpriteEvent("dragStart");
         return;
       }
 
       applyDragRunDelta(deltaX);
-      void nuwa.pet.dragMove();
+      void bailin.pet.dragMove();
     },
-    [nuwa, sendSpriteEvent, applyDragRunDelta]
+    [bailin, sendSpriteEvent, applyDragRunDelta]
   );
 
   const onPetPointerUp = useCallback(
@@ -229,27 +229,27 @@ export function PetApp(): JSX.Element {
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
       if (wasDragging) {
-        void nuwa.pet.dragEnd();
+        void bailin.pet.dragEnd();
         sendSpriteEvent("dragEnd");
       } else {
         sendSpriteEvent("click");
         window.setTimeout(() => {
-          void nuwa.pet.openChat();
+          void bailin.pet.openChat();
           sendSpriteEvent("chatOpen");
         }, 420);
       }
     },
-    [nuwa, sendSpriteEvent]
+    [bailin, sendSpriteEvent]
   );
 
   // ===== 托盘 / 快捷键唤起时震一下 =====
   const [nudgeNonce, setNudgeNonce] = useState(0);
   useEffect(() => {
-    return nuwa.on.petSummon(() => {
+    return bailin.on.petSummon(() => {
       setNudgeNonce((n) => n + 1);
       sendSpriteEvent("chatOpen");
     });
-  }, [nuwa, sendSpriteEvent]);
+  }, [bailin, sendSpriteEvent]);
 
   // ===== 右键菜单 =====
   const [menu, setMenu] = useState<{ chatOpen: boolean; side: "left" | "right" } | null>(null);
@@ -260,16 +260,16 @@ export function PetApp(): JSX.Element {
   const openContextMenu = useCallback(async () => {
     await resyncLocale();
     const [list, st, chatOpen] = await Promise.all([
-      nuwa.characters.list(),
-      nuwa.characters.listStarters(),
-      nuwa.chat.isVisible()
+      bailin.characters.list(),
+      bailin.characters.listStarters(),
+      bailin.chat.isVisible()
     ]);
-    const side = await nuwa.pet.setContextMenuOpen(true);
+    const side = await bailin.pet.setContextMenuOpen(true);
     setMenu({ chatOpen, side: side ?? "right" });
     setSubmenu(null);
     setCharacters(list);
     setStarters(st);
-  }, [nuwa, resyncLocale]);
+  }, [bailin, resyncLocale]);
 
   const onPetContextMenu = useCallback(
     (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -286,7 +286,7 @@ export function PetApp(): JSX.Element {
         e.preventDefault();
         sendSpriteEvent("click");
         window.setTimeout(() => {
-          void nuwa.pet.openChat();
+          void bailin.pet.openChat();
           sendSpriteEvent("chatOpen");
         }, 420);
         return;
@@ -297,16 +297,16 @@ export function PetApp(): JSX.Element {
         void openContextMenu();
       }
     },
-    [nuwa, sendSpriteEvent, openContextMenu]
+    [bailin, sendSpriteEvent, openContextMenu]
   );
 
   const closeMenu = useCallback(() => {
     setMenu(null);
     setSubmenu(null);
-    void nuwa.pet.setContextMenuOpen(false);
+    void bailin.pet.setContextMenuOpen(false);
     // 菜单关闭后焦点回到桌宠，避免键盘用户焦点丢到 body。
     window.setTimeout(() => wrapRef.current?.focus(), 0);
-  }, [nuwa]);
+  }, [bailin]);
 
   // 菜单展开期间强制整窗接收 mouse events（设 ignore=false）。否则当 mouse
   // 从桌宠移到菜单时，桌宠的 onPointerLeave 会先把 ignore 设回 true，菜单上
@@ -318,13 +318,13 @@ export function PetApp(): JSX.Element {
     if (menu) {
       ignoredRef.current = false;
       mouseInsideRef.current = true;
-      void nuwa.pet.setMouseIgnore(false);
+      void bailin.pet.setMouseIgnore(false);
     } else {
       ignoredRef.current = true;
       mouseInsideRef.current = false;
-      void nuwa.pet.setMouseIgnore(true);
+      void bailin.pet.setMouseIgnore(true);
     }
-  }, [menu, nuwa]);
+  }, [menu, bailin]);
 
   useEffect(() => {
     if (!menu) return;
@@ -334,7 +334,7 @@ export function PetApp(): JSX.Element {
   }, [menu, closeMenu]);
 
   if (!bundle) {
-    return <EmptyPet onPickStarter={() => void nuwa.pet.openSettings()} />;
+    return <EmptyPet onPickStarter={() => void bailin.pet.openSettings()} />;
   }
 
   return (
@@ -364,12 +364,12 @@ export function PetApp(): JSX.Element {
                 userSelect: "none"
               }}
               onPointerDown={onPetPointerDown}
-              onPointerEnter={() => void nuwa.pet.setMouseIgnore(false)}
+              onPointerEnter={() => void bailin.pet.setMouseIgnore(false)}
               onPointerLeave={() => {
                 // 菜单展开 / 拖拽中时，整窗都需要可点击；不要在这里 ignore，
                 // 否则鼠标从桌宠移到菜单的瞬间会让菜单 click 失效。
                 if (draggingRef.current || menu) return;
-                void nuwa.pet.setMouseIgnore(true);
+                void bailin.pet.setMouseIgnore(true);
               }}
               onPointerMove={onPetPointerMove}
               onPointerUp={onPetPointerUp}
@@ -405,22 +405,22 @@ export function PetApp(): JSX.Element {
               hushMinutes={defaultHushMinutes}
               onSubmenu={(s) => setSubmenu(s)}
               onSummon={() => {
-                void nuwa.pet.summon();
+                void bailin.pet.summon();
                 closeMenu();
               }}
               onHush={() => {
-                void nuwa.pet.hush(defaultHushMinutes * 60 * 1000);
-                void nuwa.chat.hide();
+                void bailin.pet.hush(defaultHushMinutes * 60 * 1000);
+                void bailin.chat.hide();
                 closeMenu();
               }}
-              onOpenSettings={() => void nuwa.pet.openSettings()}
-              onHide={() => void nuwa.pet.hide()}
+              onOpenSettings={() => void bailin.pet.openSettings()}
+              onHide={() => void bailin.pet.hide()}
               onActivate={async (id) => {
-                await nuwa.characters.activate(id);
+                await bailin.characters.activate(id);
                 closeMenu();
               }}
               onImportStarter={async (id) => {
-                await nuwa.characters.importStarter(id);
+                await bailin.characters.importStarter(id);
                 closeMenu();
               }}
               onClose={closeMenu}

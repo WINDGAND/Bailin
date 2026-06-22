@@ -1,5 +1,5 @@
 import { useCallback, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { useNuwa } from "../shared/use-nuwa.js";
+import { useBailin } from "../shared/use-bailin.js";
 import { useRafThrottle } from "../shared/use-raf-throttle.js";
 
 type ResizeEdge = "e" | "s" | "se";
@@ -19,13 +19,13 @@ const NO_DRAG = { WebkitAppRegion: "no-drag" } as CSSProperties;
  * 尺寸变更走主进程 setContentBounds + 内存中的 chatWindowSize，避免 DPI 漂移。
  */
 export function ChatResizeHandles(): JSX.Element {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const dragRef = useRef<DragState | null>(null);
 
   // rAF 节流 IPC 调用：高频 pointermove（每秒 60+）只发最后一帧的尺寸。
   // 拖完时再发一次 final（onPointerEnd 内调），保证最终尺寸落地。
   const resizeIpc = useRafThrottle((width: number, height: number) => {
-    void nuwa.chat.resize({ width, height });
+    void bailin.chat.resize({ width, height });
   });
 
   const onPointerDown = useCallback(
@@ -33,7 +33,7 @@ export function ChatResizeHandles(): JSX.Element {
       e.preventDefault();
       e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
-      void nuwa.chat.getSize().then(({ width, height }) => {
+      void bailin.chat.getSize().then(({ width, height }) => {
         dragRef.current = {
           edge,
           startScreenX: e.screenX,
@@ -43,7 +43,7 @@ export function ChatResizeHandles(): JSX.Element {
         };
       });
     },
-    [nuwa]
+    [bailin]
   );
 
   const onPointerMove = useCallback(

@@ -5,7 +5,7 @@ import type {
   QualityReport,
   ResearchAgentId,
   ResearchDoc
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 import type {
   AmbientSignal,
   DistillationProgressEvent,
@@ -17,8 +17,8 @@ import type {
 } from "../../shared/ipc-contract.js";
 import type { ChatStreamChunk, ChatVisibilityEvent } from "../../shared/ipc-contract.js";
 
-interface NuwaWindow {
-  nuwa: {
+interface BailinWindow {
+  bailin: {
     app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void>; openExternal(url: string): Promise<{ ok: boolean }> };
     llm: {
       setProvider(input: unknown): Promise<{ ok: boolean; error?: string }>;
@@ -148,20 +148,20 @@ interface NuwaWindow {
   };
 }
 
-export function useNuwa() {
+export function useBailin() {
   return useMemo(() => {
-    const w = window as unknown as NuwaWindow;
-    if (w.nuwa) return w.nuwa;
+    const w = window as unknown as BailinWindow;
+    if (w.bailin) return w.bailin;
     // Fallback：vite 单独跑（无 Electron preload）或测试场景，返回空安全的 stub，
     // 保证 UI 仍可渲染，方便截图 / 设计调试。
-    return makeNuwaStub();
+    return makeBailinStub();
   }, []);
 }
 
 /** 仅用于 vite 单跑 / 测试环境的空安全 stub，绝不在 Electron 内被使用。
  *  为方便在浏览器里设计 / 截图：list / getActive / listStarters / get 直接返回
  *  apps/desktop shared/starters 内置 bundle，写操作仍是空 stub。 */
-function makeNuwaStub(): NuwaWindow["nuwa"] {
+function makeBailinStub(): BailinWindow["bailin"] {
   const noopOff = () => () => {};
   let starterCache: any[] | null = null;
   async function loadStarters(): Promise<any[]> {
@@ -405,21 +405,21 @@ export function useActiveCharacter(): {
   bundle: CharacterBundle | null;
   refresh: () => Promise<void>;
 } {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const [bundle, setBundle] = useState<CharacterBundle | null>(null);
 
   const refresh = useCallback(async () => {
-    const b = await nuwa.characters.getActive();
+    const b = await bailin.characters.getActive();
     setBundle(b);
-  }, [nuwa]);
+  }, [bailin]);
 
   useEffect(() => {
     void refresh();
-    const off = nuwa.on.activeCharacterChanged((b) => {
+    const off = bailin.on.activeCharacterChanged((b) => {
       setBundle(b);
     });
     return off;
-  }, [nuwa, refresh]);
+  }, [bailin, refresh]);
 
   return { bundle, refresh };
 }

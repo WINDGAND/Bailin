@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { useNuwa } from "../use-nuwa.js";
+import { useBailin } from "../use-bailin.js";
 import { en } from "./locales/en.js";
 import { zh, type TranslationTree } from "./locales/zh.js";
 import type { Locale, TranslationParams } from "./types.js";
@@ -44,7 +44,7 @@ export interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }): JSX.Element {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const [locale, setLocaleState] = useState<Locale>("zh");
   const [ready, setReady] = useState(false);
 
@@ -57,7 +57,7 @@ export function I18nProvider({ children }: { children: ReactNode }): JSX.Element
   useEffect(() => {
     void (async () => {
       try {
-        const stored = await nuwa.app.getLocale();
+        const stored = await bailin.app.getLocale();
         applyLocale(stored);
       } catch {
         const fallback = localStorage.getItem(STORAGE_KEY);
@@ -66,23 +66,23 @@ export function I18nProvider({ children }: { children: ReactNode }): JSX.Element
         setReady(true);
       }
     })();
-  }, [nuwa, applyLocale]);
+  }, [bailin, applyLocale]);
 
   useEffect(() => {
-    const off = nuwa.on.localeChanged((next) => {
+    const off = bailin.on.localeChanged((next) => {
       applyLocale(next);
     });
     return off;
-  }, [nuwa, applyLocale]);
+  }, [bailin, applyLocale]);
 
   const resyncLocale = useCallback(async () => {
     try {
-      applyLocale(await nuwa.app.getLocale());
+      applyLocale(await bailin.app.getLocale());
     } catch {
       const fallback = localStorage.getItem(STORAGE_KEY);
       if (fallback === "en" || fallback === "zh") applyLocale(fallback);
     }
-  }, [nuwa, applyLocale]);
+  }, [bailin, applyLocale]);
 
   useEffect(() => {
     const resync = () => {
@@ -94,10 +94,10 @@ export function I18nProvider({ children }: { children: ReactNode }): JSX.Element
 
   const setLocale = useCallback(
     async (next: Locale) => {
-      await nuwa.app.setLocale(next);
+      await bailin.app.setLocale(next);
       applyLocale(next);
     },
-    [nuwa, applyLocale]
+    [bailin, applyLocale]
   );
 
   const t = useCallback(

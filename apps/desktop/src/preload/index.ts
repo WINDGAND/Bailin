@@ -179,6 +179,6 @@ const api = {
   }
 };
 
-contextBridge.exposeInMainWorld("nuwa", api);
+contextBridge.exposeInMainWorld("bailin", api);
 
 export type BailinWindowApi = typeof api;

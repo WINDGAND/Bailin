@@ -1,10 +1,10 @@
 /**
- * Phase 4 Sanity + Edge 测试 prompt（女娲 SKILL.md §4.1 / §4.2）。
+ * Phase 4 Sanity + Edge 测试 prompt（nuwa-skill SKILL.md §4.1 / §4.2）。
  *
  * Sanity：3 个此人公开表态过的问题，检验回答方向是否一致。
  * Edge：1 个未公开讨论的相关问题，检验是否适度不确定、不胡编。
  */
-import type { CharacterCard, ResearchDoc } from "@nuwa-pet/character-protocol";
+import type { CharacterCard, ResearchDoc } from "@bailin/character-protocol";
 import { buildSystemPrompt } from "./system-prompt.js";
 
 export interface SanityQuestion {

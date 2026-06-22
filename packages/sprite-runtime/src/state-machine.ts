@@ -1,4 +1,4 @@
-import type { SpriteDSL, SpriteEvent, SpriteState } from "@nuwa-pet/character-protocol";
+import type { SpriteDSL, SpriteEvent, SpriteState } from "@bailin/character-protocol";
 import { evalGuard, type GuardContext } from "./guard-eval.js";
 
 export interface StateMachineRuntime {

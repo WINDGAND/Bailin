@@ -6,8 +6,8 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent
 } from "react";
-import type { CharacterBundle } from "@nuwa-pet/character-protocol";
-import { useActiveCharacter, useNuwa } from "../shared/use-nuwa.js";
+import type { CharacterBundle } from "@bailin/character-protocol";
+import { useActiveCharacter, useBailin } from "../shared/use-bailin.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import { useConfirm, useToast } from "../shared/feedback.js";
 import { ChatBubble } from "../shared/chat-bubble.js";
@@ -22,7 +22,7 @@ import type { ProfileChange, ProfileUpdatedEvent } from "../../shared/ipc-contra
 import { useT } from "../shared/i18n/index.js";
 
 export function ChatApp(): JSX.Element {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const t = useT();
   const modKey = usePlatformModKey();
   const { bundle } = useActiveCharacter();
@@ -79,7 +79,7 @@ export function ChatApp(): JSX.Element {
   const profileToastTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    return nuwa.on.profileUpdated((evt: ProfileUpdatedEvent) => {
+    return bailin.on.profileUpdated((evt: ProfileUpdatedEvent) => {
       profileToastBuf.current.push(...evt.changes.filter((c) => !c.kind.startsWith("remove")));
       if (profileToastTimer.current !== null) {
         window.clearTimeout(profileToastTimer.current);
@@ -97,11 +97,11 @@ export function ChatApp(): JSX.Element {
           kind: "info",
           text: t("chat.profileRemembered", { summary }),
           ttlMs: 5000,
-          onClick: () => void nuwa.pet.openSettings("memory")
+          onClick: () => void bailin.pet.openSettings("memory")
         });
       }, 500);
     });
-  }, [nuwa, showToast, t]);
+  }, [bailin, showToast, t]);
 
   useEffect(() => {
     return () => {
@@ -170,7 +170,7 @@ export function ChatApp(): JSX.Element {
           closeHistory();
           return;
         }
-        void nuwa.chat.hide();
+        void bailin.chat.hide();
         return;
       }
       if (e.key === "l" && (e.ctrlKey || e.metaKey)) {
@@ -180,7 +180,7 @@ export function ChatApp(): JSX.Element {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [nuwa, startNewSession, historyOpen, closeHistory]);
+  }, [bailin, startNewSession, historyOpen, closeHistory]);
 
   // ===== textarea 自动高度 + 快捷键 =====
   function onTextareaKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
@@ -299,7 +299,7 @@ export function ChatApp(): JSX.Element {
           </button>
           <button
             type="button"
-            onClick={() => void nuwa.chat.hide()}
+            onClick={() => void bailin.chat.hide()}
             className="btn btn--icon"
             data-hint={t("chat.closeHint")}
             data-hint-placement="bottom"
@@ -356,7 +356,7 @@ export function ChatApp(): JSX.Element {
               onRetry={turn.error ? retryLastUser : undefined}
               onGoSettings={
                 turn.error?.code === "AUTH_FAILED" || /401|auth|key/i.test(turn.error?.message ?? "")
-                  ? () => void nuwa.pet.openSettings()
+                  ? () => void bailin.pet.openSettings()
                   : undefined
               }
               onCopy={() => {

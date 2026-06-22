@@ -1,5 +1,5 @@
-import { buildSystemPrompt } from "@nuwa-pet/nuwa-prompts";
-import type { CharacterBundle } from "@nuwa-pet/character-protocol";
+import { buildSystemPrompt } from "@bailin/prompts";
+import type { CharacterBundle } from "@bailin/character-protocol";
 import { profileForPrompt } from "../../shared/profile.js";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 import type { MemoryStore } from "../runtime/memory-store.js";

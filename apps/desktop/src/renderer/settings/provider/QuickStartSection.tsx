@@ -2,7 +2,7 @@ import type { RecommendedBundle } from "./presets.js";
 import type { ReadinessMap } from "./apply-recommended-bundle.js";
 import { FieldLabel } from "../../shared/FieldHelp.js";
 import { ReadinessChecklist } from "./ReadinessChecklist.js";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { useT } from "../../shared/i18n/index.js";
 import { OhMyGptDisclaimer } from "./OhMyGptDisclaimer.js";
 
@@ -42,7 +42,7 @@ export function QuickStartSection({
   compact = false
 }: QuickStartSectionProps): JSX.Element {
   const t = useT();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const isAuthor = selectedBundle.id === "ohmygpt";
   const faqId = selectedBundle.faqId;
   const link = FAQ_LINKS[faqId];
@@ -86,7 +86,7 @@ export function QuickStartSection({
             <button
               type="button"
               className="provider-link-btn"
-              onClick={() => void nuwa.app.openExternal(link.href)}
+              onClick={() => void bailin.app.openExternal(link.href)}
             >
               {isAuthor
                 ? t("provider.quickStart.openSite")

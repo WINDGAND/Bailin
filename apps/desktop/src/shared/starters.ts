@@ -1,4 +1,4 @@
-import type { CharacterBundle } from "@nuwa-pet/character-protocol";
+import type { CharacterBundle } from "@bailin/character-protocol";
 
 /** 内置 starter 角色（当前为空；将来可在此追加 CharacterBundle）。 */
 export const STARTER_BUNDLES: ReadonlyArray<CharacterBundle> = [];

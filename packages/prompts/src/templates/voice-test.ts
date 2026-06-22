@@ -11,7 +11,7 @@ import type {
   CharacterCard,
   ExpressionDNA,
   MentalModel
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 
 export function buildVoiceSamplePrompt(card: CharacterCard): {
   system: string;

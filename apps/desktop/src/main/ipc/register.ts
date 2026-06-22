@@ -16,7 +16,7 @@ import type { LocalVault } from "../store/local-vault.js";
 import type { MemoryStore } from "../runtime/memory-store.js";
 import type { ProfileExtractor } from "../runtime/profile-extractor.js";
 import type { CharacterRuntime } from "../runtime/character-runtime.js";
-import type { NuwaOrchestrator } from "../orchestration/nuwa-orchestrator.js";
+import type { BailinOrchestrator } from "../orchestration/bailin-orchestrator.js";
 import type { ProactiveOrchestrator } from "../proactive/proactive-orchestrator.js";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 import { DEFAULT_VISION_MODEL, DEFAULT_WEB_SEARCH_MODEL } from "../adapters/llm-adapter.js";
@@ -33,14 +33,14 @@ import {
   summarizeAppearance,
   type CharacterBundle,
   type DistillationJob
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 
 export interface IpcDeps {
   vault: LocalVault;
   memory: MemoryStore;
   profileExtractor: ProfileExtractor;
   runtime: CharacterRuntime;
-  orchestrator: NuwaOrchestrator;
+  orchestrator: BailinOrchestrator;
   proactive: ProactiveOrchestrator;
   llm: LLMAdapter;
   imageGen: ImageGenerationAdapter;

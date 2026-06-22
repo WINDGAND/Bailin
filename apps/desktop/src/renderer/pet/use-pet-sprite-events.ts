@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { SpriteEvent } from "@nuwa-pet/character-protocol";
+import type { SpriteEvent } from "@bailin/character-protocol";
 import type { AmbientSignal, ChatStreamChunk, ChatVisibilityEvent } from "../../shared/ipc-contract.js";
-import { useNuwa } from "../shared/use-nuwa.js";
+import { useBailin } from "../shared/use-bailin.js";
 
 /**
  * 桌宠窗口统一订阅聊天流 / 对话可见性 / 环境信号，并转为 SpriteEvent。
@@ -11,12 +11,12 @@ export function usePetSpriteEvents(
   characterId: string | undefined,
   sendSpriteEvent: (kind: SpriteEvent) => void
 ): void {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const streamingRef = useRef(false);
 
   useEffect(() => {
     if (!characterId) return;
-    return nuwa.on.chatStream((raw) => {
+    return bailin.on.chatStream((raw) => {
       const chunk = raw as ChatStreamChunk;
       if (chunk.characterId && chunk.characterId !== characterId) return;
 
@@ -45,19 +45,19 @@ export function usePetSpriteEvents(
         sendSpriteEvent("responseEnd");
       }
     });
-  }, [characterId, nuwa, sendSpriteEvent]);
+  }, [characterId, bailin, sendSpriteEvent]);
 
   useEffect(() => {
     if (!characterId) return;
-    return nuwa.on.chatVisibility((raw) => {
+    return bailin.on.chatVisibility((raw) => {
       const evt = raw as ChatVisibilityEvent;
       if (evt.characterId && evt.characterId !== characterId) return;
       sendSpriteEvent(evt.visible ? "chatOpen" : "chatClose");
     });
-  }, [characterId, nuwa, sendSpriteEvent]);
+  }, [characterId, bailin, sendSpriteEvent]);
 
   useEffect(() => {
-    return nuwa.on.ambientSignal((raw) => {
+    return bailin.on.ambientSignal((raw) => {
       const signal = raw as AmbientSignal;
       if (signal.kind === "lock") {
         sendSpriteEvent("screenLock");
@@ -65,5 +65,5 @@ export function usePetSpriteEvents(
         sendSpriteEvent("screenUnlock");
       }
     });
-  }, [nuwa, sendSpriteEvent]);
+  }, [bailin, sendSpriteEvent]);
 }

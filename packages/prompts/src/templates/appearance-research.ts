@@ -1,5 +1,5 @@
 /**
- * 外貌调研 prompt：女娲流程中 Phase·外貌的独立调用。
+ * 外貌调研 prompt：百灵流程中 Phase·外貌的独立调用。
  * 输出严格 JSON，符合 character-protocol 的 AppearanceSpec schema。
  * 详见 README「角色协议」与 packages/character-protocol（AppearanceSpec）。
  */

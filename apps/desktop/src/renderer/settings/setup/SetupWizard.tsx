@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { STARTER_BUNDLES } from "../../../shared/starters.js";
-import { stripRoleSuffix, type CharacterBundle } from "@nuwa-pet/character-protocol";
+import { stripRoleSuffix, type CharacterBundle } from "@bailin/character-protocol";
 import { usePlatformModKey } from "../../shared/use-platform-mod-key.js";
 import { BrandLogo } from "../../shared/brand-logo.js";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
 import {
@@ -197,7 +197,7 @@ function ProviderStep({
   onBack: () => void;
 }) {
   const t = useT();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const { showToast } = useToast();
   const [selectedBundleId] = useState(DEFAULT_BUNDLE_ID);
   const [apiKey, setApiKey] = useState("");
@@ -235,7 +235,7 @@ function ProviderStep({
     setReadiness(IDLE_READINESS);
 
     const result = await applyOhMyGptBundle(
-      nuwa,
+      bailin,
       selectedBundle,
       apiKey.trim(),
       (key, state) => {
@@ -336,13 +336,13 @@ function StarterStep({
   onBack: () => void;
 }) {
   const t = useT();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const { showToast } = useToast();
   const [importing, setImporting] = useState<string | null>(null);
 
   async function pick(id: string) {
     setImporting(id);
-    const r = await nuwa.characters.importStarter(id);
+    const r = await bailin.characters.importStarter(id);
     if (r.ok) {
       showToast({ kind: "success", text: t("setup.toastCharacterReady") });
       await onDone();

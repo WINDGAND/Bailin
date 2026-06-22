@@ -1,4 +1,4 @@
-import type { SpriteProgram } from "@nuwa-pet/character-protocol";
+import type { SpriteProgram } from "@bailin/character-protocol";
 import { SpriteCanvas } from "./sprite-canvas.js";
 
 interface PetPreviewProps {

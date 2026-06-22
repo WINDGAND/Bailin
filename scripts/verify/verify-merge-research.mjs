@@ -16,7 +16,7 @@ let mergeResearchDocs;
 try {
   ({ mergeResearchSummary, mergeResearchDocs } = await import(distPath.href));
 } catch {
-  console.log("跳过：需先编译 main（pnpm --filter @nuwa-pet/desktop build 或 tsc）");
+  console.log("跳过：需先编译 main（pnpm --filter @bailin/desktop build 或 tsc）");
   process.exit(0);
 }
 

@@ -1,4 +1,4 @@
-import type { SpriteDSL } from "@nuwa-pet/character-protocol";
+import type { SpriteDSL } from "@bailin/character-protocol";
 
 /**
  * DSL 程序化 sprite 的共用动画 / 状态机 / 影子工厂。

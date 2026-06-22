@@ -29,7 +29,7 @@ import { SafetyPolicy } from "./safety/safety-policy.js";
 import { MemoryStore } from "./runtime/memory-store.js";
 import { ProfileExtractor } from "./runtime/profile-extractor.js";
 import { CharacterRuntime } from "./runtime/character-runtime.js";
-import { NuwaOrchestrator } from "./orchestration/nuwa-orchestrator.js";
+import { BailinOrchestrator } from "./orchestration/bailin-orchestrator.js";
 import {
   broadcastToAllWindows,
   readImageConfigForMain,
@@ -257,7 +257,7 @@ function showChatNearPet(): void {
   chat.moveTop();
   chat.focus();
   broadcastChatVisibility(true);
-  broadcastToAllWindows("nuwa.event.petSummon", null);
+  broadcastToAllWindows("bailin.event.petSummon", null);
 }
 
 /**
@@ -272,7 +272,7 @@ function summonPetBubble(): void {
   const pet = ensurePetWindow();
   if (!pet.isVisible()) pet.show();
   pet.moveTop();
-  broadcastToAllWindows("nuwa.event.petSummon", null);
+  broadcastToAllWindows("bailin.event.petSummon", null);
 
   if (isChatVisible()) {
     hideChat();
@@ -534,7 +534,7 @@ void app.whenReady().then(() => {
       }
     }
   );
-  const orchestrator = new NuwaOrchestrator(llm, { imageGen, vault });
+  const orchestrator = new BailinOrchestrator(llm, { imageGen, vault });
   const screenCapture = new ScreenCaptureService();
   ambientMonitor = new AmbientMonitor();
   proactiveBubbleHost = new ProactiveBubbleHost({

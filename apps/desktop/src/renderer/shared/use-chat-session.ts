@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ulid } from "ulid";
-import type { CharacterBundle } from "@nuwa-pet/character-protocol";
+import type { CharacterBundle } from "@bailin/character-protocol";
 import type { ChatTurn } from "../../shared/ipc-contract.js";
-import { useNuwa } from "./use-nuwa.js";
+import { useBailin } from "./use-bailin.js";
 import { useT } from "./i18n/index.js";
 
 export interface UiTurn {
@@ -45,7 +45,7 @@ export function useChatSession(
     onError?: (text: string) => void;
   }
 ): ChatSessionState {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const t = useT();
   const [sessionId, setSessionId] = useState("");
   const [turns, setTurns] = useState<UiTurn[]>([]);
@@ -60,7 +60,7 @@ export function useChatSession(
   const loadSession = useCallback(
     async (targetSessionId: string) => {
       if (!bundle) return;
-      const recent = await nuwa.chat.getRecent(bundle.card.id, targetSessionId);
+      const recent = await bailin.chat.getRecent(bundle.card.id, targetSessionId);
       setSessionId(targetSessionId);
       setTurns(toUiTurns(recent).slice(-(options.historyLimit ?? 24)));
       setPending("");
@@ -69,7 +69,7 @@ export function useChatSession(
       inFlightRef.current = null;
       pendingAssistantTurnIdRef.current = null;
     },
-    [bundle, nuwa, options.historyLimit]
+    [bundle, bailin, options.historyLimit]
   );
 
   useEffect(() => {
@@ -83,13 +83,13 @@ export function useChatSession(
       return;
     }
     void (async () => {
-      const active = await nuwa.chat.getActiveSession(bundle.card.id);
+      const active = await bailin.chat.getActiveSession(bundle.card.id);
       await loadSession(active.sessionId);
     })();
-  }, [bundle?.card.id, nuwa, loadSession]);
+  }, [bundle?.card.id, bailin, loadSession]);
 
   useEffect(() => {
-    return nuwa.on.chatStream((chunk) => {
+    return bailin.on.chatStream((chunk) => {
       if (chunk.requestId !== inFlightRef.current) return;
       if (chunk.error) {
         setPending("");
@@ -136,7 +136,7 @@ export function useChatSession(
         pendingAssistantTurnIdRef.current = null;
       }
     });
-  }, [nuwa]);
+  }, [bailin]);
 
   useEffect(() => {
     if (phase === "idle") return;
@@ -144,7 +144,7 @@ export function useChatSession(
       if (phaseRef.current === "idle") return;
       const requestId = inFlightRef.current;
       void (async () => {
-        if (requestId) await nuwa.chat.cancel(requestId);
+        if (requestId) await bailin.chat.cancel(requestId);
         setPending("");
         setPhase("idle");
         const errObj = { code: "TIMEOUT", message: t("chat.sessionTimeout") };
@@ -167,7 +167,7 @@ export function useChatSession(
       })();
     }, STALL_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
-  }, [phase, nuwa, t, options.onError]);
+  }, [phase, bailin, t, options.onError]);
 
   const sendInternal = useCallback(
     async (text: string, opts?: { skipUserAppend?: boolean }) => {
@@ -191,7 +191,7 @@ export function useChatSession(
 
       setPhase("thinking");
       try {
-        const res = await nuwa.chat.send({
+        const res = await bailin.chat.send({
           characterId: bundle.card.id,
           sessionId,
           content: trimmed,
@@ -207,7 +207,7 @@ export function useChatSession(
         options.onError?.(message);
       }
     },
-    [bundle, sessionId, nuwa, options.surface, options.onError, t]
+    [bundle, sessionId, bailin, options.surface, options.onError, t]
   );
 
   const submit = useCallback(async (text: string) => sendInternal(text), [sendInternal]);
@@ -217,7 +217,7 @@ export function useChatSession(
     const id = inFlightRef.current;
     inFlightRef.current = null;
     pendingAssistantTurnIdRef.current = null;
-    await nuwa.chat.cancel(id);
+    await bailin.chat.cancel(id);
     setPending((cur) => {
       if (cur.length > 0) {
         setTurns((prev) => [
@@ -229,21 +229,21 @@ export function useChatSession(
     });
     setPhase("idle");
     options.onInfo?.(t("chat.sessionCancelled"));
-  }, [nuwa, options.onInfo, t]);
+  }, [bailin, options.onInfo, t]);
 
   const startNewSession = useCallback(async () => {
     if (!bundle) return;
     if (inFlightRef.current) await cancel();
-    const r = await nuwa.chat.newSession(bundle.card.id);
+    const r = await bailin.chat.newSession(bundle.card.id);
     await loadSession(r.sessionId);
     options.onInfo?.(t("chat.sessionNewStarted"));
-  }, [bundle, nuwa, cancel, loadSession, options.onInfo, t]);
+  }, [bundle, bailin, cancel, loadSession, options.onInfo, t]);
 
   const switchSession = useCallback(
     async (targetSessionId: string) => {
       if (!bundle || targetSessionId === sessionId) return;
       if (inFlightRef.current) await cancel();
-      const res = await nuwa.chat.switchSession({
+      const res = await bailin.chat.switchSession({
         characterId: bundle.card.id,
         sessionId: targetSessionId
       });
@@ -253,7 +253,7 @@ export function useChatSession(
       }
       await loadSession(targetSessionId);
     },
-    [bundle, sessionId, nuwa, cancel, loadSession, options.onError, t]
+    [bundle, sessionId, bailin, cancel, loadSession, options.onError, t]
   );
 
   const retryLastUser = useCallback(() => {
@@ -273,7 +273,7 @@ export function useChatSession(
     async (turnId: string) => {
       if (!bundle || !sessionId) return;
       try {
-        const res = await nuwa.chat.deleteTurn({
+        const res = await bailin.chat.deleteTurn({
           characterId: bundle.card.id,
           sessionId,
           turnId
@@ -288,14 +288,14 @@ export function useChatSession(
         options.onError?.(e instanceof Error ? e.message : t("chat.sessionDeleteFailed"));
       }
     },
-    [bundle, sessionId, nuwa, options.onInfo, options.onError, t]
+    [bundle, sessionId, bailin, options.onInfo, options.onError, t]
   );
 
   const deleteTurnsFrom = useCallback(
     async (turnId: string) => {
       if (!bundle || !sessionId) return;
       try {
-        const res = await nuwa.chat.deleteTurnsFrom({
+        const res = await bailin.chat.deleteTurnsFrom({
           characterId: bundle.card.id,
           sessionId,
           turnId
@@ -314,7 +314,7 @@ export function useChatSession(
         options.onError?.(e instanceof Error ? e.message : t("chat.sessionDeleteFailed"));
       }
     },
-    [bundle, sessionId, nuwa, options.onInfo, options.onError, t]
+    [bundle, sessionId, bailin, options.onInfo, options.onError, t]
   );
 
   const regenerateAssistant = useCallback(
@@ -335,7 +335,7 @@ export function useChatSession(
       if (!userContent) return;
 
       try {
-        const res = await nuwa.chat.deleteTurn({
+        const res = await bailin.chat.deleteTurn({
           characterId: bundle.card.id,
           sessionId,
           turnId: assistantTurnId
@@ -351,7 +351,7 @@ export function useChatSession(
         options.onError?.(e instanceof Error ? e.message : t("chat.sessionRegenerateFailed"));
       }
     },
-    [bundle, sessionId, turns, nuwa, cancel, sendInternal, options.onInfo, options.onError, t]
+    [bundle, sessionId, turns, bailin, cancel, sendInternal, options.onInfo, options.onError, t]
   );
 
   return {

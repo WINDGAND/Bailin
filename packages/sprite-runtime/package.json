@@ -1,5 +1,5 @@
 {
-  "name": "@nuwa-pet/sprite-runtime",
+  "name": "@bailin/sprite-runtime",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@nuwa-pet/character-protocol": "workspace:*"
+    "@bailin/character-protocol": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

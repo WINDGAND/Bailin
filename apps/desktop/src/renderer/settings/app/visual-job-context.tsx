@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { useConfirm, useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
 
@@ -52,7 +52,7 @@ function patchJob(
 
 export function VisualJobProvider({ children }: { children: ReactNode }): JSX.Element {
   const t = useT();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const confirm = useConfirm();
   const { showToast } = useToast();
   const [jobsByCharacterId, setJobsByCharacterId] = useState<Record<string, VisualJob>>({});
@@ -112,7 +112,7 @@ export function VisualJobProvider({ children }: { children: ReactNode }): JSX.El
       );
 
       try {
-        const r = await nuwa.characters.regenerateSprite(characterId);
+        const r = await bailin.characters.regenerateSprite(characterId);
         const warnTail =
           r.warnings && r.warnings.length > 0
             ? t("library.warningsSuffix", { count: r.warnings.length })
@@ -169,7 +169,7 @@ export function VisualJobProvider({ children }: { children: ReactNode }): JSX.El
         notifySettled(characterId, "error");
       }
     },
-    [jobsByCharacterId, confirm, t, nuwa, showToast, notifySettled]
+    [jobsByCharacterId, confirm, t, bailin, showToast, notifySettled]
   );
 
   const runAppearanceRegeneration = useCallback(
@@ -208,7 +208,7 @@ export function VisualJobProvider({ children }: { children: ReactNode }): JSX.El
           reader.onerror = () => rej(reader.error ?? new Error("read failed"));
           reader.readAsDataURL(file);
         });
-        const r = await nuwa.characters.regenerateAppearance({
+        const r = await bailin.characters.regenerateAppearance({
           characterId,
           referenceImages: [
             {
@@ -275,7 +275,7 @@ export function VisualJobProvider({ children }: { children: ReactNode }): JSX.El
         notifySettled(characterId, "error");
       }
     },
-    [jobsByCharacterId, confirm, t, nuwa, showToast, notifySettled]
+    [jobsByCharacterId, confirm, t, bailin, showToast, notifySettled]
   );
 
   const runningJobs = useMemo(

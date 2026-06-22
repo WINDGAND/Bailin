@@ -19,7 +19,7 @@ import {
   resolveAtlasPetPixelSize,
   resolveDslPetPixelSize
 } from "../../../shared/pet-display-scale.js";
-import { useNuwa, useActiveCharacter } from "../../shared/use-nuwa.js";
+import { useBailin, useActiveCharacter } from "../../shared/use-bailin.js";
 import { useConfirm, useToast } from "../../shared/feedback.js";
 import { BlSelect } from "../../shared/BlSelect.js";
 import { PetPreview } from "../../shared/pet-preview.js";
@@ -63,7 +63,7 @@ const LAST_REASON_KEYS: Record<string, string> = {
 
 export function DesktopBehaviorPanel(): JSX.Element {
   const { t, locale } = useI18n();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const { bundle } = useActiveCharacter();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -79,15 +79,15 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const quietHoursEnabledId = useId();
 
   const refreshStatus = useCallback(async () => {
-    setStatus(await nuwa.proactive.getStatus());
-  }, [nuwa]);
+    setStatus(await bailin.proactive.getStatus());
+  }, [bailin]);
 
   useEffect(() => {
     void (async () => {
       const [s, st, vision] = await Promise.all([
-        nuwa.proactive.getSettings(),
-        nuwa.proactive.getStatus(),
-        nuwa.characters.detectVisionCapability().catch(() => null)
+        bailin.proactive.getSettings(),
+        bailin.proactive.getStatus(),
+        bailin.characters.detectVisionCapability().catch(() => null)
       ]);
       setSettings(s);
       setStatus(st);
@@ -95,7 +95,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
     })();
     const timer = window.setInterval(() => void refreshStatus(), 30_000);
     return () => window.clearInterval(timer);
-  }, [nuwa, refreshStatus]);
+  }, [bailin, refreshStatus]);
 
   useEffect(() => {
     setHushDraftMinutes(settings.defaultHushMinutes);
@@ -105,7 +105,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
     setSettings(next);
     setSaving(true);
     try {
-      const saved = await nuwa.proactive.setSettings(next);
+      const saved = await bailin.proactive.setSettings(next);
       setSettings(saved);
       await refreshStatus();
       if (!opts?.silent) {
@@ -151,7 +151,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
     if (minutes !== settings.defaultHushMinutes) {
       await save({ ...settings, defaultHushMinutes: minutes }, { silent: true });
     }
-    await nuwa.pet.hush(minutes * 60 * 1000);
+    await bailin.pet.hush(minutes * 60 * 1000);
     await refreshStatus();
     showToast({
       kind: "success",
@@ -371,7 +371,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
                   onClick={async () => {
                     setLlmTesting(true);
                     try {
-                      const r = await nuwa.proactive.triggerLlmScreenshot();
+                      const r = await bailin.proactive.triggerLlmScreenshot();
                       showToast({
                         kind: r.ok ? "success" : "info",
                         text: r.ok
@@ -557,7 +557,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
             className="btn btn--magenta"
             disabled={saving}
             onClick={async () => {
-              const r = await nuwa.proactive.triggerNow("manual");
+              const r = await bailin.proactive.triggerNow("manual");
               showToast({
                 kind: r.ok ? "success" : "info",
                 text: r.ok

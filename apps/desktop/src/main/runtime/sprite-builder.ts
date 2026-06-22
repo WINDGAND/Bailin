@@ -3,7 +3,7 @@ import {
   type AppearanceSpec,
   type SpriteProgram,
   type SpriteDSL
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 import { symbolForKeyword, type SymbolPattern } from "./sprite-symbols.js";
 
 type AnimDef = NonNullable<SpriteDSL["animations"]["idle"]>;
@@ -12,7 +12,7 @@ import {
   standardShadow,
   standardStateMachine,
   withFidgetVariants
-} from "@nuwa-pet/sprite-runtime";
+} from "@bailin/sprite-runtime";
 
 /**
  * 程序化 sprite 生成器 v2（96×96 高精度版）。

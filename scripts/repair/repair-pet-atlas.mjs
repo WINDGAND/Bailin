@@ -7,8 +7,8 @@
  * 若无 raw-row，则对现有 spritesheet 逐帧做内部洞修复。
  *
  * 用法：
- *   pnpm --filter=@nuwa-pet/character-protocol run build
- *   pnpm --filter=@nuwa-pet/pet-atlas-tools run build
+ *   pnpm --filter=@bailin/character-protocol run build
+ *   pnpm --filter=@bailin/pet-atlas-tools run build
  *   node scripts/repair/repair-pet-atlas.mjs --character-id <id>
  *   node scripts/repair/repair-pet-atlas.mjs --all
  *   node scripts/repair/repair-pet-atlas.mjs --all --dry-run
@@ -389,14 +389,14 @@ function resolveVaultRoot() {
   if (!appData) throw new Error("APPDATA 未设置");
   const candidates = [
     join(appData, "Bailin"),
-    join(appData, "@nuwa-pet", "desktop", "Bailin"),
+    join(appData, "@bailin", "desktop", "Bailin"),
     join(appData, "Electron", "Bailin"),
     join(appData, "NuwaPet")
   ];
   for (const c of candidates) {
     if (existsSync(join(c, "vault.db"))) return c;
   }
-  return join(appData, "@nuwa-pet", "desktop", "Bailin");
+  return join(appData, "@bailin", "desktop", "Bailin");
 }
 
 function listCharacterIds(charactersDir) {

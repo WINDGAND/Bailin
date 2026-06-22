@@ -33,9 +33,9 @@ const env = loadEnv(resolve(repoRoot, ".env.dev"));
 
 const llmProvider = {
   kind: "openai-compatible",
-  baseUrl: env.NUWA_PET_LLM_BASE_URL,
-  apiKey: env.NUWA_PET_LLM_API_KEY,
-  model: env.NUWA_PET_LLM_MODEL ?? "bytedance/doubao-seed-2.0-lite-260428"
+  baseUrl: env.BAILIN_LLM_BASE_URL,
+  apiKey: env.BAILIN_LLM_API_KEY,
+  model: env.BAILIN_LLM_MODEL ?? "bytedance/doubao-seed-2.0-lite-260428"
 };
 const config = DEFAULT_IMAGE_GENERATION_CONFIG;
 const adapter = new ImageGenerationAdapter(

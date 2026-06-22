@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { useNuwa } from "../use-nuwa.js";
+import { useBailin } from "../use-bailin.js";
 import { useToast } from "../feedback.js";
 import { useT } from "../i18n/index.js";
 import {
@@ -29,7 +29,7 @@ export interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }): JSX.Element {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const { showToast } = useToast();
   const t = useT();
   const [preference, setPreference] = useState<ThemePreference>(() => readStoredThemePreference());
@@ -44,21 +44,21 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   useEffect(() => {
     void (async () => {
       try {
-        applyPreference(await nuwa.app.getTheme());
+        applyPreference(await bailin.app.getTheme());
       } catch {
         bootstrapThemeFromStorage();
         setPreference(readStoredThemePreference());
         setResolved(resolveTheme(readStoredThemePreference()));
       }
     })();
-  }, [nuwa, applyPreference]);
+  }, [bailin, applyPreference]);
 
   useEffect(() => {
-    const off = nuwa.on.themeChanged((next) => {
+    const off = bailin.on.themeChanged((next) => {
       applyPreference(next);
     });
     return off;
-  }, [nuwa, applyPreference]);
+  }, [bailin, applyPreference]);
 
   useEffect(() => {
     if (preference !== "system") return;
@@ -76,11 +76,11 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   const setTheme = useCallback(
     async (next: ThemePreference) => {
       if (next === preference) return;
-      await nuwa.app.setTheme(next);
+      await bailin.app.setTheme(next);
       applyPreference(next);
       showToast({ kind: "success", text: t("settings.themeSaved") });
     },
-    [nuwa, preference, applyPreference, showToast, t]
+    [bailin, preference, applyPreference, showToast, t]
   );
 
   const value = useMemo(

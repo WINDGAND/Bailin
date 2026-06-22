@@ -34,8 +34,8 @@ function loadEnv(path) {
 }
 
 const env = loadEnv(resolve(repoRoot, ".env.dev"));
-const baseUrl = env.NUWA_PET_LLM_BASE_URL;
-const apiKey = env.NUWA_PET_LLM_API_KEY;
+const baseUrl = env.BAILIN_LLM_BASE_URL;
+const apiKey = env.BAILIN_LLM_API_KEY;
 
 const characterName = process.argv[2] ?? "三笠";
 const sourceContext = process.argv[3] ?? "进击的巨人";

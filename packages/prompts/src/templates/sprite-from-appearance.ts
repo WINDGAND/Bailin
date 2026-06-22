@@ -1,4 +1,4 @@
-import type { AppearanceSpec } from "@nuwa-pet/character-protocol";
+import type { AppearanceSpec } from "@bailin/character-protocol";
 
 /**
  * Sprite 转译 prompt：把结构化 AppearanceSpec 翻成 SpriteProgram。

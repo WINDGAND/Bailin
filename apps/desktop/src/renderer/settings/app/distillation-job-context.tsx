@@ -8,12 +8,12 @@ import {
   useState,
   type ReactNode
 } from "react";
-import type { ResearchAgentId } from "@nuwa-pet/character-protocol";
+import type { ResearchAgentId } from "@bailin/character-protocol";
 import type {
   DistillationProgressEvent,
   ResearchSummaryPayload
 } from "../../../shared/ipc-contract.js";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
 import { ResearchCheckpointDialog } from "../progress/ResearchCheckpointDialog.js";
@@ -51,7 +51,7 @@ const TERMINAL: DistillationBannerStatus[] = ["done", "failed", "cancelled"];
 
 export function DistillationJobProvider({ children }: { children: ReactNode }): JSX.Element {
   const t = useT();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const { showToast } = useToast();
   const [activeJob, setActiveJob] = useState<ActiveDistillationJob | null>(null);
   const [bannerStatus, setBannerStatus] = useState<DistillationBannerStatus | null>(null);
@@ -109,11 +109,11 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     if (!job) return;
     const status = bannerStatusRef.current;
     if (status === "running" || status === "awaiting_research") {
-      await nuwa.characters.cancelDistillation(job.jobId);
+      await bailin.characters.cancelDistillation(job.jobId);
       return;
     }
     resetJobState();
-  }, [nuwa, resetJobState]);
+  }, [bailin, resetJobState]);
 
   const approveResearch = useCallback(
     async (supplementalAgentIds?: ResearchAgentId[]) => {
@@ -121,17 +121,17 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
       if (!job) return;
       setShowCheckpoint(false);
       setBannerStatus("running");
-      await nuwa.characters.approveDistillation({
+      await bailin.characters.approveDistillation({
         jobId: job.jobId,
         phase: "research",
         supplementalAgentIds
       });
     },
-    [nuwa]
+    [bailin]
   );
 
   useEffect(() => {
-    const off = nuwa.on.distillationProgress((evt: DistillationProgressEvent) => {
+    const off = bailin.on.distillationProgress((evt: DistillationProgressEvent) => {
       const job = activeJobRef.current;
       if (!job || evt.jobId !== job.jobId) return;
 
@@ -187,7 +187,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
       }
     });
     return off;
-  }, [nuwa, showToast, t]);
+  }, [bailin, showToast, t]);
 
   const value = useMemo(
     () => ({

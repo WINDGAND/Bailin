@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ResearchAgentId } from "@nuwa-pet/character-protocol";
+import type { ResearchAgentId } from "@bailin/character-protocol";
 import type { ResearchReviewAgentRow, ResearchSummaryPayload } from "../../../shared/ipc-contract.js";
 import { useT } from "../../shared/i18n/index.js";
 import { agentNameKey } from "./distillation-phase-i18n.js";

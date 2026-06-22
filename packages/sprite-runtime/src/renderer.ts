@@ -4,7 +4,7 @@ import type {
   SpriteDSL,
   SpritePart,
   SpriteProgram
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 
 /**
  * 像素渲染器：把 DSL + 当前动画帧绘制到 OffscreenCanvas / Canvas 2D 上下文。

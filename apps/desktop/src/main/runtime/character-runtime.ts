@@ -1,6 +1,6 @@
 import { ulid } from "ulid";
-import type { CharacterBundle } from "@nuwa-pet/character-protocol";
-import { buildSystemPrompt } from "@nuwa-pet/nuwa-prompts";
+import type { CharacterBundle } from "@bailin/character-protocol";
+import { buildSystemPrompt } from "@bailin/prompts";
 import { profileForPrompt } from "../../shared/profile.js";
 import type { LLMAdapter, ChatChunk } from "../adapters/llm-adapter.js";
 import type { LocalVault } from "../store/local-vault.js";

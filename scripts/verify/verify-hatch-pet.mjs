@@ -9,8 +9,8 @@
 //   4. PNG IO 不丢透明像素
 //
 // 跑法（先 build 三个包）：
-//   pnpm --filter=@nuwa-pet/character-protocol run build
-//   pnpm --filter=@nuwa-pet/pet-atlas-tools run build
+//   pnpm --filter=@bailin/character-protocol run build
+//   pnpm --filter=@bailin/pet-atlas-tools run build
 //   node scripts/verify/verify-hatch-pet.mjs
 
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
@@ -28,8 +28,8 @@ const toolsPath = resolve(repoRoot, "packages/pet-atlas-tools/dist/index.cjs");
 if (!existsSync(protocolPath) || !existsSync(toolsPath)) {
   console.error(
     "[verify-hatch-pet] 缺少 dist 产物；请先：\n" +
-      "  pnpm --filter=@nuwa-pet/character-protocol run build\n" +
-      "  pnpm --filter=@nuwa-pet/pet-atlas-tools run build"
+      "  pnpm --filter=@bailin/character-protocol run build\n" +
+      "  pnpm --filter=@bailin/pet-atlas-tools run build"
   );
   process.exit(2);
 }

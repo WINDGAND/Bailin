@@ -12,11 +12,11 @@ import {
   type AtlasPet,
   type HatchPetRowState,
   type SpriteProgram
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 import {
   buildHatchPetBasePrompt,
   buildHatchPetRowPrompt
-} from "@nuwa-pet/nuwa-prompts";
+} from "@bailin/prompts";
 import {
   composeAtlas,
   decodePng,
@@ -33,7 +33,7 @@ import {
   type ExtractedFrame,
   type HatchJobSpec,
   type RowSlot
-} from "@nuwa-pet/pet-atlas-tools";
+} from "@bailin/pet-atlas-tools";
 import type { LocalVault } from "../store/local-vault.js";
 import {
   modelSupportsTransparent,
@@ -162,12 +162,12 @@ function buildChromaRowSlot(
   };
 }
 
-/** 9 行 strip 默认并发数；可通过 input.rowConcurrency 或 NUWA_PET_HATCH_ROW_CONCURRENCY 覆盖。 */
+/** 9 行 strip 默认并发数；可通过 input.rowConcurrency 或 BAILIN_HATCH_ROW_CONCURRENCY 覆盖。 */
 const DEFAULT_HATCH_ROW_CONCURRENCY = 4;
 const MAX_HATCH_ROW_CONCURRENCY = 6;
 
 function resolveHatchRowConcurrency(input?: number): number {
-  const fromEnv = Number(process.env.NUWA_PET_HATCH_ROW_CONCURRENCY);
+  const fromEnv = Number(process.env.BAILIN_HATCH_ROW_CONCURRENCY ?? process.env.NUWA_PET_HATCH_ROW_CONCURRENCY);
   const raw = input ?? (Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : DEFAULT_HATCH_ROW_CONCURRENCY);
   return Math.max(1, Math.min(MAX_HATCH_ROW_CONCURRENCY, Math.floor(raw)));
 }

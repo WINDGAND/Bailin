@@ -1,5 +1,5 @@
 /**
- * 人格卡 prompt：女娲流程中 Phase·人格的独立调用。
+ * 人格卡 prompt：百灵流程中 Phase·人格的独立调用。
  * 输出严格 JSON，仅包含 CharacterCard 的人格部分（不含 sprite / 不含 appearance）。
  * 外貌由 buildAppearanceResearchPrompt() 单独产出。
  * 详见 README「角色协议」与 packages/character-protocol（CharacterCard）。
@@ -95,7 +95,7 @@ export function buildCharacterCardPrompt(input: CharacterCardInput): {
     "纪律：",
     "1. 你必须输出 JSON，且仅输出 JSON。不要 markdown，不要解释。",
     "2. 提炼的是 HOW they think，不是 WHAT they said。不要抄原话，要总结模式。",
-    "3. 心智模型 3-5 个；只取最具排他性、跨域复现性强的（参见女娲 extraction-framework）。",
+    "3. 心智模型 3-5 个；只取最具排他性、跨域复现性强的（参见 nuwa-skill extraction-framework）。",
     "4. meta.chineseName 与 meta.englishName 必须同时填写：上行中文、下行英文。",
     "   - 华人：查常用英文译名（周杰伦 → Jay Chou）；无译名则拼音 GivenName FamilyName（张雪峰 → Xuefeng Zhang）。",
     "   - 外国人 / 虚构角色：中文用大陆常见译名（Kobe Bryant → 科比·布莱恩特），英文用官方写法。",

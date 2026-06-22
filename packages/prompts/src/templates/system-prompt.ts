@@ -1,4 +1,4 @@
-import type { CharacterCard } from "@nuwa-pet/character-protocol";
+import type { CharacterCard } from "@bailin/character-protocol";
 import { formatAnswerProtocolForPrompt, resolveAnswerProtocol } from "./agentic-protocol.js";
 
 export interface SystemPromptUserProfile {
@@ -38,7 +38,7 @@ export interface SystemPromptInput {
 }
 
 /**
- * 组装对话 system prompt（详见 README「角色协议」与 packages/nuwa-prompts）。
+ * 组装对话 system prompt（详见 README「角色协议」与 packages/prompts）。
  * 注意：免责声明仅在 isFirstActivation = true 时显式提示模型可以说一次。
  */
 export function buildSystemPrompt(input: SystemPromptInput): string {

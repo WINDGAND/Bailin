@@ -29,7 +29,7 @@ import {
   type ResearchAgentId,
   type ResearchDoc,
   type SpriteProgram
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 import {
   buildAppearanceCritiquePrompt,
   buildAppearanceImageSearchPrompt,
@@ -42,7 +42,7 @@ import {
   buildCharacterQuoteResolutionPrompt,
   buildCharacterQuoteTranslationPrompt,
   type ResearchAgentSlug
-} from "@nuwa-pet/nuwa-prompts";
+} from "@bailin/prompts";
 import type { LLMAdapter, ChatContentPart } from "../adapters/llm-adapter.js";
 import { runResearchAgents, agentIdsToSlugs, type AgentResearchPlan } from "./research-pipeline.js";
 import {
@@ -166,7 +166,7 @@ export interface DeepOrchestrateInput {
   signal?: AbortSignal;
 }
 
-export class NuwaOrchestrator {
+export class BailinOrchestrator {
   private hatchPipeline: HatchPetPipeline | null;
 
   constructor(
@@ -327,7 +327,7 @@ export class NuwaOrchestrator {
   }
 
   /**
-   * 深度蒸馏 async generator：对齐女娲完整流程。
+   * 深度蒸馏 async generator：对齐百灵完整流程。
    *
    * 流程：
    *   Phase 1: 6 Agent 并行调研 → yield agent_start / agent_done / research_complete

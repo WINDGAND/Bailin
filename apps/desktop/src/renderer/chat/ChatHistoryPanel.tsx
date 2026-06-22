@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import type { ChatSessionSummary } from "../../shared/ipc-contract.js";
 import { formatSessionListTime } from "../shared/format-chat-time.js";
 import { useConfirm } from "../shared/feedback.js";
-import { useNuwa } from "../shared/use-nuwa.js";
+import { useBailin } from "../shared/use-bailin.js";
 import { useT, useI18n } from "../shared/i18n/index.js";
 import { useFocusTrap } from "../shared/use-focus-trap.js";
 import { Icon } from "../shared/icon.js";
@@ -31,7 +31,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
   } = props;
   const t = useT();
   const { locale } = useI18n();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const confirm = useConfirm();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -62,14 +62,14 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
   const loadSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await nuwa.chat.listSessions(characterId);
+      const list = await bailin.chat.listSessions(characterId);
       setSessions(list);
     } catch (e) {
       onError(e instanceof Error ? e.message : t("chat.historyToastLoadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [characterId, nuwa, onError, t]);
+  }, [characterId, bailin, onError, t]);
 
   useEffect(() => {
     if (!open) return;
@@ -181,7 +181,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
         return;
       }
       try {
-        const res = await nuwa.chat.renameSession({ characterId, sessionId, title });
+        const res = await bailin.chat.renameSession({ characterId, sessionId, title });
         if (!res.ok) {
           onError(t("chat.historyToastRenameFailed"));
           return;
@@ -194,7 +194,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
         onError(e instanceof Error ? e.message : t("chat.historyToastRenameFailed"));
       }
     },
-    [characterId, nuwa, renameValue, loadSessions, onInfo, onError, t]
+    [characterId, bailin, renameValue, loadSessions, onInfo, onError, t]
   );
 
   const handleDelete = useCallback(
@@ -215,7 +215,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
       });
       if (!ok) return;
       try {
-        const res = await nuwa.chat.deleteSession({
+        const res = await bailin.chat.deleteSession({
           characterId,
           sessionId: session.id
         });
@@ -226,7 +226,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
         setMenuSessionId(null);
         onInfo(t("chat.historyToastDeleted"));
         if (session.id === activeSessionId) {
-          const active = await nuwa.chat.getActiveSession(characterId);
+          const active = await bailin.chat.getActiveSession(characterId);
           onSwitch(active.sessionId);
         }
         await loadSessions();
@@ -234,7 +234,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps): JSX.Element | nu
         onError(e instanceof Error ? e.message : t("chat.historyToastDeleteFailed"));
       }
     },
-    [characterId, nuwa, activeSessionId, onSwitch, loadSessions, onInfo, onError, confirm, t]
+    [characterId, bailin, activeSessionId, onSwitch, loadSessions, onInfo, onError, confirm, t]
   );
 
   if (!open) return null;

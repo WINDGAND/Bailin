@@ -4,9 +4,9 @@ import type {
   SpriteEvent,
   SpriteProgram,
   SpriteState
-} from "@nuwa-pet/character-protocol";
-import { atlasWalkLeftBinding } from "@nuwa-pet/character-protocol";
-import { createStateMachine } from "@nuwa-pet/sprite-runtime";
+} from "@bailin/character-protocol";
+import { atlasWalkLeftBinding } from "@bailin/character-protocol";
+import { createStateMachine } from "@bailin/sprite-runtime";
 import "./atlas-pet.css";
 
 /**

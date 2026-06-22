@@ -1,8 +1,8 @@
 /**
  * 轻量 Agentic Protocol：从心智模型反推回答路由，供运行时 buildSystemPrompt 使用。
  */
-import type { AnswerProtocol, CharacterCard } from "@nuwa-pet/character-protocol";
-import { AnswerProtocolSchema, isAnswerProtocolValid } from "@nuwa-pet/character-protocol";
+import type { AnswerProtocol, CharacterCard } from "@bailin/character-protocol";
+import { AnswerProtocolSchema, isAnswerProtocolValid } from "@bailin/character-protocol";
 
 export function buildAnswerProtocolGenerationPrompt(
   card: Pick<
@@ -11,7 +11,7 @@ export function buildAnswerProtocolGenerationPrompt(
   >
 ): { system: string; user: string } {
   const system = [
-    "你是百灵 Bailin 的「回答路由生成器」（女娲 Agentic Protocol 轻量版）。",
+    "你是百灵 Bailin 的「回答路由生成器」（百灵 Agentic Protocol 轻量版）。",
     "任务：从角色的心智模型反推 3~5 条「遇到新问题怎么想」的路由，不是通用模板。",
     "",
     "纪律：",

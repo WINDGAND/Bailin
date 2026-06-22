@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 独立复现 NuwaOrchestrator 的 3 步串行调用。
+ * 独立复现 BailinOrchestrator 的 3 步串行调用。
  * 不动 Electron / IPC / SQLite，直接走 DeepSeek，把每一步的 raw response、
  * extractJSON 结果、zod 校验错误打出来。
  *
@@ -24,10 +24,10 @@ for (const line of envRaw.split(/\r?\n/)) {
   process.env[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
 }
 
-const KEY = process.env.NUWA_PET_LLM_API_KEY;
-const BASE = process.env.NUWA_PET_LLM_BASE_URL ?? "https://api.deepseek.com";
-const MODEL = process.env.NUWA_PET_LLM_MODEL ?? "deepseek-chat";
-if (!KEY) throw new Error("NUWA_PET_LLM_API_KEY missing");
+const KEY = process.env.BAILIN_LLM_API_KEY;
+const BASE = process.env.BAILIN_LLM_BASE_URL ?? "https://api.deepseek.com";
+const MODEL = process.env.BAILIN_LLM_MODEL ?? "deepseek-chat";
+if (!KEY) throw new Error("BAILIN_LLM_API_KEY missing");
 
 // 直接硬编码：PowerShell 中文参数易乱码
 const characterName = "蔡徐坤";
@@ -39,7 +39,7 @@ console.log(`[debug] model = ${MODEL} @ ${BASE}\n`);
 
 // 直接 import 已构建好的 packages
 const { buildCharacterCardPrompt, buildAppearanceResearchPrompt, buildSpriteFromAppearancePrompt } =
-  await import(toUrl(resolve(root, "packages/nuwa-prompts/dist/index.js")));
+  await import(toUrl(resolve(root, "packages/prompts/dist/index.js")));
 const {
   parseCard,
   parseSprite,

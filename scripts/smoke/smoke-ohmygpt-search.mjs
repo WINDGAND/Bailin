@@ -30,10 +30,10 @@ function chatCompletionsUrl(baseUrl) {
 async function main() {
   const envPath = resolve(process.cwd(), ".env.dev");
   const env = loadEnv(envPath);
-  const baseUrl = env.NUWA_PET_LLM_BASE_URL;
-  const apiKey = env.NUWA_PET_LLM_API_KEY;
+  const baseUrl = env.BAILIN_LLM_BASE_URL;
+  const apiKey = env.BAILIN_LLM_API_KEY;
   if (!baseUrl || !apiKey) {
-    console.error("[smoke] .env.dev 缺少 NUWA_PET_LLM_BASE_URL / NUWA_PET_LLM_API_KEY");
+    console.error("[smoke] .env.dev 缺少 BAILIN_LLM_BASE_URL / BAILIN_LLM_API_KEY");
     process.exit(2);
   }
   const model = "gpt-4o-mini-search-preview";

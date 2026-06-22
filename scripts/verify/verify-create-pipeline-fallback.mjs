@@ -8,9 +8,9 @@
  *   4. 用真实凭据打一发 gpt-image-2 generate（economy 档省钱），
  *      验证 .env.dev 里的 OhMyGPT / OpenAI / 任意 provider 真能出图。
  *
- * 跑法：先 build:main + nuwa-prompts + character-protocol：
+ * 跑法：先 build:main + prompts + character-protocol：
  *   pnpm --filter=./packages/character-protocol run build
- *   pnpm --filter=./packages/nuwa-prompts run build
+ *   pnpm --filter=./packages/prompts run build
  *   pnpm --filter=./apps/desktop run build:main
  *   node scripts/verify/verify-create-pipeline-fallback.mjs
  *
@@ -27,14 +27,14 @@ const repoRoot = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
 
 const protocolPath = resolve(repoRoot, "packages/character-protocol/dist/index.cjs");
-const promptsPath = resolve(repoRoot, "packages/nuwa-prompts/dist/index.cjs");
+const promptsPath = resolve(repoRoot, "packages/prompts/dist/index.cjs");
 const builderPath = resolve(
   repoRoot,
   "apps/desktop/dist/main/main/runtime/sprite-builder.js"
 );
 const orchestratorPath = resolve(
   repoRoot,
-  "apps/desktop/dist/main/main/orchestration/nuwa-orchestrator.js"
+  "apps/desktop/dist/main/main/orchestration/bailin-orchestrator.js"
 );
 
 const { AppearanceSpecSchema, parseSprite } = require(protocolPath);
@@ -178,8 +178,8 @@ if (!existsSync(envPath)) {
   process.exit(0);
 }
 const env = loadEnv(envPath);
-const baseUrl = env.NUWA_PET_LLM_BASE_URL;
-const apiKey = env.NUWA_PET_LLM_API_KEY;
+const baseUrl = env.BAILIN_LLM_BASE_URL;
+const apiKey = env.BAILIN_LLM_API_KEY;
 if (!baseUrl || !apiKey) {
   console.log("[skip] .env.dev 缺凭据，Step 4 跳过。");
   console.log("\nAll non-network checks passed.");

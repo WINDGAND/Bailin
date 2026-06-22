@@ -1,5 +1,5 @@
 {
-  "name": "@nuwa-pet/desktop",
+  "name": "@bailin/desktop",
   "version": "0.0.1",
   "private": true,
   "description": "Bailin (百灵) — Electron desktop shell.",
@@ -13,14 +13,14 @@
     "build": "pnpm run build:main && pnpm run build:preload && pnpm run build:renderer",
     "prestart": "pnpm run build:main && pnpm run build:preload",
     "start": "electron .",
-    "typecheck": "pnpm --dir ../.. -r --filter @nuwa-pet/character-protocol --filter @nuwa-pet/nuwa-prompts --filter @nuwa-pet/pet-atlas-tools --filter @nuwa-pet/sprite-runtime run build && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "typecheck": "pnpm --dir ../.. -r --filter @bailin/character-protocol --filter @bailin/prompts --filter @bailin/pet-atlas-tools --filter @bailin/sprite-runtime run build && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "package": "electron-builder"
   },
   "dependencies": {
-    "@nuwa-pet/character-protocol": "workspace:*",
-    "@nuwa-pet/nuwa-prompts": "workspace:*",
-    "@nuwa-pet/pet-atlas-tools": "workspace:*",
-    "@nuwa-pet/sprite-runtime": "workspace:*",
+    "@bailin/character-protocol": "workspace:*",
+    "@bailin/prompts": "workspace:*",
+    "@bailin/pet-atlas-tools": "workspace:*",
+    "@bailin/sprite-runtime": "workspace:*",
     "better-sqlite3": "^11.3.0",
     "electron-log": "^5.2.0",
     "ulid": "^2.3.0",

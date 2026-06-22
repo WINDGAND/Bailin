@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * ResearchDoc：女娲深度蒸馏 Phase·1（多 Agent 并行调研）每个 Agent 的产出。
+ * ResearchDoc：百灵深度蒸馏 Phase·1（多 Agent 并行调研）每个 Agent 的产出。
  * 对应 huashu-nuwa SKILL.md 第 213 行附近的 6 维度调研。
  * 一次蒸馏 → 6 个 doc（按 agentId 1..6 区分）。
  */
@@ -45,7 +45,7 @@ export const ResearchDocSchema = z.object({
 
 export type ResearchDoc = z.infer<typeof ResearchDocSchema>;
 
-/** 一次完整调研的汇总，对应女娲 Phase 1.5 检查点要展示给用户的内容。 */
+/** 一次完整调研的汇总，对应百灵 Phase 1.5 检查点要展示给用户的内容。 */
 export const ResearchSummarySchema = z.object({
   jobId: z.string().min(1),
   docs: z.array(ResearchDocSchema).max(6),

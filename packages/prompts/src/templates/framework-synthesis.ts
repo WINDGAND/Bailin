@@ -21,7 +21,7 @@ export interface FrameworkSynthesisInput {
 }
 
 const SYNTHESIS_DISCIPLINE = `
-提炼纪律（女娲 Phase 2）：
+提炼纪律（百灵 Phase 2）：
 1. 提炼的是 HOW they think，不是 WHAT they said。不要照搬原话，要提取模式。
 2. 心智模型 3-5 个；每个必须通过三重验证：
    - 跨域复现：在 ≥2 个不同领域 / 话题中出现过
@@ -43,7 +43,7 @@ export function buildFrameworkSynthesisPrompt(input: FrameworkSynthesisInput): {
   const { characterName, sourceType, track, researchSegments, userMaterial } = input;
 
   const system = [
-    "你是 百灵 Bailin 的「框架提炼器」（女娲 Phase 2）。",
+    "你是 百灵 Bailin 的「框架提炼器」（百灵 Phase 2）。",
     "你的工作：把 6 份多维度调研报告提炼成 1 张结构化人格卡。",
     "",
     SYNTHESIS_DISCIPLINE,

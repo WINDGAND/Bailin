@@ -8,7 +8,7 @@ export default defineConfig({
   sourcemap: true,
   target: "es2022",
   outDir: "dist",
-  external: ["@nuwa-pet/character-protocol", "pngjs"],
+  external: ["@bailin/character-protocol", "pngjs"],
   outExtension: ({ format }) => ({ js: format === "esm" ? ".js" : ".cjs" }),
   onSuccess: async () => {
     const { copyFileSync, existsSync } = await import("node:fs");

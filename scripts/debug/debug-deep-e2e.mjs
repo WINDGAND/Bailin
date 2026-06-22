@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 端到端测试：直接调用真实的 NuwaOrchestrator.createCharacterDeep（编译后），
+ * 端到端测试：直接调用真实的 BailinOrchestrator.createCharacterDeep（编译后），
  * 喂真实的 LLMAdapter（用 .env.dev 的 OhMyGPT），全程自动 approve 两个 checkpoint，
  * 走完 6 Agent 并行调研 + 提炼 + 深度外貌 + Sprite + 自检。
  *
@@ -26,12 +26,12 @@ for (const line of envRaw.split(/\r?\n/)) {
   process.env[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
 }
 
-const KEY = process.env.NUWA_PET_LLM_API_KEY;
-const BASE = process.env.NUWA_PET_LLM_BASE_URL ?? "https://api.ohmygpt.com/v1";
-const MODEL = process.env.NUWA_PET_LLM_MODEL ?? "gpt-4o-mini";
+const KEY = process.env.BAILIN_LLM_API_KEY;
+const BASE = process.env.BAILIN_LLM_BASE_URL ?? "https://api.ohmygpt.com/v1";
+const MODEL = process.env.BAILIN_LLM_MODEL ?? "gpt-4o-mini";
 
-const { NuwaOrchestrator } = await import(
-  toUrl(resolve(root, "apps/desktop/dist/main/main/orchestration/nuwa-orchestrator.js"))
+const { BailinOrchestrator } = await import(
+  toUrl(resolve(root, "apps/desktop/dist/main/main/orchestration/bailin-orchestrator.js"))
 );
 const { LLMAdapter } = await import(
   toUrl(resolve(root, "apps/desktop/dist/main/main/adapters/llm-adapter.js"))
@@ -44,7 +44,7 @@ const provider = {
   model: MODEL
 };
 const llm = new LLMAdapter(() => provider);
-const orch = new NuwaOrchestrator(llm);
+const orch = new BailinOrchestrator(llm);
 
 const characterName = process.argv[2] ?? "三笠";
 const config = {

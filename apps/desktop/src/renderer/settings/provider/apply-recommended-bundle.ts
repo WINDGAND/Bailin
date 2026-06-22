@@ -20,7 +20,7 @@ export const IDLE_READINESS: ReadinessMap = {
   imageGen: { status: "idle" }
 };
 
-interface NuwaProviderApis {
+interface BailinProviderApis {
   llm: {
     setProvider(input: {
       kind: string;
@@ -75,11 +75,11 @@ export interface CustomProviderInput {
 type ProgressFn = (key: ReadinessKey, state: ReadinessState) => void;
 
 async function saveOhMyGptBundle(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   bundle: RecommendedBundle,
   apiKey: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const llmSave = await nuwa.llm.setProvider({
+  const llmSave = await bailin.llm.setProvider({
     kind: bundle.llm.kind,
     baseUrl: bundle.llm.baseUrl,
     model: bundle.llm.model,
@@ -89,17 +89,17 @@ async function saveOhMyGptBundle(
   });
   if (!llmSave.ok) return { ok: false, error: llmSave.error };
 
-  const imgSave = await nuwa.imageGen.setConfig(bundle.image);
+  const imgSave = await bailin.imageGen.setConfig(bundle.image);
   if (!imgSave.ok) return { ok: false, error: imgSave.error };
 
   return { ok: true };
 }
 
 async function saveCustomProvider(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   input: CustomProviderInput
 ): Promise<{ ok: boolean; error?: string }> {
-  const llmSave = await nuwa.llm.setProvider({
+  const llmSave = await bailin.llm.setProvider({
     kind: input.kind,
     baseUrl: input.baseUrl,
     model: input.model,
@@ -113,18 +113,18 @@ async function saveCustomProvider(
     ...input.imageConfig,
     apiKey: input.imageConfig.useLLMProvider ? undefined : input.imageApiKey || undefined
   };
-  const imgSave = await nuwa.imageGen.setConfig(payload);
+  const imgSave = await bailin.imageGen.setConfig(payload);
   if (!imgSave.ok) return { ok: false, error: imgSave.error };
 
   return { ok: true };
 }
 
 async function runChatTest(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   onProgress: ProgressFn
 ): Promise<ReadinessState> {
   onProgress("chat", { status: "running" });
-  const chatTest = await nuwa.llm.testConnection();
+  const chatTest = await bailin.llm.testConnection();
   const state: ReadinessState = chatTest.ok
     ? { status: "ok", latencyMs: chatTest.latencyMs }
     : { status: "fail", reason: chatTest.error ?? "connection failed" };
@@ -133,12 +133,12 @@ async function runChatTest(
 }
 
 async function runVisionTest(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   onProgress: ProgressFn
 ): Promise<ReadinessState> {
   onProgress("vision", { status: "running" });
   try {
-    const v = await nuwa.characters.probeVision();
+    const v = await bailin.characters.probeVision();
     const state: ReadinessState = v.ok
       ? { status: "ok", latencyMs: v.latencyMs }
       : { status: "fail", reason: v.reason ?? "vision probe failed" };
@@ -155,12 +155,12 @@ async function runVisionTest(
 }
 
 async function runWebSearchTest(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   onProgress: ProgressFn
 ): Promise<ReadinessState> {
   onProgress("webSearch", { status: "running" });
   try {
-    const w = await nuwa.characters.probeWebSearch();
+    const w = await bailin.characters.probeWebSearch();
     const ok = w.ok && w.realWebSearch;
     const state: ReadinessState = ok
       ? { status: "ok", latencyMs: w.latencyMs, detail: String(w.citations) }
@@ -181,14 +181,14 @@ async function runWebSearchTest(
 }
 
 async function runImageGenTest(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   tier: string,
   imageConfig: ImageGenerationConfigDTO,
   onProgress: ProgressFn
 ): Promise<ReadinessState> {
   onProgress("imageGen", { status: "running" });
   try {
-    const img = await nuwa.imageGen.test(tier);
+    const img = await bailin.imageGen.test(tier);
     const tierCfg = imageConfig.tiers[tier as ImageTierName];
     if (img.ok) {
       const detailParts = [img.model, img.requestFields?.join(", ")].filter(Boolean);
@@ -225,14 +225,14 @@ async function runImageGenTest(
 
 /** OhMyGPT 一键接入：写入作者预设，仅验证 Key + 主模型。 */
 export async function applyOhMyGptBundle(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   bundle: RecommendedBundle,
   apiKey: string,
   onProgress: ProgressFn
 ): Promise<ApplyBundleResult> {
   const readiness: ReadinessMap = { ...IDLE_READINESS };
 
-  const save = await saveOhMyGptBundle(nuwa, bundle, apiKey);
+  const save = await saveOhMyGptBundle(bailin, bundle, apiKey);
   if (!save.ok) {
     return {
       saveOk: false,
@@ -242,7 +242,7 @@ export async function applyOhMyGptBundle(
     };
   }
 
-  readiness.chat = await runChatTest(nuwa, onProgress);
+  readiness.chat = await runChatTest(bailin, onProgress);
   const allRequiredPassed = readiness.chat.status === "ok";
 
   return { saveOk: true, readiness, allRequiredPassed };
@@ -250,7 +250,7 @@ export async function applyOhMyGptBundle(
 
 /** 个性化配置：保存用户填写项，四项全部实测。 */
 export async function verifyCustomProvider(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   input: CustomProviderInput,
   onProgress: ProgressFn
 ): Promise<ApplyBundleResult> {
@@ -266,7 +266,7 @@ export async function verifyCustomProvider(
     };
   }
 
-  const save = await saveCustomProvider(nuwa, input);
+  const save = await saveCustomProvider(bailin, input);
   if (!save.ok) {
     return {
       saveOk: false,
@@ -276,11 +276,11 @@ export async function verifyCustomProvider(
     };
   }
 
-  readiness.chat = await runChatTest(nuwa, onProgress);
-  readiness.vision = await runVisionTest(nuwa, onProgress);
-  readiness.webSearch = await runWebSearchTest(nuwa, onProgress);
+  readiness.chat = await runChatTest(bailin, onProgress);
+  readiness.vision = await runVisionTest(bailin, onProgress);
+  readiness.webSearch = await runWebSearchTest(bailin, onProgress);
   readiness.imageGen = await runImageGenTest(
-    nuwa,
+    bailin,
     input.imageConfig.defaultTier,
     input.imageConfig,
     onProgress
@@ -294,11 +294,11 @@ export async function verifyCustomProvider(
 
 /** @deprecated 使用 applyOhMyGptBundle 或 verifyCustomProvider */
 export async function applyRecommendedBundle(
-  nuwa: NuwaProviderApis,
+  bailin: BailinProviderApis,
   bundle: RecommendedBundle,
   apiKey: string,
   onProgress: ProgressFn,
   _unavailableReason: (feature: ReadinessKey) => string
 ): Promise<ApplyBundleResult> {
-  return applyOhMyGptBundle(nuwa, bundle, apiKey, onProgress);
+  return applyOhMyGptBundle(bailin, bundle, apiKey, onProgress);
 }

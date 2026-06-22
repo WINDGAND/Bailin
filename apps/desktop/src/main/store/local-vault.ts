@@ -1,25 +1,48 @@
 import Database from "better-sqlite3";
 import { app, safeStorage } from "electron";
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type {
   CharacterBundle,
   DistillationJob,
   DistillationJobStatus,
   ResearchDoc
-} from "@nuwa-pet/character-protocol";
-import { RESEARCH_AGENT_LABELS, mergeAtlasRuntimeDefaults } from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
+import { RESEARCH_AGENT_LABELS, mergeAtlasRuntimeDefaults } from "@bailin/character-protocol";
 import type { ProfileChangeRecord, UserProfile } from "../../shared/ipc-contract.js";
 import { emptyProfile, normalizeProfile } from "../../shared/profile.js";
 
 const USER_DATA_DIR = "Bailin";
 const LEGACY_USER_DATA_DIR = "NuwaPet";
+/** 旧 npm 作用域 @nuwa-pet/desktop 下的 Electron userData 相对路径。 */
+const LEGACY_ELECTRON_APP_DATA_DIRS = ["@nuwa-pet/desktop"] as const;
 const DEFAULT_CHAT_SESSION_TITLE = "新的对话";
 
-function deriveChatSessionTitle(content: string): string {
-  const oneLine = content.replace(/\s+/g, " ").trim();
-  if (!oneLine) return DEFAULT_CHAT_SESSION_TITLE;
-  return oneLine.length > 36 ? `${oneLine.slice(0, 36)}…` : oneLine;
+/** 空库通常只有几 KB；有角色/对话的 vault.db 会大得多。 */
+function vaultDbLooksPopulated(vaultDbPath: string): boolean {
+  if (!existsSync(vaultDbPath)) return false;
+  try {
+    return statSync(vaultDbPath).size >= 8192;
+  } catch {
+    return false;
+  }
+}
+
+function tryMigrateDirectory(fromDir: string, toDir: string): boolean {
+  if (!existsSync(fromDir) || fromDir === toDir) return false;
+  try {
+    if (existsSync(toDir)) {
+      renameSync(toDir, `${toDir}.pre-migrate-${Date.now()}`);
+    } else {
+      mkdirSync(dirname(toDir), { recursive: true });
+    }
+    renameSync(fromDir, toDir);
+    console.info(`[local-vault] migrated user data: ${fromDir} -> ${toDir}`);
+    return true;
+  } catch (err) {
+    console.warn(`[local-vault] failed to migrate ${fromDir}:`, err);
+    return false;
+  }
 }
 
 function resolveUserDataRoot(): string {
@@ -33,7 +56,30 @@ function resolveUserDataRoot(): string {
       return legacy;
     }
   }
+
+  const newVaultDb = join(root, "vault.db");
+  if (!vaultDbLooksPopulated(newVaultDb)) {
+    const appData = app.getPath("appData");
+    const legacyRoots = LEGACY_ELECTRON_APP_DATA_DIRS.flatMap((rel) => [
+      join(appData, ...rel.split("/"), USER_DATA_DIR),
+      join(appData, ...rel.split("/"), LEGACY_USER_DATA_DIR)
+    ]);
+    for (const legacyRoot of legacyRoots) {
+      if (legacyRoot === root) continue;
+      if (vaultDbLooksPopulated(join(legacyRoot, "vault.db"))) {
+        tryMigrateDirectory(legacyRoot, root);
+        break;
+      }
+    }
+  }
+
   return root;
+}
+
+function deriveChatSessionTitle(content: string): string {
+  const oneLine = content.replace(/\s+/g, " ").trim();
+  if (!oneLine) return DEFAULT_CHAT_SESSION_TITLE;
+  return oneLine.length > 36 ? `${oneLine.slice(0, 36)}…` : oneLine;
 }
 
 /**

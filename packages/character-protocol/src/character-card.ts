@@ -4,7 +4,7 @@ import { AnswerProtocolSchema } from "./answer-protocol.js";
 
 /**
  * CharacterCard 描述一个角色"怎么想 / 怎么说"。
- * 这是女娲 SKILL 的结构化产品版本。详见 README「角色协议」与 packages/character-protocol。
+ * 这是百灵角色协议的结构化产品版本。详见 README「角色协议」与 packages/character-protocol。
  */
 
 export const SCHEMA_VERSION = "0.1" as const;
@@ -90,7 +90,7 @@ export const CharacterMetaSchema = z.object({
    * `summarizeAppearance(appearance)` 自动写入。Step1 的人格卡 LLM 不再被要求输出此字段。
    */
   avatarHint: z.string().max(800).default(""),
-  /** 结构化外貌信息，由女娲外貌调研阶段产出；为可选以兼容 v0.1 仅有 avatarHint 的旧卡。 */
+  /** 结构化外貌信息，由百灵外貌调研阶段产出；为可选以兼容 v0.1 仅有 avatarHint 的旧卡。 */
   appearance: AppearanceSpecSchema.optional(),
   disclaimer: z.string().min(1).max(400)
 });

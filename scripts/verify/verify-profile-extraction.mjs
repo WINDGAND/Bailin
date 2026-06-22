@@ -1,6 +1,6 @@
 /**
  * 用户画像 v2 facts 逻辑单元测试（无 LLM / Electron）。
- * 运行：pnpm --filter @nuwa-pet/desktop run build:main && node scripts/verify/verify-profile-extraction.mjs
+ * 运行：pnpm --filter @bailin/desktop run build:main && node scripts/verify/verify-profile-extraction.mjs
  */
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";

@@ -45,7 +45,7 @@ function Capture-Pet {
   $hdc = $g.GetHdc()
   [PWX]::PrintWindow($pet, $hdc, 2) | Out-Null
   $g.ReleaseHdc($hdc); $g.Dispose()
-  $shot = "$env:TEMP\nuwa-pet-$Name.png"
+  $shot = "$env:TEMP\bailin-pet-$Name.png"
   $bmp.Save($shot, [System.Drawing.Imaging.ImageFormat]::Png)
   $bmp.Dispose()
   Write-Host "  saved: $shot ($w x $hi)"
@@ -67,8 +67,8 @@ foreach ($n in $names) {
   Get-Process electron, node | Stop-Process -Force
   Start-Sleep -Seconds 2
 
-  # 启动 dev with NUWA_PET_DEV_ACTIVE
-  $env:NUWA_PET_DEV_ACTIVE = $n.key
+  # 启动 dev with BAILIN_DEV_ACTIVE
+  $env:BAILIN_DEV_ACTIVE = $n.key
   Push-Location "d:\桌面\文件夹\Bailin"
   Start-Process -FilePath "pnpm" -ArgumentList "dev" -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\nuwa-dev-$($n.file).log"
   Pop-Location

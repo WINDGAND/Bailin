@@ -1,4 +1,4 @@
-import { buildProfileExtractionPrompt } from "@nuwa-pet/nuwa-prompts";
+import { buildProfileExtractionPrompt } from "@bailin/prompts";
 import log from "electron-log/main";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 import type { LocalVault } from "../store/local-vault.js";

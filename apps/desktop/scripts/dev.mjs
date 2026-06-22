@@ -14,10 +14,10 @@ if (process.platform === "win32") {
 }
 
 const WORKSPACE_PACKAGES = [
-  ["@nuwa-pet/character-protocol", "packages/character-protocol/dist/index.d.ts"],
-  ["@nuwa-pet/nuwa-prompts", "packages/nuwa-prompts/dist/index.d.ts"],
-  ["@nuwa-pet/pet-atlas-tools", "packages/pet-atlas-tools/dist/index.d.ts"],
-  ["@nuwa-pet/sprite-runtime", "packages/sprite-runtime/dist/index.d.ts"]
+  ["@bailin/character-protocol", "packages/character-protocol/dist/index.d.ts"],
+  ["@bailin/prompts", "packages/prompts/dist/index.d.ts"],
+  ["@bailin/pet-atlas-tools", "packages/pet-atlas-tools/dist/index.d.ts"],
+  ["@bailin/sprite-runtime", "packages/sprite-runtime/dist/index.d.ts"]
 ];
 
 function assertWorkspacePackagesBuilt() {
@@ -60,13 +60,13 @@ runChecked(
   [
     "-r",
     "--filter",
-    "@nuwa-pet/character-protocol",
+    "@bailin/character-protocol",
     "--filter",
-    "@nuwa-pet/nuwa-prompts",
+    "@bailin/prompts",
     "--filter",
-    "@nuwa-pet/pet-atlas-tools",
+    "@bailin/pet-atlas-tools",
     "--filter",
-    "@nuwa-pet/sprite-runtime",
+    "@bailin/sprite-runtime",
     "run",
     "build"
   ],
@@ -157,10 +157,10 @@ const preloadBuild = run("tsc", ["-w", "-p", "tsconfig.preload.json"]);
 // 这意味着重启时桌宠 + 设置 + 聊天窗会一起消失再出现，视觉上是"全局闪屏"。
 //
 // 主进程改动后默认自动重启 Electron（避免 preload 已更新但 main 未重启导致 IPC 缺失）。
-// 若不想闪屏可设 NUWA_PET_DEV_AUTO_RESTART=0，改完主进程后在 dev 终端输入 r + Enter。
+// 若不想闪屏可设 BAILIN_DEV_AUTO_RESTART=0，改完主进程后在 dev 终端输入 r + Enter。
 
 const distMainRoot = resolve(appRoot, "dist/main");
-const autoRestart = process.env.NUWA_PET_DEV_AUTO_RESTART !== "0";
+const autoRestart = process.env.BAILIN_DEV_AUTO_RESTART !== "0";
 let electron = null;
 let restartTimer = null;
 let lastRestartAt = 0;
@@ -169,7 +169,7 @@ let restartingElectron = false;
 function spawnElectron(label = "fresh") {
   console.log(`[dev] electron ${label} starting…`);
   electron = run("electron", ["."], {
-    NUWA_PET_DEV: "1",
+    BAILIN_DEV: "1",
     VITE_DEV_SERVER: DEV_VITE_URL
   });
   electron.on("exit", (code) => {
@@ -252,13 +252,13 @@ void waitForVite(DEV_VITE_URL).then(() => {
  * 让用户在 dev 终端里手动触发主进程重启，避免每次主进程改动都"全局闪屏"。
  *   r + Enter / restart + Enter  → 立即重启 Electron
  *   q + Enter / quit + Enter     → 退出整个 dev
- * 自动模式（NUWA_PET_DEV_AUTO_RESTART=1）下仍保留 stdin 入口。
+ * 自动模式（BAILIN_DEV_AUTO_RESTART=1）下仍保留 stdin 入口。
  */
 function setupManualRestart() {
   if (autoRestart) {
     console.log(
       "[dev] main process auto-restart: ON. " +
-        "Main/preload edits restart Electron (NUWA_PET_DEV_AUTO_RESTART=0 to disable)."
+        "Main/preload edits restart Electron (BAILIN_DEV_AUTO_RESTART=0 to disable)."
     );
   } else {
     console.log(

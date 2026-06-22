@@ -1,4 +1,4 @@
-import type { DistillationJobConfig } from "@nuwa-pet/character-protocol";
+import type { DistillationJobConfig } from "@bailin/character-protocol";
 import {
   agentNameForSlug,
   buildMaterialCoveragePrompt,
@@ -7,7 +7,7 @@ import {
   type MaterialCoverageResult,
   RESEARCH_AGENT_ORDER,
   type ResearchAgentSlug
-} from "@nuwa-pet/nuwa-prompts";
+} from "@bailin/prompts";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 import type { AgentResearchPlan } from "./research-pipeline.js";
 

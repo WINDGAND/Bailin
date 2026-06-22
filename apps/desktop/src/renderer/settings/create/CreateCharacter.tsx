@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { DistillationProgress } from "../progress/DistillationProgress.js";
 import { useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
@@ -47,7 +47,7 @@ interface ReferenceImage {
 
 export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element {
   const t = useT();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const { showToast } = useToast();
   const { activeJob, startJob, clearJob, cancelJob } = useDistillationJobs();
 
@@ -73,8 +73,8 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     void (async () => {
       try {
         const [c, v] = await Promise.all([
-          nuwa.characters.detectCapabilities(),
-          nuwa.characters.detectVisionCapability()
+          bailin.characters.detectCapabilities(),
+          bailin.characters.detectVisionCapability()
         ]);
         setCaps(c);
         setVision(v);
@@ -85,7 +85,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         // ignore
       }
     })();
-  }, [nuwa]);
+  }, [bailin]);
 
   const addReferenceImage = useCallback(
     (img: Omit<ReferenceImage, "id" | "role">) => {
@@ -187,7 +187,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     setBusy(true);
     setWarnings([]);
     setSkeletonNote(null);
-    const r = await nuwa.characters.create({
+    const r = await bailin.characters.create({
       characterName: trimmedName,
       sourceType,
       track,
@@ -220,7 +220,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     setBusy(true);
     const resolvedMode = effectiveMaterialMode;
     const localOnly = resolvedMode === "local-only";
-    const r = await nuwa.characters.createDeep({
+    const r = await bailin.characters.createDeep({
       characterName: trimmedName,
       sourceType,
       track,
@@ -414,7 +414,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                       font: "inherit",
                       cursor: "pointer"
                     }}
-                    onClick={() => nuwa.pet.openSettings()}
+                    onClick={() => bailin.pet.openSettings()}
                   >
                     {t("nav.key")}
                   </button>
@@ -517,7 +517,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                     style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}
                     onClick={(e) => {
                       e.preventDefault();
-                      nuwa.pet.openSettings();
+                      bailin.pet.openSettings();
                     }}
                   >
                     {t("nav.key")}

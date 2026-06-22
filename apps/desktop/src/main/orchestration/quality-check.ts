@@ -3,7 +3,7 @@ import type {
   QualityCheckItem,
   QualityReport,
   ResearchDoc
-} from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
 import {
   buildSanityEdgeJudgePrompt,
   buildSanityEdgeQuestionPrompt,
@@ -12,7 +12,7 @@ import {
   buildVoiceSamplePrompt,
   researchDocsToSegments,
   type SanityEdgeQuestionSet
-} from "@nuwa-pet/nuwa-prompts";
+} from "@bailin/prompts";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 
 export interface RunQualityCheckInput {

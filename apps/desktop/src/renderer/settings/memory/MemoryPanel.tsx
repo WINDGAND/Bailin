@@ -13,7 +13,7 @@ import {
   groupFactsByCategory,
   PROFILE_FACT_CATEGORY_ORDER
 } from "../../../shared/profile.js";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { useConfirm, useToast } from "../../shared/feedback.js";
 import { useDirtyTracker } from "../app/dirty-context.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
@@ -53,7 +53,7 @@ function cleanProfileForSave(profile: UserProfile, now: number): UserProfile {
 export function MemoryPanel(): JSX.Element {
   const t = useT();
   const { locale } = useI18n();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const confirm = useConfirm();
   const { showToast } = useToast();
   const [profile, setProfile] = useState<UserProfile>(emptyProfile());
@@ -76,9 +76,9 @@ export function MemoryPanel(): JSX.Element {
   async function reload(): Promise<void> {
     try {
       const [p, s, changes] = await Promise.all([
-        nuwa.memory.getProfile(),
-        nuwa.memory.getSettings(),
-        nuwa.memory.getRecentChanges(5)
+        bailin.memory.getProfile(),
+        bailin.memory.getSettings(),
+        bailin.memory.getRecentChanges(5)
       ]);
       setProfile(p);
       setInitial(p);
@@ -99,7 +99,7 @@ export function MemoryPanel(): JSX.Element {
 
   useEffect(() => {
     void reload();
-  }, [nuwa]);
+  }, [bailin]);
 
   const dirtyRef = useRef(false);
   const dirty = useMemo(
@@ -110,22 +110,22 @@ export function MemoryPanel(): JSX.Element {
   useDirtyTracker(dirty);
 
   useEffect(() => {
-    return nuwa.on.profileUpdated((evt) => {
+    return bailin.on.profileUpdated((evt) => {
       if (dirtyRef.current) {
         setPendingAutoBanner(true);
         return;
       }
       setProfile(evt.profile);
       setInitial(evt.profile);
-      void nuwa.memory.getRecentChanges(5).then(setRecentChanges);
+      void bailin.memory.getRecentChanges(5).then(setRecentChanges);
     });
-  }, [nuwa]);
+  }, [bailin]);
 
   async function save(): Promise<void> {
     setSaving(true);
     const clean = cleanProfileForSave(profile, Date.now());
     try {
-      await nuwa.memory.updateProfile(clean);
+      await bailin.memory.updateProfile(clean);
       setProfile(clean);
       setInitial(clean);
       showToast({ kind: "success", text: t("memory.toastSaved") });
@@ -165,7 +165,7 @@ export function MemoryPanel(): JSX.Element {
 
   async function toggleAutoLearn(enabled: boolean): Promise<void> {
     try {
-      const next = await nuwa.memory.setSettings({ autoLearnEnabled: enabled });
+      const next = await bailin.memory.setSettings({ autoLearnEnabled: enabled });
       setSettings(next);
       showToast({
         kind: "info",
@@ -184,11 +184,11 @@ export function MemoryPanel(): JSX.Element {
   async function undoLast(): Promise<void> {
     setUndoing(true);
     try {
-      const res = await nuwa.memory.undoLastChange();
+      const res = await bailin.memory.undoLastChange();
       if (res.ok && res.profile) {
         setProfile(res.profile);
         setInitial(res.profile);
-        setRecentChanges(await nuwa.memory.getRecentChanges(5));
+        setRecentChanges(await bailin.memory.getRecentChanges(5));
         showToast({ kind: "info", text: t("memory.toastUndone") });
       } else if (res.reason === "expired") {
         showToast({ kind: "error", text: t("memory.toastUndoExpired") });
@@ -224,7 +224,7 @@ export function MemoryPanel(): JSX.Element {
     if (!ok) return;
     setClearing(true);
     try {
-      await nuwa.memory.clearProfile();
+      await bailin.memory.clearProfile();
       setProfile(emptyProfile());
       setInitial(emptyProfile());
       setRecentChanges([]);
@@ -263,7 +263,7 @@ export function MemoryPanel(): JSX.Element {
     if (!ok) return;
     setClearing(true);
     try {
-      await nuwa.memory.clearAll();
+      await bailin.memory.clearAll();
       setProfile(emptyProfile());
       setInitial(emptyProfile());
       setRecentChanges([]);

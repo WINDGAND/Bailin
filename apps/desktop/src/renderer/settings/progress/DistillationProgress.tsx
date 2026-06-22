@@ -5,15 +5,15 @@ import type {
   QualityReport,
   ResearchAgentId,
   ResearchDoc
-} from "@nuwa-pet/character-protocol";
-import { HATCH_PET_ROW_STATES } from "@nuwa-pet/character-protocol";
+} from "@bailin/character-protocol";
+import { HATCH_PET_ROW_STATES } from "@bailin/character-protocol";
 import type {
   DistillationProgressEvent,
   HatchProgressEventDTO,
   SynthesisSummaryPayload,
   ResearchSummaryPayload
 } from "../../../shared/ipc-contract.js";
-import { useNuwa } from "../../shared/use-nuwa.js";
+import { useBailin } from "../../shared/use-bailin.js";
 import { CopyButton, Spinner } from "../../shared/feedback.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
 import type { Locale } from "../../shared/i18n/types.js";
@@ -67,7 +67,7 @@ export function DistillationProgress({
 }: Props): JSX.Element {
   const t = useT();
   const { locale } = useI18n();
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const [agents, setAgents] = useState<AgentCardState[]>(INITIAL_AGENTS);
   const [progress, setProgress] = useState(0);
   const [phaseLabel, setPhaseLabel] = useState("启动中…");
@@ -91,7 +91,7 @@ export function DistillationProgress({
   >(null);
 
   useEffect(() => {
-    const off = nuwa.on.distillationProgress((evt: DistillationProgressEvent) => {
+    const off = bailin.on.distillationProgress((evt: DistillationProgressEvent) => {
       if (evt.jobId !== jobId) return;
       switch (evt.kind) {
         case "started":
@@ -165,7 +165,7 @@ export function DistillationProgress({
       }
     });
     return off;
-  }, [nuwa, jobId]);
+  }, [bailin, jobId]);
 
   const running = finalState == null;
 

@@ -1,4 +1,4 @@
-import type { AppearanceSpec, HatchPetRowState } from "@nuwa-pet/character-protocol";
+import type { AppearanceSpec, HatchPetRowState } from "@bailin/character-protocol";
 
 /**
  * Hatch-pet prompt 模板。

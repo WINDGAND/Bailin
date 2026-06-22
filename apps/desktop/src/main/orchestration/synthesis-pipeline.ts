@@ -1,4 +1,4 @@
-import type { CharacterCard, QualityReport, ResearchDoc } from "@nuwa-pet/character-protocol";
+import type { CharacterCard, QualityReport, ResearchDoc } from "@bailin/character-protocol";
 import {
   buildFrameworkSynthesisPrompt,
   buildSynthesisPassAPrompt,
@@ -9,9 +9,9 @@ import {
   parseAnswerProtocolFromLLM,
   type FrameworkSynthesisInput,
   type SynthesisPassAResult
-} from "@nuwa-pet/nuwa-prompts";
-import type { DistillationJobConfig } from "@nuwa-pet/character-protocol";
-import { isAnswerProtocolValid, parseCard, SCHEMA_VERSION } from "@nuwa-pet/character-protocol";
+} from "@bailin/prompts";
+import type { DistillationJobConfig } from "@bailin/character-protocol";
+import { isAnswerProtocolValid, parseCard, SCHEMA_VERSION } from "@bailin/character-protocol";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 
 export const MAX_SYNTHESIS_ROUNDS = 2;

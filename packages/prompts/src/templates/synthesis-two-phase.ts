@@ -5,7 +5,7 @@
  * Pass B：对候选做三重验证标注后输出完整 CharacterCard（含 timeline / sources）。
  * Targeted：质检失败后只重写 mentalModels / heuristics。
  */
-import type { CharacterCard, QualityReport } from "@nuwa-pet/character-protocol";
+import type { CharacterCard, QualityReport } from "@bailin/character-protocol";
 import type { FrameworkSynthesisInput } from "./framework-synthesis.js";
 
 export interface SynthesisCandidate {
@@ -73,7 +73,7 @@ export function buildSynthesisPassAPrompt(input: FrameworkSynthesisInput): {
   user: string;
 } {
   const system = [
-    "你是百灵 Bailin 的「框架扫描器」（女娲 Phase 2 · Pass A）。",
+    "你是百灵 Bailin 的「框架扫描器」（百灵 Phase 2 · Pass A）。",
     "任务：从调研报告中扫描 15~30 个候选论点，标注矛盾与信息缺口。",
     "不要输出完整人格卡，只输出 Pass A JSON。",
     "",
@@ -88,7 +88,7 @@ export function buildSynthesisPassBPrompt(
   passA: SynthesisPassAResult
 ): { system: string; user: string } {
   const system = [
-    "你是百灵 Bailin 的「框架提炼器」（女娲 Phase 2 · Pass B）。",
+    "你是百灵 Bailin 的「框架提炼器」（百灵 Phase 2 · Pass B）。",
     "任务：根据 Pass A 候选做三重验证筛选，输出完整 CharacterCard JSON。",
     "",
     SYNTHESIS_PASS_B_SCHEMA

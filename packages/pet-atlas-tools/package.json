@@ -1,5 +1,5 @@
 {
-  "name": "@nuwa-pet/pet-atlas-tools",
+  "name": "@bailin/pet-atlas-tools",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@nuwa-pet/character-protocol": "workspace:*",
+    "@bailin/character-protocol": "workspace:*",
     "pngjs": "^7.0.0"
   },
   "devDependencies": {

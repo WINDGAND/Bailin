@@ -247,7 +247,7 @@ bailin/
 ├── packages/
 │   ├── character-protocol/         # CharacterCard / AppearanceSpec / SpriteProgram schema
 │   ├── sprite-runtime/             # DSL 渲染器 + 状态机 + guard 沙箱 + dsl-presets
-│   ├── nuwa-prompts/               # 蒸馏 / 调研 / 外貌 / 对话 / hatch-pet prompt
+│   ├── prompts/                    # 蒸馏 / 调研 / 外貌 / 对话 / hatch-pet prompt
 │   └── pet-atlas-tools/            # hatch-pet atlas 裁帧 / 拼图 / 校验
 ├── apps/desktop/src/shared/starters.ts  # 可选内置 starter 列表（默认空）
 ├── assets/                         # README 用图与 logo
@@ -258,9 +258,6 @@ bailin/
     ├── debug/                      # 端到端调试脚本
     └── smoke/                      # 外部 provider 冒烟脚本
 ```
-
-> 内部 npm 包作用域仍为 `@nuwa-pet/*`（历史命名），计划 v0.1 统一为 `@bailin/*`
-
 ### 验证脚本
 
 ```bash
@@ -283,7 +280,7 @@ node ./scripts/a11y-scan.mjs     # 扫 pet / chat / settings / bubble 四窗口
 ### 架构
 
 - **桌面壳**：Electron（Windows 优先；透明置顶 Pet 窗 + 附着 Chat 窗 + Settings SPA）
-- **主进程**：托盘 / 全局快捷键、LocalVault（SQLite）、LLMAdapter、NuwaOrchestrator、CharacterRuntime、DPAPI Key 加密
+- **主进程**：托盘 / 全局快捷键、LocalVault（SQLite）、LLMAdapter、BailinOrchestrator、CharacterRuntime、DPAPI Key 加密
 - **渲染进程**：Pet Canvas + Web Worker 内跑 SpriteProgram；Chat / Settings 走 Vite + React
 - **原则**：内核（协议 / 运行时 / 记忆）与 Electron 外壳分离；零云服务；LLM 输出在用户机执行须沙箱化
 
@@ -315,14 +312,14 @@ node ./scripts/a11y-scan.mjs     # 扫 pet / chat / settings / bubble 四窗口
 - 状态机驱动 idle / walk / talk / think / click 等；`guard` 表达式在 Worker 内白名单求值
 - 共用动画预设见 `sprite-runtime` 的 `dsl-presets`；用户新建走 `sprite-builder` + hatch-pet atlas 流水线
 
-提示词模板（快速/深度造人、外貌调研、system prompt 组装）在 `packages/nuwa-prompts/`。
+提示词模板（快速/深度造人、外貌调研、system prompt 组装）在 `packages/prompts/`。
 
 ### 核心流程
 
 | # | 流程 | 入口 → 产出 |
 | --- | --- | --- |
 | 1 | 首启 | 免责声明 → 配置 Key → 选示例或造人 → 桌宠上桌 |
-| 2 | 造人 | 设置 / 向导 → NuwaOrchestrator（快速 ~60s / 深度 5–15min）→ CharacterBundle 入库 |
+| 2 | 造人 | 设置 / 向导 → BailinOrchestrator（快速 ~60s / 深度 5–15min）→ CharacterBundle 入库 |
 | 3 | 唤起聊天 | `Ctrl+Shift+P` 或点击桌宠 → CharacterRuntime + LLM 流式回复 |
 | 4 | 记忆 | 设置 → 用户画像：自动学习事实，可编辑 / 清空（本地 SQLite） |
 | 5 | 切换 / 删除 | 托盘菜单或角色仓库 → 更换激活角色或删除 CharacterBundle |

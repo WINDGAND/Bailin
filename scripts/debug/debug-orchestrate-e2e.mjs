@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 端到端测试：直接调用真实的 NuwaOrchestrator（编译后），
+ * 端到端测试：直接调用真实的 BailinOrchestrator（编译后），
  * 喂真实的 LLMAdapter（用 .env.dev 的 DeepSeek），看 createCharacter 整体是否能跑通。
  *
  * 这等价于"用户在 UI 里点造人"的全链路，只不过不通过 Electron / IPC。
@@ -22,13 +22,13 @@ for (const line of envRaw.split(/\r?\n/)) {
   process.env[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
 }
 
-const KEY = process.env.NUWA_PET_LLM_API_KEY;
-const BASE = process.env.NUWA_PET_LLM_BASE_URL ?? "https://api.deepseek.com";
-const MODEL = process.env.NUWA_PET_LLM_MODEL ?? "deepseek-chat";
+const KEY = process.env.BAILIN_LLM_API_KEY;
+const BASE = process.env.BAILIN_LLM_BASE_URL ?? "https://api.deepseek.com";
+const MODEL = process.env.BAILIN_LLM_MODEL ?? "deepseek-chat";
 
 // 直接 import orchestrator（从 apps/desktop 的编译产物）
-const { NuwaOrchestrator } = await import(
-  toUrl(resolve(root, "apps/desktop/dist/main/main/orchestration/nuwa-orchestrator.js"))
+const { BailinOrchestrator } = await import(
+  toUrl(resolve(root, "apps/desktop/dist/main/main/orchestration/bailin-orchestrator.js"))
 );
 const { LLMAdapter } = await import(
   toUrl(resolve(root, "apps/desktop/dist/main/main/adapters/llm-adapter.js"))
@@ -41,7 +41,7 @@ const provider = {
   model: MODEL
 };
 const llm = new LLMAdapter(() => provider);
-const orch = new NuwaOrchestrator(llm);
+const orch = new BailinOrchestrator(llm);
 
 const characters = [
   { characterName: "蔡徐坤", sourceType: "public-figure", track: "companion" },

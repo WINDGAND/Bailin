@@ -3,8 +3,8 @@ import type {
   SpriteEvent,
   SpriteProgram,
   SpriteState
-} from "@nuwa-pet/character-protocol";
-import { createStateMachine, pickAnimationForState, renderSprite } from "@nuwa-pet/sprite-runtime";
+} from "@bailin/character-protocol";
+import { createStateMachine, pickAnimationForState, renderSprite } from "@bailin/sprite-runtime";
 
 interface SpriteCanvasProps {
   program: SpriteProgram;

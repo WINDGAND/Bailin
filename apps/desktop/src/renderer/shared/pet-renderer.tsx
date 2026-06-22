@@ -1,4 +1,4 @@
-import type { SpriteEvent, SpriteProgram, SpriteState } from "@nuwa-pet/character-protocol";
+import type { SpriteEvent, SpriteProgram, SpriteState } from "@bailin/character-protocol";
 import { AtlasPet } from "./atlas-pet.js";
 import { SpriteCanvas } from "./sprite-canvas.js";
 

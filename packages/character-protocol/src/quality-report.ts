@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * QualityReport：女娲 Phase 4 质量自检的结构化产出。
+ * QualityReport：百灵 Phase 4 质量自检的结构化产出。
  * 落到 CharacterBundle.qualityReport，UI 详情页可展开查看。
  * 对应 huashu-nuwa SKILL.md 第 525 行附近的「通过标准」表。
  */

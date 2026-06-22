@@ -1,5 +1,5 @@
 /**
- * 6 Agent 调研 prompt 集合：女娲深度蒸馏 Phase·1。
+ * 6 Agent 调研 prompt 集合：百灵深度蒸馏 Phase·1。
  * 每个 Agent 输出 Markdown（不是 JSON），最终 6 份 md 落到
  *   %APPDATA%/Bailin/research/<characterId>/0X-*.md
  * 并喂给 Phase·2（framework-synthesis）合成心智模型。

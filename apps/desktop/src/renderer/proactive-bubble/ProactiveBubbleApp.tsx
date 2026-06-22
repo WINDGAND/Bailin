@@ -1,31 +1,31 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ProactiveBubblePlacement, ProactiveWhisperEvent } from "../../shared/ipc-contract.js";
 import { ProactiveBubble, type ProactiveBubbleState } from "../pet/proactive-bubble.js";
-import { useNuwa } from "../shared/use-nuwa.js";
+import { useBailin } from "../shared/use-bailin.js";
 
 /** 气泡尖角在盒外占用的额外高度（absolute tail）。 */
 const PROACTIVE_BUBBLE_TAIL_GUTTER_PX = 8;
 
 export function ProactiveBubbleApp(): JSX.Element {
-  const nuwa = useNuwa();
+  const bailin = useBailin();
   const [bubble, setBubble] = useState<ProactiveBubbleState | null>(null);
   const [placement, setPlacement] = useState<ProactiveBubblePlacement>("above");
   const bubbleRef = useRef<HTMLDivElement>(null);
   const lastReportedSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
-    return nuwa.on.proactiveWhisper((evt) => {
+    return bailin.on.proactiveWhisper((evt) => {
       const e = evt as ProactiveWhisperEvent;
       lastReportedSizeRef.current = null;
       setBubble({ id: e.id, text: e.text });
     });
-  }, [nuwa]);
+  }, [bailin]);
 
   useEffect(() => {
-    return nuwa.on.proactiveBubblePlacement((payload) => {
+    return bailin.on.proactiveBubblePlacement((payload) => {
       setPlacement(payload.placement);
     });
-  }, [nuwa]);
+  }, [bailin]);
 
   useLayoutEffect(() => {
     const el = bubbleRef.current;
@@ -41,7 +41,7 @@ export function ProactiveBubbleApp(): JSX.Element {
         const last = lastReportedSizeRef.current;
         if (last && last.width === width && last.height === height) return;
         lastReportedSizeRef.current = { width, height };
-        void nuwa.proactiveBubble.resize({ width, height });
+        void bailin.proactiveBubble.resize({ width, height });
       });
     };
 
@@ -52,13 +52,13 @@ export function ProactiveBubbleApp(): JSX.Element {
       cancelAnimationFrame(raf);
       observer.disconnect();
     };
-  }, [bubble, placement, nuwa]);
+  }, [bubble, placement, bailin]);
 
   const dismissBubble = useCallback(() => {
     setBubble(null);
     lastReportedSizeRef.current = null;
-    void nuwa.proactiveBubble.dismiss();
-  }, [nuwa]);
+    void bailin.proactiveBubble.dismiss();
+  }, [bailin]);
 
   if (!bubble) {
     return <div className="bubble-shell" aria-hidden />;
@@ -73,7 +73,7 @@ export function ProactiveBubbleApp(): JSX.Element {
         onDismiss={dismissBubble}
         onOpenChat={() => {
           dismissBubble();
-          void nuwa.pet.openChat();
+          void bailin.pet.openChat();
         }}
       />
     </div>
