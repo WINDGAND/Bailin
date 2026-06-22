@@ -281,14 +281,14 @@ export function MemoryPanel(): JSX.Element {
   }
 
   return (
-    <div>
+    <div style={{ maxWidth: 760, margin: "0 auto" }}>
       <div style={{ marginBottom: 26 }}>
         <div className="eyebrow">{t("memory.eyebrow")}</div>
         <div className="display display--page">{t("memory.title")}</div>
         <p className="apple-page-subtitle">{t("memory.subtitle")}</p>
       </div>
 
-      <div style={{ maxWidth: 760 }}>
+      <div>
         {pendingAutoBanner ? (
           <div
             role="status"

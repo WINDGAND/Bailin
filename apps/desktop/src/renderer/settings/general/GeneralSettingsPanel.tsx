@@ -6,14 +6,14 @@ export function GeneralSettingsPanel(): JSX.Element {
   const t = useT();
 
   return (
-    <div>
+    <div style={{ maxWidth: 760, margin: "0 auto" }}>
       <div style={{ marginBottom: 26 }}>
         <div className="eyebrow">{t("settings.eyebrow")}</div>
         <div className="display display--page">{t("settings.title")}</div>
         <p className="apple-page-subtitle">{t("settings.subtitle")}</p>
       </div>
 
-      <div style={{ maxWidth: 760, display: "flex", flexDirection: "column", gap: 28 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
         <section className="forge-section">
           <div className="forge-section__head">
             <span className="bl-field-label">{t("settings.appearanceSectionLabel")}</span>

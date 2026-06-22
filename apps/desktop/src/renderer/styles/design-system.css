@@ -2561,7 +2561,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  max-width: 640px;
+  /* 跟随父 panel root 的 maxWidth (760)，与其他 panel 的 header / body
+     完全对齐 —— 之前 hardcoded 640 让 form 比 header 窄 120px，
+     5 个 panel 切换时标题位置看起来"在动"。 */
+  max-width: 100%;
   padding: 0;
 }
 

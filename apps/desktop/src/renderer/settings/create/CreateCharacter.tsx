@@ -290,7 +290,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         : t("forge.hintQuickEmpty");
 
   return (
-    <div>
+    <div style={{ maxWidth: 760, margin: "0 auto" }}>
       <div style={{ marginBottom: 26 }}>
         <div className="eyebrow">{t("forge.eyebrow")}</div>
         <div className="display display--page">{t("forge.title")}</div>

@@ -367,14 +367,14 @@ export function ApiKeyPanel(): JSX.Element {
   }
 
   return (
-    <div>
+    <div style={{ maxWidth: 760, margin: "0 auto" }}>
       <div style={{ marginBottom: 26 }}>
         <div className="eyebrow">{t("provider.eyebrow")}</div>
         <div className="display display--page">{t("provider.title")}</div>
         <p className="apple-page-subtitle">{t("provider.subtitle")}</p>
       </div>
 
-      <div style={{ maxWidth: 760, display: "flex", flexDirection: "column", gap: 28 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
         <ProviderModeSwitch mode={mode} onChange={(m) => void handleModeChange(m)} />
 
         <ProviderGuideSection compact={mode === "custom"} />

@@ -238,17 +238,16 @@ export function DesktopBehaviorPanel(): JSX.Element {
   }, [screenshotsOn, status?.lastScreenshotAt, frequency, visionAvailable, t, timeLocale]);
 
   return (
-    <div className="stack" style={{ maxWidth: 760 }}>
-      <div>
+    // 与其他 panel 一致的两层结构：root（maxWidth 760 + margin auto）→ header
+    // (marginBottom 26) + body wrapper (flex column + gap 28)。
+    <div style={{ maxWidth: 760, margin: "0 auto" }}>
+      <div style={{ marginBottom: 26 }}>
         <div className="eyebrow">{t("desktop.eyebrow")}</div>
-        <h1 className="display display--page" style={{ margin: "6px 0 0" }}>
-          {t("desktop.title")}
-        </h1>
-        <p className="bl-field-hint" style={{ maxWidth: 520, margin: "8px 0 0" }}>
-          {t("desktop.subtitle")}
-        </p>
+        <div className="display display--page">{t("desktop.title")}</div>
+        <p className="apple-page-subtitle">{t("desktop.subtitle")}</p>
       </div>
 
+      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
       <section className="card" style={{ padding: 18 }}>
         <div className="row gap-3 row--start-top" style={{ alignItems: "flex-start" }}>
           <div
@@ -574,6 +573,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
           </button>
         </div>
       </details>
+      </div>
     </div>
   );
 }
