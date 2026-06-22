@@ -2,7 +2,7 @@
   "name": "bailin",
   "version": "0.0.1",
   "private": true,
-  "description": "桌面上的百变魂灵 · 60 秒造人，像素桌宠常驻桌面，Ctrl+Shift+P 用 ta 的视角陪你思考 —— 完全本地，自带 Key",
+  "description": "60 秒造人，请上桌面 —— 开源本地 AI 桌宠，用 ta 的视角陪你看问题",
   "license": "MIT",
   "packageManager": "pnpm@9.0.0",
   "engines": {
