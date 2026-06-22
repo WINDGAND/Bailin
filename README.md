@@ -1,10 +1,14 @@
-# 百灵 Bailin
+<h1 align="center">百灵 Bailin</h1>
 
-> **桌面上的百变魂灵** —— 60 秒造一个视角型 AI 角色，像素桌宠常驻桌面，`Ctrl + Shift + P` 随手可问。
+<p align="center">
+  <strong>桌面上的百变魂灵</strong> —— 60 秒造一个视角型 AI 角色，像素桌宠常驻桌面，<code>Ctrl + Shift + P</code> 随手可问。
+</p>
 
 <!-- README-I18N:START -->
 
-[English](./README.en.md) | **汉语**
+<p align="center">
+  <a href="./README.en.md">English</a> · <strong>汉语</strong>
+</p>
 
 <!-- README-I18N:END -->
 

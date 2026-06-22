@@ -1,10 +1,14 @@
-# Bailin (百灵)
+<h1 align="center">Bailin (百灵)</h1>
 
-> **A shapeshifting spirit on your desktop** — craft a perspective-driven AI persona in 60 seconds, keep a pixel pet on screen, ask anytime with `Ctrl + Shift + P`.
+<p align="center">
+  <strong>A shapeshifting spirit on your desktop</strong> — craft a perspective-driven AI persona in 60 seconds, keep a pixel pet on screen, ask anytime with <code>Ctrl + Shift + P</code>.
+</p>
 
 <!-- README-I18N:START -->
 
-**English** | [汉语](./README.md)
+<p align="center">
+  <strong>English</strong> · <a href="./README.md">汉语</a>
+</p>
 
 <!-- README-I18N:END -->
 
