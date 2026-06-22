@@ -95,14 +95,33 @@ for (const dir of ["dist", "resources"]) {
   cpSync(src, dest, { recursive: true });
 }
 
-console.log(`[package-win] electron-builder (NSIS) in ${stagingRoot}…`);
+const assetsLogo = join(repoRoot, "assets", "logo.png");
+if (existsSync(assetsLogo)) {
+  cpSync(assetsLogo, join(stagingRoot, "resources", "logo.png"));
+  cpSync(assetsLogo, join(desktopRoot, "resources", "logo.png"));
+}
+
+console.log("[package-win] generate icon.ico from logo.png …");
+run("node", [join(desktopRoot, "scripts/generate-win-icon.mjs"), stagingRoot]);
+
+console.log(`[package-win] electron-builder (dir) in ${stagingRoot}…`);
 const env = {
   ...process.env,
   ELECTRON_MIRROR: process.env.ELECTRON_MIRROR ?? "https://npmmirror.com/mirrors/electron/",
   CSC_IDENTITY_AUTO_DISCOVERY: "false",
   PUPPETEER_SKIP_DOWNLOAD: process.env.PUPPETEER_SKIP_DOWNLOAD ?? "true"
 };
-run("pnpm", ["exec", "electron-builder", "--win", "nsis", "--x64"], {
+run("pnpm", ["exec", "electron-builder", "--win", "dir", "--x64"], {
+  cwd: stagingRoot,
+  env
+});
+
+console.log("[package-win] embed product icon into exe …");
+run("node", [join(desktopRoot, "scripts/embed-win-icon.mjs"), stagingRoot], { cwd: stagingRoot });
+
+console.log("[package-win] electron-builder (NSIS) …");
+const unpacked = join(stagingRoot, "release", "win-unpacked");
+run("pnpm", ["exec", "electron-builder", "--prepackaged", unpacked, "--win", "nsis", "--x64"], {
   cwd: stagingRoot,
   env
 });

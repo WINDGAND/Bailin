@@ -28,6 +28,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "rcedit": "^4.0.1",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.16.10",
     "@types/react": "^18.3.11",
@@ -39,6 +40,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sharp": "^0.35.2",
+    "to-ico": "^1.1.5",
     "typescript": "^5.6.3",
     "vite": "^5.4.8"
   },
@@ -80,7 +82,7 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "resources/logo.png",
+      "icon": "resources/icon.ico",
       "artifactName": "Bailin-Setup-${version}.${ext}",
       "signAndEditExecutable": false
     },
@@ -89,6 +91,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "allowElevation": false,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
       "installerLanguages": ["zh_CN", "en_US"],
       "language": "2052",
       "shortcutName": "百灵 Bailin"
