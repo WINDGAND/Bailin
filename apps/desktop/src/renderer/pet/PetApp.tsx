@@ -108,8 +108,9 @@ export function PetApp(): JSX.Element {
   // hover 在某菜单项上不动)，纠正逻辑不会触发。所以菜单 / 拖拽这类「全局可点击」
   // 状态必须由下面的 useEffect 显式强制 setMouseIgnore(false)。
   const draggingRef = useRef(false);
+  const menuOpenRef = useRef(false);
   const checkMouseIgnore = useRafThrottle((clientX: number, clientY: number) => {
-    if (draggingRef.current) return;
+    if (draggingRef.current || menuOpenRef.current) return;
     const hitTargets = [wrapRef.current, menuLayerRef.current].filter(Boolean) as HTMLElement[];
     const inside = hitTargets.some((el) => {
       const rect = el.getBoundingClientRect();
@@ -313,6 +314,7 @@ export function PetApp(): JSX.Element {
   // 到下面的桌面 → 点不动菜单项。菜单关闭后 ignore 恢复默认 true，下一次
   // mouse 移到桌宠区域时 checkMouseIgnore 会再把它设回 false。
   useEffect(() => {
+    menuOpenRef.current = menu !== null;
     if (menu) {
       ignoredRef.current = false;
       mouseInsideRef.current = true;
@@ -671,7 +673,6 @@ function MenuItem({
         justifyContent: "space-between",
         width: "100%",
         padding: "9px 14px",
-        background: "transparent",
         border: "none",
         fontFamily: "inherit",
         fontSize: "inherit",

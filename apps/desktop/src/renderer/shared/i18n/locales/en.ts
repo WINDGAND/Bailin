@@ -56,7 +56,10 @@ export const en: TranslationTree = {
     themeSaved: "Appearance updated",
     languageSectionLabel: "Interface language",
     languageSectionHint: "Switch the interface language. Character dialogue is not affected.",
-    languageSectionNote: "Applies immediately and is saved on this device."
+    languageSectionNote: "Applies immediately and is saved on this device.",
+    shortcutsSectionLabel: "Keyboard shortcuts",
+    shortcutsSectionHint: "View shortcuts available in the current window.",
+    shortcutsSectionNote: "Press ? anytime, or use the button below."
   },
   language: {
     zhLabel: "简体中文",
@@ -557,7 +560,7 @@ export const en: TranslationTree = {
     lastReasonLlm: "Smart screenshot"
   },
   provider: {
-    eyebrow: "Model service",
+    eyebrow: "Model Service",
     title: "Model & API Key",
     subtitle:
       "Choose OhMyGPT one-click (Key + chat model only) or custom setup with full four-model verification.",
@@ -946,6 +949,8 @@ export const en: TranslationTree = {
     title: "Keyboard shortcuts",
     empty: "No shortcuts registered on this page yet.",
     dismissHint: "Press {{key}} again to dismiss.",
+    dismissHintBefore: "Press",
+    dismissHintAfter: "again to dismiss.",
     scopeGlobal: "Global",
     scopeSettings: "Settings"
   },

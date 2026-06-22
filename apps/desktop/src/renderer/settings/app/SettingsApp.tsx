@@ -148,7 +148,7 @@ export function SettingsApp(): JSX.Element {
     id: "help",
     combo: "?",
     scope: "Settings",
-    label: "查看快捷键",
+    label: t("keyboard.discoverHint"),
     handler: () => kb.openHelp()
   });
 
@@ -253,19 +253,6 @@ export function SettingsApp(): JSX.Element {
                   </button>
                 ))}
               </nav>
-
-              {/* 侧栏底部：键盘快捷键 discoverability hint。collapsed 时藏起来。 */}
-              {!sidebarCollapsed ? (
-                <button
-                  type="button"
-                  className="settings-sidebar__shortcuts-hint"
-                  onClick={() => kb.openHelp()}
-                  title={t("keyboard.discoverHint")}
-                >
-                  <span className="kbd">?</span>
-                  <span>{t("keyboard.discoverHint")}</span>
-                </button>
-              ) : null}
             </aside>
             {/*
               设计选择 (S7 ARIA review):

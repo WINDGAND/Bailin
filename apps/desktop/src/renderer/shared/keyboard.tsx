@@ -236,54 +236,56 @@ function HelpOverlay({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal" style={{ width: 480 }}>
-        <div className="row row--between" style={{ marginBottom: 12 }}>
-          <div className="eyebrow">Keyboard</div>
+      <div className="modal modal--shortcuts">
+        <header className="shortcuts-modal__header">
+          <div>
+            <div className="eyebrow">Keyboard</div>
+            <h2 className="display display--section shortcuts-modal__title">
+              {t("keyboard.title")}
+            </h2>
+          </div>
           <button
             type="button"
-            className="btn btn--icon"
+            className="btn btn--icon shortcuts-modal__close"
             onClick={onClose}
             aria-label={t("keyboard.close")}
             data-hint="Esc"
           >
             <Icon name="close" size={14} strokeWidth={2} />
           </button>
-        </div>
-        <div className="display display--section" style={{ marginBottom: 14 }}>
-          {t("keyboard.title")}
-        </div>
+        </header>
+
         {grouped.length === 0 ? (
-          <p className="body-md">{t("keyboard.empty")}</p>
+          <p className="body-md shortcuts-modal__empty">{t("keyboard.empty")}</p>
         ) : (
-          grouped.map(([scope, list]) => (
-            <div key={scope} style={{ marginBottom: 12 }}>
-              <div className="eyebrow" style={{ marginBottom: 6 }}>
-                {scope}
-              </div>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <tbody>
-                  {list.map((s) => (
-                    <tr key={s.id}>
-                      <td
-                        style={{
-                          padding: "4px 8px 4px 0",
-                          width: 140,
-                          verticalAlign: "top"
-                        }}
-                      >
+          <div className="shortcuts-modal__groups">
+            {grouped.map(([scope, list]) => (
+              <section key={scope} className="shortcuts-modal__group">
+                <h3 className="shortcuts-modal__scope">{scope}</h3>
+                <ul className="shortcuts-modal__list">
+                  {list.map((s, i) => (
+                    <li
+                      key={s.id}
+                      className="shortcuts-modal__row fade-in-up"
+                      style={{ animationDelay: `${i * 36}ms` }}
+                    >
+                      <div className="shortcuts-modal__keys">
                         <ComboBadge combo={s.combo} />
-                      </td>
-                      <td style={{ padding: "4px 0", fontSize: 13 }}>{s.label}</td>
-                    </tr>
+                      </div>
+                      <span className="shortcuts-modal__label">{s.label}</span>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          ))
+                </ul>
+              </section>
+            ))}
+          </div>
         )}
-        <p className="body-sm" style={{ marginTop: 8, color: "var(--ink-faint)" }}>
-          {t("keyboard.dismissHint", { key: "?" })}
-        </p>
+
+        <footer className="shortcuts-modal__footer">
+          {t("keyboard.dismissHintBefore")}
+          <kbd className="shortcuts-kbd shortcuts-kbd--inline">?</kbd>
+          {t("keyboard.dismissHintAfter")}
+        </footer>
       </div>
     </div>,
     document.body
@@ -295,7 +297,7 @@ function ComboBadge({ combo }: { combo: string }): JSX.Element {
   const isMac =
     typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
   return (
-    <span className="row gap-1">
+    <span className="shortcuts-kbd-group">
       {parts.map((p, i) => {
         const label =
           p.toLowerCase() === "mod"
@@ -304,9 +306,9 @@ function ComboBadge({ combo }: { combo: string }): JSX.Element {
               : "Ctrl"
             : p;
         return (
-          <span key={i} className="kbd">
+          <kbd key={i} className="shortcuts-kbd">
             {label}
-          </span>
+          </kbd>
         );
       })}
     </span>

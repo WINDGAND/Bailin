@@ -1506,6 +1506,31 @@ body {
   border-left-color: var(--magenta);
 }
 
+/* 角色仓库 · 列表底部分页（窄屏换行时仍居中） */
+.library-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 16px;
+  padding: 16px 8px 0;
+  text-align: center;
+}
+
+.library-pagination__summary {
+  color: var(--ink-soft);
+  flex: 0 1 auto;
+}
+
+.library-pagination__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 1 auto;
+}
+
 .library-item__thumb {
   width: 44px;
   height: 44px;
@@ -2587,6 +2612,10 @@ body {
 
 .forge-mode__card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   appearance: none;
   text-align: left;
   padding: 14px 16px;
@@ -2627,14 +2656,10 @@ body {
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.15;
-  margin-bottom: 3px;
-}
-
-.forge-mode__card.is-active .forge-mode__title {
-  color: var(--ink);
 }
 
 .forge-mode__caption {
+  display: block;
   font-size: var(--text-caption);
   color: var(--ink-caption);
   line-height: var(--leading-caption);
@@ -2988,6 +3013,31 @@ body {
   font-size: 12px;
   color: var(--ink-faint);
   line-height: 1.4;
+}
+
+/* Character motto / quote — 角色座右铭（编辑式引语，无额外色块） */
+.char-quote {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.65;
+  margin: 0;
+  padding: var(--space-2) 0 var(--space-2) 16px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--grid-strong);
+  border-radius: 0;
+}
+
+/* 与上方角色头像/名称区块拉开距离（stack--lg 默认 26px 仍偏紧） */
+.stack--lg > .char-quote {
+  margin-top: var(--space-6);
+}
+
+[data-theme="dark"] .char-quote {
+  color: var(--ink-caption);
+  border-left-color: var(--hairline-strong);
 }
 
 /* ---------- Status strip：左 4px 实色竖条 + 主文 + 副文 + action ---------- */
@@ -4264,45 +4314,215 @@ body {
 }
 
 /* =============================================================
- * Settings sidebar · keyboard shortcuts discoverability hint
- *
- * 让用户发现按 `?` 能看快捷键。放在侧栏最底（margin-top: auto
- * 配合 settings-sidebar flex column）。点击直接弹 HelpOverlay。
- * collapsed 模式不显示（节省空间）。
+ * Settings · keyboard shortcuts section
  * ============================================================= */
-.settings-sidebar__shortcuts-hint {
-  margin-top: auto;
-  margin: auto 12px 16px;
-  padding: 8px 10px;
+.settings-shortcuts__open {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 10px 14px;
   border: 1px dashed var(--grid-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
-  text-align: left;
   transition:
     border-color var(--motion-fast) var(--ease-out),
     color var(--motion-fast) var(--ease-out),
     background var(--motion-fast) var(--ease-out);
 }
-.settings-sidebar__shortcuts-hint:hover {
+.settings-shortcuts__open:hover {
   border-color: var(--magenta-soft);
   background: var(--magenta-tint);
-  color: var(--ink-soft);
+  color: var(--ink);
 }
-.settings-sidebar__shortcuts-hint:focus-visible {
+.settings-shortcuts__open:focus-visible {
   outline: 2px solid var(--magenta);
   outline-offset: 2px;
 }
-[data-theme="dark"] .settings-sidebar__shortcuts-hint:hover {
+[data-theme="dark"] .settings-shortcuts__open:hover {
   border-color: var(--magenta-soft);
   background: rgba(212, 103, 148, 0.1);
   color: var(--ink);
+}
+
+/* =============================================================
+ * Keyboard shortcuts modal (HelpOverlay)
+ * ============================================================= */
+
+.modal--shortcuts {
+  width: min(440px, 92vw);
+  padding: 24px 26px 20px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 1px 0 rgba(31, 58, 58, 0.04),
+    0 36px 80px -32px rgba(0, 0, 0, 0.55);
+}
+
+.shortcuts-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.shortcuts-modal__title {
+  margin: 6px 0 0;
+}
+
+.shortcuts-modal__close {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.shortcuts-modal__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.shortcuts-modal__group {
+  margin: 0;
+}
+
+.shortcuts-modal__scope {
+  margin: 0 0 8px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.shortcuts-modal__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--grid);
+  border-radius: var(--radius-md);
+  background: var(--paper-deep);
+  overflow: hidden;
+}
+
+.shortcuts-modal__row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.shortcuts-modal__row:not(:last-child) {
+  border-bottom: 1px solid var(--grid);
+}
+
+.shortcuts-modal__row:hover {
+  background: var(--magenta-tint);
+}
+
+.shortcuts-modal__keys {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.shortcuts-modal__label {
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.shortcuts-modal__empty {
+  margin: 16px 0 0;
+  color: var(--ink-soft);
+}
+
+.shortcuts-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--grid);
+  font-size: var(--text-caption);
+  color: var(--ink-faint);
+}
+
+/* 键帽：双层 bezel，模拟实体按键 */
+.shortcuts-kbd-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.shortcuts-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-deep) 100%);
+  border: 1px solid var(--grid-strong);
+  border-radius: 7px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 0 rgba(31, 58, 58, 0.06),
+    0 2px 4px -2px rgba(31, 58, 58, 0.12);
+}
+
+.shortcuts-kbd--inline {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+[data-theme="dark"] .modal--shortcuts {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 240, 0.06),
+    0 1px 0 rgba(0, 0, 0, 0.3),
+    0 36px 80px -32px rgba(0, 0, 0, 0.65);
+}
+
+[data-theme="dark"] .shortcuts-modal__list {
+  background: rgba(0, 0, 0, 0.18);
+  border-color: var(--hairline-strong);
+}
+
+[data-theme="dark"] .shortcuts-modal__row:not(:last-child) {
+  border-bottom-color: var(--hairline);
+}
+
+[data-theme="dark"] .shortcuts-modal__row:hover {
+  background: rgba(212, 103, 148, 0.1);
+}
+
+[data-theme="dark"] .shortcuts-kbd {
+  background: linear-gradient(180deg, rgba(255, 248, 240, 0.08) 0%, rgba(0, 0, 0, 0.22) 100%);
+  border-color: var(--hairline-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 240, 0.1),
+    0 1px 0 rgba(0, 0, 0, 0.35),
+    0 2px 4px -2px rgba(0, 0, 0, 0.4);
 }
 
 /* =============================================================

@@ -1,9 +1,11 @@
 import { useT } from "../../shared/i18n/index.js";
+import { useKeyboard } from "../../shared/keyboard.js";
 import { AppearanceSection } from "./AppearanceSection.js";
 import { LanguageSection } from "../language/LanguageSection.js";
 
 export function GeneralSettingsPanel(): JSX.Element {
   const t = useT();
+  const kb = useKeyboard();
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto" }}>
@@ -34,6 +36,24 @@ export function GeneralSettingsPanel(): JSX.Element {
             {t("settings.languageSectionNote")}
           </p>
           <LanguageSection />
+        </section>
+
+        <section className="forge-section">
+          <div className="forge-section__head">
+            <span className="bl-field-label">{t("settings.shortcutsSectionLabel")}</span>
+            <span className="forge-section__lede">{t("settings.shortcutsSectionHint")}</span>
+          </div>
+          <p className="body-sm" style={{ margin: "0 0 16px", color: "var(--ink-soft)", maxWidth: 520 }}>
+            {t("settings.shortcutsSectionNote")}
+          </p>
+          <button
+            type="button"
+            className="settings-shortcuts__open"
+            onClick={() => kb.openHelp()}
+          >
+            <span className="kbd">?</span>
+            <span>{t("keyboard.discoverHint")}</span>
+          </button>
         </section>
       </div>
     </div>

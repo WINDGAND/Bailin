@@ -441,22 +441,15 @@ export function CharacterLibrary({
           )}
           </div>
           {filteredItems && filteredItems.length > LIBRARY_PAGE_SIZE ? (
-            <div
-              className="row row--between"
-              style={{
-                padding: "12px 4px 0",
-                gap: 8,
-                flexWrap: "wrap"
-              }}
-            >
-              <span className="body-sm" style={{ color: "var(--ink-soft)" }}>
+            <div className="library-pagination">
+              <span className="library-pagination__summary body-sm">
                 {t("library.paginationSummary", {
                   total: filteredItems.length,
                   page: currentPage,
                   pages: totalPages
                 })}
               </span>
-              <div className="row gap-2">
+              <div className="library-pagination__controls">
                 <button
                   type="button"
                   className="btn btn--ghost"
@@ -558,20 +551,7 @@ export function CharacterLibrary({
               ) : null}
 
               {selected.card.meta.quoteOneLiner ? (
-                <blockquote
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontStyle: "italic",
-                    fontSize: 17,
-                    lineHeight: 1.6,
-                    margin: 0,
-                    padding: "16px 20px",
-                    border: "1px solid var(--grid)",
-                    color: "var(--ink)",
-                    background: "var(--paper-warm)",
-                    borderRadius: "var(--radius-md)"
-                  }}
-                >
+                <blockquote className="char-quote">
                   「{selected.card.meta.quoteOneLiner}」
                 </blockquote>
               ) : null}

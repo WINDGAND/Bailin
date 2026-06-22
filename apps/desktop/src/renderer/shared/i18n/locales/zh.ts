@@ -54,7 +54,10 @@ export const zh = {
     themeSaved: "外观模式已切换",
     languageSectionLabel: "界面语言",
     languageSectionHint: "切换界面显示语言。角色对话内容不受此设置影响。",
-    languageSectionNote: "选择后立即生效，并保存在本机。"
+    languageSectionNote: "选择后立即生效，并保存在本机。",
+    shortcutsSectionLabel: "键盘快捷键",
+    shortcutsSectionHint: "查看当前窗口可用的快捷键列表。",
+    shortcutsSectionNote: "随时按 ? 打开，或点击下方按钮查看。"
   },
   language: {
     zhLabel: "简体中文",
@@ -147,7 +150,7 @@ export const zh = {
     qualityLowVoice: "风格相似度 {{score}}/10，还有空间。可以在「创建角色」里粘贴一段该角色的真实文本作为补充素材，再创建一次会更像。"
   },
   forge: {
-    eyebrow: "创建",
+    eyebrow: "Create",
     title: "创建角色",
     subtitle: "填一个名字，选择它的来源和用途。其余细节可以之后慢慢补。",
     nameLabel: "角色名",
@@ -555,7 +558,7 @@ export const zh = {
     lastReasonLlm: "智能截图"
   },
   provider: {
-    eyebrow: "模型服务",
+    eyebrow: "Model Service",
     title: "模型与 API Key",
     subtitle:
       "选择 OhMyGPT 一键接入（只验证 Key 与主模型），或个性化配置并逐项实测四类模型。",
@@ -940,6 +943,8 @@ export const zh = {
     title: "快捷键",
     empty: "当前页面还没注册任何快捷键。",
     dismissHint: "再按 {{key}} 收起。",
+    dismissHintBefore: "再按",
+    dismissHintAfter: "收起。",
     scopeGlobal: "全局",
     scopeSettings: "设置"
   },
