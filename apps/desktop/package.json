@@ -88,7 +88,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "allowElevation": true,
+      "allowElevation": false,
       "installerLanguages": ["zh_CN", "en_US"],
       "language": "2052",
       "shortcutName": "百灵 Bailin"
