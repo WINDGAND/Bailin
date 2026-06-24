@@ -4128,10 +4128,17 @@ body {
 .pet-empty-cta {
   position: relative;
   pointer-events: auto;
+  max-width: 280px;
+}
+
+.pet-empty-cta__trigger {
+  position: relative;
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+  width: 100%;
   padding: 14px 36px 14px 16px;
   background: var(--paper-warm);
   color: var(--ink);
@@ -4139,7 +4146,6 @@ body {
   border: 1px solid var(--magenta-soft);
   font-family: var(--font-body);
   cursor: pointer;
-  max-width: 280px;
   text-align: left;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.55),
@@ -4150,7 +4156,15 @@ body {
     border-color var(--motion-fast) var(--ease-out);
 }
 
-.pet-empty-cta:hover {
+.pet-empty-cta__dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.pet-empty-cta__trigger:hover {
   transform: translateY(-1px);
   border-color: var(--magenta);
   box-shadow:
@@ -4158,11 +4172,11 @@ body {
     0 18px 38px -16px rgba(31, 58, 58, 0.42);
 }
 
-.pet-empty-cta:active {
+.pet-empty-cta__trigger:active {
   transform: translateY(0);
 }
 
-.pet-empty-cta:focus-visible {
+.pet-empty-cta__trigger:focus-visible {
   outline: 2px solid var(--magenta);
   outline-offset: 3px;
 }
@@ -4207,11 +4221,11 @@ body {
   transition: transform var(--motion-base) var(--ease-spring);
 }
 
-.pet-empty-cta:hover .pet-empty-cta__pip {
+.pet-empty-cta__trigger:hover .pet-empty-cta__pip {
   transform: rotate(15deg) scale(1.08);
 }
 
-[data-theme="dark"] .pet-empty-cta {
+[data-theme="dark"] .pet-empty-cta__trigger {
   background: rgba(46, 40, 36, 0.94);
   border-color: rgba(212, 103, 148, 0.55);
   box-shadow:

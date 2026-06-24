@@ -1034,6 +1034,7 @@ export const zh = {
     emptyEyebrow: "BAILIN · 待孵化",
     emptyTitle: "挑一只角色入驻桌面",
     emptyBody: "从角色仓库选一个内置示例，或自己造一只",
+    emptyDismiss: "隐藏桌宠",
     menuCloseChat: "关闭对话",
     menuOpenChat: "唤起对话",
     menuHush: "安静 {{minutes}} 分钟",

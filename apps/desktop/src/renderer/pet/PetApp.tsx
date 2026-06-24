@@ -256,6 +256,24 @@ export function PetApp(): JSX.Element {
   const [characters, setCharacters] = useState<MyCharacter[]>([]);
   const [starters, setStarters] = useState<Starter[]>([]);
   const [submenu, setSubmenu] = useState<null | "switch">(null);
+  const [libraryCount, setLibraryCount] = useState<number | null>(null);
+
+  const refreshLibraryCount = useCallback(async () => {
+    const list = await bailin.characters.list();
+    setLibraryCount(list.length);
+    setCharacters(list);
+  }, [bailin]);
+
+  useEffect(() => {
+    void refreshLibraryCount();
+    const off = bailin.on.activeCharacterChanged(() => void refreshLibraryCount());
+    const onFocus = () => void refreshLibraryCount();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      off();
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [bailin, refreshLibraryCount]);
 
   const openContextMenu = useCallback(async () => {
     await resyncLocale();
@@ -334,7 +352,15 @@ export function PetApp(): JSX.Element {
   }, [menu, closeMenu]);
 
   if (!bundle) {
-    return <EmptyPet onPickStarter={() => void bailin.pet.openSettings()} />;
+    if (libraryCount === 0) {
+      return (
+        <EmptyPet
+          onPickStarter={() => void bailin.pet.openSettings()}
+          onDismiss={() => void bailin.pet.hide()}
+        />
+      );
+    }
+    return null;
   }
 
   return (
@@ -432,7 +458,13 @@ export function PetApp(): JSX.Element {
   );
 }
 
-function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element {
+function EmptyPet({
+  onPickStarter,
+  onDismiss
+}: {
+  onPickStarter: () => void;
+  onDismiss: () => void;
+}): JSX.Element {
   const t = useT();
   return (
     <div
@@ -446,19 +478,29 @@ function EmptyPet({ onPickStarter }: { onPickStarter: () => void }): JSX.Element
         pointerEvents: "none"
       }}
     >
-      <button
-        type="button"
-        onClick={onPickStarter}
-        className="fade-in-up pet-empty-cta"
-        aria-label={t("pet.emptyTitle")}
-      >
-        <span className="pet-empty-cta__eyebrow">{t("pet.emptyEyebrow")}</span>
-        <span className="pet-empty-cta__title">{t("pet.emptyTitle")}</span>
-        <span className="pet-empty-cta__body">{t("pet.emptyBody")}</span>
-        <span className="pet-empty-cta__pip" aria-hidden="true">
-          <Icon name="sparkle" size={14} strokeWidth={1.6} />
-        </span>
-      </button>
+      <div className="fade-in-up pet-empty-cta">
+        <button
+          type="button"
+          className="pet-empty-cta__dismiss btn btn--icon"
+          onClick={onDismiss}
+          aria-label={t("pet.emptyDismiss")}
+        >
+          <Icon name="close" size={14} strokeWidth={1.6} />
+        </button>
+        <button
+          type="button"
+          onClick={onPickStarter}
+          className="pet-empty-cta__trigger"
+          aria-label={t("pet.emptyTitle")}
+        >
+          <span className="pet-empty-cta__eyebrow">{t("pet.emptyEyebrow")}</span>
+          <span className="pet-empty-cta__title">{t("pet.emptyTitle")}</span>
+          <span className="pet-empty-cta__body">{t("pet.emptyBody")}</span>
+          <span className="pet-empty-cta__pip" aria-hidden="true">
+            <Icon name="sparkle" size={14} strokeWidth={1.6} />
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

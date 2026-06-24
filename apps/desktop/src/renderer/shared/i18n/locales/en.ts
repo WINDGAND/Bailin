@@ -1041,6 +1041,7 @@ export const en: TranslationTree = {
     emptyEyebrow: "BAILIN · UNHATCHED",
     emptyTitle: "Pick a character for your desktop",
     emptyBody: "Choose a starter from the library, or forge your own",
+    emptyDismiss: "Hide pet",
     menuCloseChat: "Close chat",
     menuOpenChat: "Open chat",
     menuHush: "Quiet for {{minutes}} min",

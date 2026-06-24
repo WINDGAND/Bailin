@@ -347,11 +347,9 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.CharactersDelete, (_e, characterId: string) => {
     vault.deleteCharacter(characterId);
     if (deps.getActiveCharacterId() === characterId) {
-      const fallback = vault.listCharacters()[0];
-      const nextId = fallback?.id ?? null;
-      deps.setActiveCharacterId(nextId);
-      vault.setSetting(SETTING_ACTIVE_CHARACTER, nextId ?? "");
-      broadcast(IPC.EventActiveCharacterChanged, nextId ? vault.getCharacter(nextId) : null);
+      deps.setActiveCharacterId(null);
+      vault.setSetting(SETTING_ACTIVE_CHARACTER, "");
+      broadcast(IPC.EventActiveCharacterChanged, null);
     }
     return { ok: true };
   });

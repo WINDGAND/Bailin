@@ -422,6 +422,16 @@ function hidePet(): void {
   if (petWin && !petWin.isDestroyed()) petWin.hide();
 }
 
+/** 读取 active_character_id；若指向已删除角色则清空，不自动替用户选第一只。 */
+function loadActiveCharacterId(vault: LocalVault): string | null {
+  const stored = vault.getSetting("active_character_id")?.trim() || null;
+  if (!stored) return null;
+  if (vault.getCharacter(stored)) return stored;
+  vault.setSetting("active_character_id", "");
+  log.info(`[main] active character ${stored} missing, cleared`);
+  return null;
+}
+
 /**
  * 把桌宠"内容区"原点放到 (x, y)，并 clamp 在所属显示器的物理 bounds 内。
  *
@@ -580,7 +590,7 @@ void app.whenReady().then(() => {
     void proactive.tickLlmWhisper();
   }, 5 * 60_000);
 
-  activeCharacterId = vault.getSetting("active_character_id") || null;
+  activeCharacterId = loadActiveCharacterId(vault);
 
   registerIpc({
     vault,

@@ -92,19 +92,16 @@ function seedStarterLibraryIfEmpty(vault: LocalVault): void {
   const now = Date.now();
 
   if (existing.length === 0) {
-    let firstId: string | null = null;
     for (const starter of STARTER_BUNDLES) {
       const id = ulid();
-      if (firstId == null) firstId = id;
       const bundle = {
         ...starter,
         card: { ...starter.card, id, createdAt: now, updatedAt: now }
       };
       vault.upsertCharacter({ id, bundle, isSkeleton: false, now });
     }
-    if (firstId) vault.setSetting("active_character_id", firstId);
     vault.setSetting("starter_seed_version", STARTER_SEED_VERSION);
-    log.info(`[dev-setup] empty vault, imported ${STARTER_BUNDLES.length} starters; active=${firstId}`);
+    log.info(`[dev-setup] empty vault, imported ${STARTER_BUNDLES.length} starters`);
     return;
   }
 
