@@ -46,7 +46,7 @@
   },
   "build": {
     "appId": "app.bailin.desktop",
-    "productName": "百灵 Bailin",
+    "productName": "Bailin",
     "electronVersion": "32.3.3",
     "copyright": "Copyright © 2026 WINDGAND",
     "directories": {
@@ -95,7 +95,7 @@
       "uninstallerIcon": "resources/icon.ico",
       "installerLanguages": ["zh_CN", "en_US"],
       "language": "2052",
-      "shortcutName": "百灵 Bailin"
+      "shortcutName": "Bailin"
     }
   }
 }

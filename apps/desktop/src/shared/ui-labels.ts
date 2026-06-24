@@ -22,8 +22,8 @@ const TRAY: Record<UiLocale, MainTrayLabels> = {
     showPet: "显示桌宠",
     openSettings: "打开设置 / 角色仓库",
     quit: "退出",
-    tooltip: "百灵 Bailin",
-    uncaughtExceptionTitle: "百灵 Bailin · 主进程异常"
+    tooltip: "Bailin",
+    uncaughtExceptionTitle: "Bailin · 主进程异常"
   },
   en: {
     summonClose: "Close chat",

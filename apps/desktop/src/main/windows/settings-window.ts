@@ -12,7 +12,7 @@ export function createSettingsWindow(devUrl: string | undefined): BrowserWindow 
     // 这之前会在用户刚启动应用 / 拖动桌宠的瞬间叠加上一层白色面板抢焦点。
     show: false,
     backgroundColor: "#fbfaf7",
-    title: "百灵 Bailin · 设置",
+    title: "Bailin · 设置",
     icon: loadAppIcon(256),
     webPreferences: {
       preload: join(__dirname, "../../../preload/preload/index.js"),

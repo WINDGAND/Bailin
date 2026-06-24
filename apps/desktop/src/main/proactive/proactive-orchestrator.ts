@@ -27,6 +27,7 @@ export interface ProactiveOrchestratorDeps {
   vault: LocalVault;
   getActiveCharacterId: () => string | null;
   isChatVisible: () => boolean;
+  isPetVisible: () => boolean;
   broadcast: (channel: string, payload: unknown) => void;
   getActiveMinutes?: () => number;
   getMinutesUntilLongActive?: () => number | null;
@@ -275,6 +276,9 @@ export class ProactiveOrchestrator {
     }
     if (!opts.force && this.deps.isChatVisible()) {
       return { ok: false, reason: "chat-visible" };
+    }
+    if (!opts.force && !this.deps.isPetVisible()) {
+      return { ok: false, reason: "pet-hidden" };
     }
     if (!opts.force && settings.maxPerHour === 0) {
       return { ok: false, reason: "quota-disabled" };

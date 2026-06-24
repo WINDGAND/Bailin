@@ -376,7 +376,7 @@ export const zh = {
     msgRateLimited: "模型这一刻在限流，自动稍候再试一次就好。",
     msgTimeout: "这一步响应较慢，系统已尽量继续推进。",
     msgGeneric: "这一步有个小插曲，系统已继续推进。",
-    errorReportTitle: "# 百灵 Bailin · 深度蒸馏错误日志",
+    errorReportTitle: "# Bailin · 深度蒸馏错误日志",
     errorReportCharacter: "- 角色：{{name}}",
     errorReportJobId: "- Job ID：{{jobId}}",
     errorReportTime: "- 时间：{{time}}",
@@ -884,7 +884,7 @@ export const zh = {
     }
   },
   setup: {
-    eyebrow: "百灵 Bailin · Setup",
+    eyebrow: "Bailin · Setup",
     heroLine1: "把一个有立场的视角，",
     heroLine2: "请到你的桌面上。",
     introWithStarters:
@@ -898,7 +898,7 @@ export const zh = {
     stepProvider: "接入你的 LLM",
     stepStarter: "挑一只先上桌",
     welcomeBody:
-      "百灵 Bailin 不会替代真实的咨询、医疗或法律意见。它给你的是一位「受公开资料启发的视角助手」，不是本人，也不是官方授权。",
+      "Bailin 不会替代真实的咨询、医疗或法律意见。它给你的是一位「受公开资料启发的视角助手」，不是本人，也不是官方授权。",
     welcomeCta: "同意，开始",
     disclaimerBody:
       "角色卡、像素桌宠、用户画像都默认存在本机；完整对话默认不保存；可一键清空所有数据。",

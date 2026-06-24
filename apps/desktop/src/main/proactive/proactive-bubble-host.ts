@@ -30,7 +30,7 @@ export class ProactiveBubbleHost {
   handleWhisper(evt: ProactiveWhisperEvent): void {
     if (evt.characterId !== this.deps.getActiveCharacterId()) return;
     const pet = this.deps.getPetWindow();
-    if (!pet || pet.isDestroyed()) return;
+    if (!pet || pet.isDestroyed() || !pet.isVisible()) return;
 
     const bubble = this.ensureWindow();
     this.clearShowFallback();
@@ -78,9 +78,12 @@ export class ProactiveBubbleHost {
   }
 
   syncNearPet(): void {
-    if (!this.bubbleWin || this.bubbleWin.isDestroyed() || !this.bubbleWin.isVisible()) return;
     const pet = this.deps.getPetWindow();
-    if (!pet || pet.isDestroyed()) return;
+    if (!pet || pet.isDestroyed() || !pet.isVisible()) {
+      if (this.isVisible()) this.hide();
+      return;
+    }
+    if (!this.bubbleWin || this.bubbleWin.isDestroyed() || !this.bubbleWin.isVisible()) return;
 
     const petRect = pet.getContentBounds();
     const display = screen.getDisplayMatching(petRect);
@@ -106,6 +109,11 @@ export class ProactiveBubbleHost {
   private flushPendingShow(): void {
     this.clearShowFallback();
     if (!this.pendingShow) return;
+    const pet = this.deps.getPetWindow();
+    if (!pet || pet.isDestroyed() || !pet.isVisible()) {
+      this.pendingShow = false;
+      return;
+    }
     const bubble = this.bubbleWin;
     if (!bubble || bubble.isDestroyed()) return;
 

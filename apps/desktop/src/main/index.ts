@@ -11,7 +11,7 @@ process.on("uncaughtException", (err) => {
     // ignore
   }
   try {
-    dialog.showErrorBox("百灵 Bailin · 主进程异常", err.stack || err.message || String(err));
+    dialog.showErrorBox("Bailin · 主进程异常", err.stack || err.message || String(err));
   } catch {
     // ignore
   }
@@ -102,6 +102,21 @@ let petBoundsBeforeMenu: { x: number; y: number; width: number; height: number }
 let proactiveBubbleHost: ProactiveBubbleHost | null = null;
 
 const devUrl = process.env.VITE_DEV_SERVER || undefined;
+
+function openLibraryAndPet(): void {
+  const pet = ensurePetWindow();
+  if (!pet.isDestroyed()) pet.show();
+  ensureSettingsWindow("library");
+}
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    openLibraryAndPet();
+  });
+}
 
 /** 拦截悄悄话广播：由独立气泡窗承载，桌宠窗不再 resize。 */
 function appBroadcast(channel: string, payload: unknown): void {
@@ -547,6 +562,7 @@ void app.whenReady().then(() => {
     vault,
     getActiveCharacterId: () => activeCharacterId,
     isChatVisible,
+    isPetVisible: () => Boolean(petWin && !petWin.isDestroyed() && petWin.isVisible()),
     broadcast: appBroadcast,
     getActiveMinutes: () => ambientMonitor?.getActiveMinutes() ?? 0,
     getMinutesUntilLongActive: () => ambientMonitor?.getMinutesUntilLongActive() ?? null,
@@ -614,13 +630,14 @@ void app.whenReady().then(() => {
   registerChatSessionHandlers(runtime, vault);
   log.info("[main] chat turn IPC registered (deleteTurn, deleteTurnsFrom)");
 
-  // 首启没完成 → 自动打开 Settings 走 Wizard；否则只确保桌宠在桌面，
-  // Settings 由用户从托盘 / 桌宠右键菜单显式打开。
+  // 启动时同步打开角色仓库 + 桌宠；首启未完成则 Settings 走 Wizard（不传 tab）。
   const firstRunDone = vault.getSetting("first_run_done") === "1";
-  if (!firstRunDone) {
+  if (firstRunDone) {
+    openLibraryAndPet();
+  } else {
+    ensurePetWindow().show();
     ensureSettingsWindow();
   }
-  ensurePetWindow();
 
   // 恢复上次保存的桌宠位置（越界则拉回完整屏幕内）
   // 注意：这里用 display.bounds + margin 0，跟拖动 clamp 一致；
