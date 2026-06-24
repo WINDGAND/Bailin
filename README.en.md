@@ -40,7 +40,7 @@
 
 Bailin is a **fully local**, open-source Windows desktop AI character companion. It does two things:
 
-1. **Craft a persona** — Enter a name; ~60 seconds (quick) or 5–15 minutes (deep) to distill a mental framework, expression DNA, and pixel appearance.
+1. **Craft a persona** — Enter a name; ~60 seconds (quick) or 5–8 minutes (deep) to distill a mental framework, expression DNA, and pixel appearance.
 2. **Bring them to your desktop** — A pixel pet stays in the corner; press `Ctrl + Shift + P` or click the pet to chat; click the system tray icon to open Settings / Character Library.
 
 > [!TIP]
