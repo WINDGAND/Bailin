@@ -389,6 +389,18 @@ Follow the [Disclaimer](#disclaimer). **PRs with third-party IP character assets
 
 ---
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=WINDGAND%2FBailin&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=WINDGAND/Bailin&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=WINDGAND/Bailin&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=WINDGAND/Bailin&type=date&legend=top-left" />
+ </picture>
+</a>
+
+---
+
 <p align="center">
   <sub>A shapeshifting spirit on your desktop · MIT · zero subscription</sub>
 </p>
