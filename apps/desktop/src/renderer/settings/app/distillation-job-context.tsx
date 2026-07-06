@@ -17,6 +17,12 @@ import { useBailin } from "../../shared/use-bailin.js";
 import { useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
 import { ResearchCheckpointDialog } from "../progress/ResearchCheckpointDialog.js";
+import {
+  INITIAL_STAGE_DISPLAY,
+  reduceStageDisplay,
+  STAGE_COUNT,
+  type StageDisplayState
+} from "../progress/stage-model.js";
 
 export type DistillationBannerStatus =
   | "running"
@@ -34,8 +40,16 @@ export interface ActiveDistillationJob {
 interface DistillationJobContextValue {
   activeJob: ActiveDistillationJob | null;
   bannerStatus: DistillationBannerStatus | null;
-  progress: number;
+  /** 当前阶段下标 + 1（1..STAGE_COUNT），只前进不后退——banner 用它拼「步骤 X/6」，
+   * 不再直接透传后端的原始百分比（质量自检触发重提炼时那个数字会往回跳，
+   * 详见 stage-model.ts 顶部注释）。 */
+  currentStep: number;
+  totalSteps: number;
   phaseLabel: string;
+  /** 权威的阶段展示状态——DistillationProgress 页面直接消费它做阶段条，而不是
+   * 自己再维护一份 reducer，这样切换设置 tab 导致页面被卸载重建时，重新挂载
+   * 也不会把已经走到的阶段"退回第一步"（context 本身不随 tab 切换卸载）。 */
+  stageDisplay: StageDisplayState;
   failureReason?: string;
   isSkeleton?: boolean;
   researchSummary: ResearchSummaryPayload | null;
@@ -55,7 +69,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
   const { showToast } = useToast();
   const [activeJob, setActiveJob] = useState<ActiveDistillationJob | null>(null);
   const [bannerStatus, setBannerStatus] = useState<DistillationBannerStatus | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [stageDisplay, setStageDisplay] = useState(INITIAL_STAGE_DISPLAY);
   const [phaseLabel, setPhaseLabel] = useState("启动中…");
   const [failureReason, setFailureReason] = useState<string | undefined>();
   const [isSkeleton, setIsSkeleton] = useState(false);
@@ -75,7 +89,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
   const resetJobState = useCallback(() => {
     setActiveJob(null);
     setBannerStatus(null);
-    setProgress(0);
+    setStageDisplay(INITIAL_STAGE_DISPLAY);
     setPhaseLabel("启动中…");
     setFailureReason(undefined);
     setIsSkeleton(false);
@@ -86,7 +100,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
   const startJob = useCallback((job: ActiveDistillationJob) => {
     setActiveJob(job);
     setBannerStatus("running");
-    setProgress(0);
+    setStageDisplay(INITIAL_STAGE_DISPLAY);
     setPhaseLabel("启动中…");
     setFailureReason(undefined);
     setIsSkeleton(false);
@@ -142,7 +156,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
           break;
         case "phase":
           setPhaseLabel(evt.message);
-          setProgress(evt.progress);
+          setStageDisplay((prev) => reduceStageDisplay(prev, { phase: evt.phase, message: evt.message }));
           if (evt.phase === "awaiting_research_ok") {
             setBannerStatus("awaiting_research");
             setShowCheckpoint(true);
@@ -155,7 +169,6 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
           setResearchSummary(evt.summary);
           break;
         case "done":
-          setProgress(100);
           setPhaseLabel("完成");
           setBannerStatus("done");
           setIsSkeleton(evt.isSkeleton);
@@ -189,11 +202,15 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     return off;
   }, [bailin, showToast, t]);
 
+  const currentStep = Math.min(stageDisplay.activeIndex + 1, STAGE_COUNT);
+
   const value = useMemo(
     () => ({
       activeJob,
       bannerStatus,
-      progress,
+      currentStep,
+      totalSteps: STAGE_COUNT,
+      stageDisplay,
       phaseLabel,
       failureReason,
       isSkeleton,
@@ -206,7 +223,8 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     [
       activeJob,
       bannerStatus,
-      progress,
+      currentStep,
+      stageDisplay,
       phaseLabel,
       failureReason,
       isSkeleton,

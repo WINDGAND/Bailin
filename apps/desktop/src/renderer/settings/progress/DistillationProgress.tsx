@@ -18,6 +18,8 @@ import { CopyButton, Spinner } from "../../shared/feedback.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
 import type { Locale } from "../../shared/i18n/types.js";
 import { agentNameKey, translatePhaseMessage } from "./distillation-phase-i18n.js";
+import { DistillationStageRail } from "./DistillationStageRail.js";
+import { useDistillationJobs } from "../app/distillation-job-context.js";
 
 type TFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -68,8 +70,11 @@ export function DistillationProgress({
   const t = useT();
   const { locale } = useI18n();
   const bailin = useBailin();
+  // 阶段展示状态从 DistillationJobProvider 读取而不是自己再维护一份 reducer——
+  // 那个 context 挂在设置页 tab 切换不会卸载的地方，这样从别的 tab 切回来时
+  // 阶段条能直接拿到已经走到的进度，不会先闪回「步骤 1/6」再等下一条事件才跳回来。
+  const { stageDisplay } = useDistillationJobs();
   const [agents, setAgents] = useState<AgentCardState[]>(INITIAL_AGENTS);
-  const [progress, setProgress] = useState(0);
   const [phaseLabel, setPhaseLabel] = useState("启动中…");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [researchSummary, setResearchSummary] = useState<ResearchSummaryPayload | null>(null);
@@ -99,7 +104,6 @@ export function DistillationProgress({
           break;
         case "phase":
           setPhaseLabel(evt.message);
-          setProgress(evt.progress);
           break;
         case "agent_start":
           setAgents((prev) =>
@@ -148,7 +152,6 @@ export function DistillationProgress({
           setWarnings((p) => [...p, evt.message]);
           break;
         case "done":
-          setProgress(100);
           setPhaseLabel("完成");
           setFinalState({
             kind: "done",
@@ -201,56 +204,14 @@ export function DistillationProgress({
         </div>
       ) : null}
 
-      <div style={{ marginBottom: 16 }}>
-        <div
-          className={`progress ${running ? "progress--running" : ""}`}
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={progress}
-          aria-label={t("distill.progressAria")}
-        >
-          <div className="progress__fill" style={{ width: `${progress}%` }} />
-        </div>
-        <p
-          className="body-sm"
-          style={{ margin: "6px 0 0", textAlign: "right" }}
-        >
-          {progress}%
-        </p>
-      </div>
+      <DistillationStageRail
+        activeIndex={stageDisplay.activeIndex}
+        isResynthesizing={stageDisplay.isResynthesizing}
+        resynthesisRound={stageDisplay.resynthesisRound}
+        forceAllDone={finalState?.kind === "done"}
+      />
 
-      <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-        <div className="eyebrow" style={{ marginBottom: 12 }}>
-          {t("distill.phase1Title")}
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: 10
-          }}
-        >
-          {agents.map((a) => (
-            <AgentCard key={a.agentId} state={a} />
-          ))}
-        </div>
-      </div>
-
-      {researchSummary ? (
-        <div className="card fade-in" style={{ padding: 14, marginBottom: 16 }}>
-          <div className="eyebrow" style={{ marginBottom: 6 }}>
-            {t("distill.researchSummary")}
-          </div>
-          <p className="body-sm" style={{ margin: 0 }}>
-            {t("distill.researchSummaryStats", {
-              ok: researchSummary.okCount,
-              failed: researchSummary.failedCount,
-              seconds: Math.round(researchSummary.totalDurationMs / 1000)
-            })}
-          </p>
-        </div>
-      ) : null}
+      <ResearchAgentsSection agents={agents} researchSummary={researchSummary} />
 
       {synthSummary ? (
         <div className="card fade-in" style={{ padding: 14, marginBottom: 16 }}>
@@ -397,6 +358,65 @@ function buildErrorReport(
     );
   }
   return lines.join("\n");
+}
+
+/**
+ * 阶段一的调研网格 —— 默认折叠成一行摘要，点「查看详情」才展开 6 张 agent 卡片。
+ * 这是用户反馈"信息太多、太乱"里最大的一块：6 张卡片的完整调用详情，多数人
+ * 只关心"调研做完了没有、成功几路"，不需要一直摊开在页面上。
+ */
+function ResearchAgentsSection({
+  agents,
+  researchSummary
+}: {
+  agents: AgentCardState[];
+  researchSummary: ResearchSummaryPayload | null;
+}): JSX.Element {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const doneCount = agents.filter((a) => a.status !== "pending" && a.status !== "running").length;
+
+  const summaryText = researchSummary
+    ? t("distill.researchCollapsedSummary", {
+        ok: researchSummary.okCount,
+        failedPart:
+          researchSummary.failedCount > 0
+            ? t("distill.researchCollapsedFailedPart", { count: researchSummary.failedCount })
+            : ""
+      })
+    : t("distill.researchCollapsedRunning", { done: doneCount });
+
+  return (
+    <details
+      className="distill-collapse fade-in"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary className="distill-collapse__summary">
+        <span className="distill-collapse__summary-text">
+          <strong>{t("distill.phase1Title")}</strong>
+          <span style={{ color: "var(--ink-faint)" }}>{summaryText}</span>
+        </span>
+        <span className="distill-collapse__toggle">
+          {open ? t("distill.hideDetails") : t("distill.viewDetails")}
+        </span>
+      </summary>
+      <div className="distill-collapse__body">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gap: 10,
+            marginTop: 12
+          }}
+        >
+          {agents.map((a) => (
+            <AgentCard key={a.agentId} state={a} />
+          ))}
+        </div>
+      </div>
+    </details>
+  );
 }
 
 function AgentCard({ state }: { state: AgentCardState }): JSX.Element {
@@ -600,6 +620,11 @@ function SummaryRow({
   );
 }
 
+/**
+ * 质量自检卡片 —— verdict/总分永远直接可见（这是用户最关心的一句话结论），
+ * 完整的逐项检查表格 + 风格/Sanity/Edge 三个测试样本默认折叠，点「查看详情」
+ * 才展开。这是用户反馈"图二这里一堆文字，很混乱"里最典型的那块内容。
+ */
 function QualityReportCard({
   report,
   track
@@ -608,6 +633,7 @@ function QualityReportCard({
   track: "utility" | "companion";
 }): JSX.Element {
   const t = useT();
+  const [open, setOpen] = useState(false);
   const companion = track === "companion";
   const verdictColor =
     report.verdict === "pass"
@@ -616,89 +642,102 @@ function QualityReportCard({
         ? "var(--amber)"
         : "var(--magenta)";
   return (
-    <div className="card fade-in" style={{ padding: 14, marginBottom: 16 }}>
-      <div className="row row--between" style={{ marginBottom: 8 }}>
-        <div className="eyebrow">{t("distill.phase4Title")}</div>
-        <span style={{ color: verdictColor, fontWeight: 600 }}>
-          {report.verdict.toUpperCase()}
-          {t("distill.phase4Score", { score: (report.overallScore * 100).toFixed(0) })}
-          {report.synthesisRounds && report.synthesisRounds > 1
-            ? t("distill.phase4SynthesisRounds", { rounds: report.synthesisRounds })
-            : ""}
+    <details
+      className="distill-collapse fade-in"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary className="distill-collapse__summary">
+        <span className="distill-collapse__summary-text">
+          <strong>{t("distill.phase4Title")}</strong>
+          <span style={{ color: verdictColor, fontWeight: 600 }}>
+            {t("distill.qualityCollapsedSummary", {
+              verdict: report.verdict.toUpperCase(),
+              score: (report.overallScore * 100).toFixed(0)
+            })}
+            {report.synthesisRounds && report.synthesisRounds > 1
+              ? t("distill.phase4SynthesisRounds", { rounds: report.synthesisRounds })
+              : ""}
+          </span>
         </span>
+        <span className="distill-collapse__toggle">
+          {open ? t("distill.hideDetails") : t("distill.viewDetails")}
+        </span>
+      </summary>
+      <div className="distill-collapse__body">
+        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 12 }}>
+          <tbody>
+            {report.items.map((it) => (
+              <CheckItemRow key={it.id} item={it} />
+            ))}
+          </tbody>
+        </table>
+        {report.voiceTest ? (
+          <details style={{ marginTop: 10 }}>
+            <summary className="eyebrow" style={{ cursor: "pointer" }}>
+              {t("distill.voiceTestSummary", { score: report.voiceTest.score })}
+            </summary>
+            <blockquote
+              className="body-sm"
+              style={{
+                margin: "8px 0",
+                padding: "10px 12px",
+                background: "var(--paper-deep)",
+                border: "1px solid var(--grid)",
+                borderRadius: "var(--radius-sm)"
+              }}
+            >
+              {report.voiceTest.sample}
+            </blockquote>
+            <p className="body-sm" style={{ color: "var(--ink-soft)" }}>
+              {t("distill.voiceCritique", { text: report.voiceTest.critique })}
+            </p>
+          </details>
+        ) : null}
+        {report.sanityTest ? (
+          <details style={{ marginTop: 10 }} open={!companion ? undefined : false}>
+            <summary className="eyebrow" style={{ cursor: "pointer" }}>
+              {companion
+                ? t("distill.sanityTestSummaryCompanion", { score: report.sanityTest.averageScore })
+                : t("distill.sanityTestSummary", { score: report.sanityTest.averageScore })}
+            </summary>
+            {report.sanityTest.questions.map((q, i) => (
+              <div key={i} className="body-sm" style={{ marginTop: 8 }}>
+                <div style={{ color: q.pass ? "var(--emerald)" : "var(--magenta)" }}>
+                  {t("distill.sanityQuestionLine", { n: i + 1, question: q.question })}
+                  {" · "}
+                  {q.score}/10
+                </div>
+                <div style={{ color: "var(--ink-faint)", marginTop: 2 }}>
+                  {t("distill.sanityAnswerLine", { answer: q.answer.slice(0, 200) })}
+                </div>
+              </div>
+            ))}
+          </details>
+        ) : null}
+        {report.edgeTest ? (
+          <details style={{ marginTop: 10 }} open={!companion ? undefined : false}>
+            <summary className="eyebrow" style={{ cursor: "pointer" }}>
+              {t("distill.edgeTestSummary", { score: report.edgeTest.score })}
+            </summary>
+            <p className="body-sm" style={{ marginTop: 6 }}>
+              {t("distill.edgeQuestionLine", { question: report.edgeTest.question })}
+            </p>
+            <p className="body-sm" style={{ whiteSpace: "pre-wrap" }}>
+              {report.edgeTest.answer}
+            </p>
+            <p className="body-sm" style={{ color: "var(--ink-faint)" }}>
+              {report.edgeTest.critique}
+            </p>
+          </details>
+        ) : null}
+        {report.synthesisRounds && report.synthesisRounds > 1 ? (
+          <p className="body-sm" style={{ marginTop: 10, color: "var(--ink-soft)" }}>
+            {t("distill.phase4ResynthesisNote")}
+          </p>
+        ) : null}
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <tbody>
-          {report.items.map((it) => (
-            <CheckItemRow key={it.id} item={it} />
-          ))}
-        </tbody>
-      </table>
-      {report.voiceTest ? (
-        <details style={{ marginTop: 10 }}>
-          <summary className="eyebrow" style={{ cursor: "pointer" }}>
-            {t("distill.voiceTestSummary", { score: report.voiceTest.score })}
-          </summary>
-          <blockquote
-            className="body-sm"
-            style={{
-              margin: "8px 0",
-              padding: "10px 12px",
-              background: "var(--paper-deep)",
-              border: "1px solid var(--grid)",
-              borderRadius: "var(--radius-sm)"
-            }}
-          >
-            {report.voiceTest.sample}
-          </blockquote>
-          <p className="body-sm" style={{ color: "var(--ink-soft)" }}>
-            {t("distill.voiceCritique", { text: report.voiceTest.critique })}
-          </p>
-        </details>
-      ) : null}
-      {report.sanityTest ? (
-        <details style={{ marginTop: 10 }} open={!companion ? undefined : false}>
-          <summary className="eyebrow" style={{ cursor: "pointer" }}>
-            {companion
-              ? t("distill.sanityTestSummaryCompanion", { score: report.sanityTest.averageScore })
-              : t("distill.sanityTestSummary", { score: report.sanityTest.averageScore })}
-          </summary>
-          {report.sanityTest.questions.map((q, i) => (
-            <div key={i} className="body-sm" style={{ marginTop: 8 }}>
-              <div style={{ color: q.pass ? "var(--emerald)" : "var(--magenta)" }}>
-                {t("distill.sanityQuestionLine", { n: i + 1, question: q.question })}
-                {" · "}
-                {q.score}/10
-              </div>
-              <div style={{ color: "var(--ink-faint)", marginTop: 2 }}>
-                {t("distill.sanityAnswerLine", { answer: q.answer.slice(0, 200) })}
-              </div>
-            </div>
-          ))}
-        </details>
-      ) : null}
-      {report.edgeTest ? (
-        <details style={{ marginTop: 10 }} open={!companion ? undefined : false}>
-          <summary className="eyebrow" style={{ cursor: "pointer" }}>
-            {t("distill.edgeTestSummary", { score: report.edgeTest.score })}
-          </summary>
-          <p className="body-sm" style={{ marginTop: 6 }}>
-            {t("distill.edgeQuestionLine", { question: report.edgeTest.question })}
-          </p>
-          <p className="body-sm" style={{ whiteSpace: "pre-wrap" }}>
-            {report.edgeTest.answer}
-          </p>
-          <p className="body-sm" style={{ color: "var(--ink-faint)" }}>
-            {report.edgeTest.critique}
-          </p>
-        </details>
-      ) : null}
-      {report.synthesisRounds && report.synthesisRounds > 1 ? (
-        <p className="body-sm" style={{ marginTop: 10, color: "var(--ink-soft)" }}>
-          {t("distill.phase4ResynthesisNote")}
-        </p>
-      ) : null}
-    </div>
+    </details>
   );
 }
 

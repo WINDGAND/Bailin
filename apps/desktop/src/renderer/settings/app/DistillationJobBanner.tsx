@@ -15,7 +15,8 @@ export function DistillationJobBanner({
   const {
     activeJob,
     bannerStatus,
-    progress,
+    currentStep,
+    totalSteps,
     phaseLabel,
     failureReason,
     dismissBanner,
@@ -45,7 +46,8 @@ export function DistillationJobBanner({
   } else {
     mainText = t("distill.bannerRunning", {
       name: characterName,
-      progress,
+      step: currentStep,
+      totalSteps,
       phase: displayPhase
     });
   }

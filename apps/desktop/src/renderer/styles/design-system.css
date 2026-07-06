@@ -50,6 +50,7 @@
  *  [32] Sidebar nav 强化       (line ~3121)
  *  [33] Dark theme overrides  (line ~3134)  data-theme="dark"
  *  [34] App-specific          (line ~3562)  pet-empty / bl-select / pet-preview
+ *  [35] Distillation stage rail            深度创建页顶部步骤条 + 折叠摘要
  *
  * 维护提示：
  * - 新增样式时请归入对应章节；如果是新业务模块，加新章节 [NN] 并更新本 ToC
@@ -4604,6 +4605,198 @@ body {
     inset 0 1px 0 rgba(255, 248, 240, 0.1),
     0 1px 0 rgba(0, 0, 0, 0.35),
     0 2px 4px -2px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- [35] Distillation stage rail ---------- */
+
+.distill-stage-rail__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.distill-stage-rail__step-count {
+  align-self: flex-end;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+
+.distill-stage-rail {
+  display: flex;
+  align-items: flex-start;
+  padding: 20px 20px 16px;
+  background: var(--paper);
+  border: 1px solid var(--grid-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.distill-stage-rail__item {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.distill-stage-rail__connector {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--grid-strong);
+  z-index: 0;
+  transition: background var(--motion-slow) var(--ease-out);
+}
+
+.distill-stage-rail__connector.is-done {
+  background: var(--emerald);
+}
+
+.distill-stage-rail__node {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    background var(--motion-base) var(--ease-out),
+    border-color var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out);
+}
+
+.distill-stage-rail__node.is-pending {
+  background: var(--paper);
+  border: 1.5px solid var(--grid-strong);
+  color: var(--ink-ghost);
+}
+
+.distill-stage-rail__node.is-active {
+  background: var(--amber-tint);
+  border: 1.5px solid var(--amber);
+  color: var(--amber);
+  animation: distill-stage-node-pulse 1.8s var(--ease-in-out) infinite;
+}
+
+.distill-stage-rail__node.is-done {
+  background: var(--emerald);
+  border: 1.5px solid var(--emerald);
+  color: var(--paper);
+}
+
+@keyframes distill-stage-node-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--amber-tint); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+.distill-stage-rail__label {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--ink-ghost);
+  max-width: 84px;
+  transition: color var(--motion-base) var(--ease-out);
+}
+
+.distill-stage-rail__label.is-active,
+.distill-stage-rail__label.is-done {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.distill-stage-rail__badge {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--amber);
+  background: var(--amber-tint);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .distill-stage-rail {
+    padding: 16px 10px 14px;
+  }
+  .distill-stage-rail__node {
+    width: 24px;
+    height: 24px;
+    font-size: 10.5px;
+  }
+  .distill-stage-rail__connector {
+    top: 12px;
+  }
+  .distill-stage-rail__label {
+    font-size: 10px;
+    max-width: 60px;
+  }
+  .distill-stage-rail__badge {
+    display: none;
+  }
+}
+
+/* ---------- Collapsible summary rows (深度创建页折叠摘要) ---------- */
+
+.distill-collapse {
+  border: 1px solid var(--grid-strong);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.distill-collapse__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.distill-collapse__summary::-webkit-details-marker {
+  display: none;
+}
+
+.distill-collapse__summary-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.distill-collapse__toggle {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--magenta);
+  white-space: nowrap;
+}
+
+.distill-collapse__body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--grid);
 }
 
 /* =============================================================
