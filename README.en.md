@@ -149,6 +149,10 @@ Chat window docks near the pet with streaming Markdown replies without stealing 
   <img src="assets/chat.png" alt="Chat window beside the pet" width="720" />
 </p>
 
+<p align="center">
+  <img src="assets/chat-trump.png" alt="Chat window — another persona example" width="720" />
+</p>
+
 <details>
 <summary><strong>More settings screenshots</strong></summary>
 

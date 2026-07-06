@@ -149,6 +149,10 @@ pnpm dev              # Vite + tsc watch + Electron
   <img src="assets/chat.png" alt="聊天窗 · 桌宠与对话同框" width="720" />
 </p>
 
+<p align="center">
+  <img src="assets/chat-trump.png" alt="聊天窗 · 另一个角色示例" width="720" />
+</p>
+
 <details>
 <summary><strong>更多设置截图</strong></summary>
 
