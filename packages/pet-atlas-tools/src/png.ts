@@ -147,6 +147,22 @@ export interface ChromaRemovalOptions {
   greenSpill?: boolean;
   /** 边缘去溢色阈值（仅作用于贴透明边的像素；默认 spill + 18）。 */
   edgeSpillThreshold?: number;
+  /**
+   * 边缘去溢色的"渐变处理"外边界（色距超过此值才算确定是前景，完全不碰）。
+   * 默认 edgeSpillThreshold × 2。这个区间只影响贴透明边的单圈像素（不会
+   * 扩散到角色内部），把过去"色距超过 edgeSpillThreshold 就完全不处理、留下
+   * 白边/绿边"的像素纳入去溢色范围。
+   *
+   * 数值越大，能扫除的溢色范围越广，但对贴着轮廓边缘、颜色本身就偏淡的纯色
+   * 前景像素（比如肤色贴白色 chroma 背景，色距天然就不大）产生误判的风险也
+   * 越高——色距无法区分"这个像素是真的抗锯齿过渡色"还是"这个像素本来就是
+   * 这个颜色，只是刚好离 chroma 不远"。×2 是经过实测校验的保守取值：
+   * 实测 #f3d3b1 肤色贴白色 chroma（色距 ≈90.5）时，×2（白色阈值下 76）能让
+   * 它落在处理区间之外、保持不变；而 edge+100（≈138）会把它也判进去，产生
+   * 新的色斑/半透明缺陷。如果以后要调大这个值，务必先用真实肤色/浅色前景
+   * 像素回归验证，不要只看合成的纯背景过渡像素。
+   */
+  edgeDecontaminateThreshold?: number;
   /** 可清除的内部 chroma 孤岛最大像素数（默认 0 = 关闭，避免误伤白裙/高光）。 */
   maxInteriorChromaIsland?: number;
   /** 内部孤岛判定阈值（默认同 seedThreshold，比 spill 更严）。 */
@@ -301,6 +317,42 @@ function clearPixel(data: Buffer, i: number): void {
   data[i + 3] = 0;
 }
 
+function clamp255(v: number): number {
+  return Math.max(0, Math.min(255, Math.round(v)));
+}
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
+/**
+ * 去溢色 alpha 越小越可能是残留背景，不值得再花力气反解颜色——直接当作
+ * "确定是背景"整像素清零，避免除以接近 0 的 alpha 导致颜色值爆炸。
+ */
+const MIN_DESPILL_ALPHA = 0.06;
+
+/**
+ * 抗锯齿边缘像素去溢色（despill / color decontamination）。
+ *
+ * 假设观测颜色是「真实前景色」与「chroma 背景色」按 alpha 混合的结果：
+ *   observed = alpha × fg + (1 - alpha) × chroma
+ * 反解出 fg（标准 chroma key 去溢色公式），并夹到 0~255。
+ */
+function decontaminateColor(
+  r: number,
+  g: number,
+  b: number,
+  key: { r: number; g: number; b: number },
+  alpha: number
+): { r: number; g: number; b: number } {
+  const inv = 1 - alpha;
+  return {
+    r: clamp255((r - inv * key.r) / alpha),
+    g: clamp255((g - inv * key.g) / alpha),
+    b: clamp255((b - inv * key.b) / alpha)
+  };
+}
+
 function isChromaResiduePixel(
   r: number,
   g: number,
@@ -356,6 +408,8 @@ export function polishChromaMatte(
   const islandSq = islandThreshold * islandThreshold;
   const greenSpill = opts.greenSpill ?? false;
   const key = opts.chromaKey;
+  const decontaminateThreshold = opts.edgeDecontaminateThreshold ?? edgeThreshold * 2;
+  const decontaminateSq = decontaminateThreshold * decontaminateThreshold;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -378,12 +432,37 @@ export function polishChromaMatte(
           break;
         }
       }
-      if (
-        touchesTrans &&
-        isChromaResiduePixel(r, g, b, a, key, edgeSq, false)
-      ) {
+      if (!touchesTrans) continue;
+
+      const distSq = colorDistSq(r, g, b, key);
+      if (distSq <= edgeSq) {
+        // 色距非常接近 chroma：和旧版行为一致，直接整像素清零。
         clearPixel(data, i);
+        continue;
       }
+      if (distSq >= decontaminateSq) {
+        // 色距已经足够远，判定为确定的前景，不碰（和旧版行为一致）。
+        continue;
+      }
+      // 过渡带：按色距做线性 alpha 估计（越接近 chroma alpha 越低），
+      // 再用 alpha 反解出去掉背景色分量的真实前景色，而不是简单地留或删。
+      // 注意：这是一个近似估计，不是精确的 matting 解——线性映射隐含假设
+      // "前景色到 chroma 的全程色距 = 过渡带宽度"，这个假设对多数真实前景色
+      // 并不成立，过渡带中段（约 50% 混合）的颜色还原可能有明显误差。
+      // 即便如此，比起原来"整像素清零或完全不处理"的二元结果，渐变 alpha +
+      // 部分去溢色仍是净改善；要做到精确还原需要真正的 trimap matting，
+      // 超出本次修复范围。
+      const dist = Math.sqrt(distSq);
+      const alpha = clamp01((dist - edgeThreshold) / (decontaminateThreshold - edgeThreshold));
+      if (alpha <= MIN_DESPILL_ALPHA) {
+        clearPixel(data, i);
+        continue;
+      }
+      const decontaminated = decontaminateColor(r, g, b, key, alpha);
+      data[i] = decontaminated.r;
+      data[i + 1] = decontaminated.g;
+      data[i + 2] = decontaminated.b;
+      data[i + 3] = clamp255(alpha * 255);
     }
   }
 
