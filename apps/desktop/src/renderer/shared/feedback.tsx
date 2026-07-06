@@ -112,7 +112,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }): JSX.Ele
   const showToast = useCallback((input: ToastInput) => {
     const kind = input.kind ?? "info";
     const text = input.text;
-    const ttlMs = input.ttlMs ?? 3500;
+    // 错误提示（尤其是「验证 Key」失败原因，往往是一整句可操作的诊断说明）需要
+    // 用户有时间读完/截图/复制，3.5s 的默认时长对完全不懂技术的用户来说太短，
+    // 容易在看清内容前就消失。成功/普通提示保持原有短时长即可。
+    const ttlMs = input.ttlMs ?? (kind === "error" ? 9000 : 3500);
     // Dedup：800ms 内出现完全相同 (kind, text) 的 toast 视为重复，刷新已有那条的 TTL
     // 而不是再叠一个。避免 form 反复出错 / 重复点按钮时 toast stack 暴涨。
     setToasts((prev) => {

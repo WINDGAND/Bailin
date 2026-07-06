@@ -1,4 +1,4 @@
-import { Spinner } from "../../shared/feedback.js";
+import { CopyButton, Spinner } from "../../shared/feedback.js";
 import type { ReadinessKey, ReadinessMap, ReadinessState } from "./apply-recommended-bundle.js";
 import { useT } from "../../shared/i18n/index.js";
 import { FieldLabel } from "../../shared/FieldHelp.js";
@@ -78,6 +78,16 @@ function ReadinessCell({ label, state }: { label: string; state: ReadinessState 
       </span>
       {state.status === "fail" && state.hintKey ? (
         <span className="provider-readiness-meter__hint">{t(state.hintKey)}</span>
+      ) : null}
+      {state.status === "fail" && state.reason ? (
+        // 很多用户不知道日志文件在哪、也看不懂英文报错，给一个一键复制按钮，
+        // 让他们能把完整错误原文直接粘贴到聊天里发给我们，而不用去找 main.log。
+        <CopyButton
+          text={state.reason}
+          label={t("provider.copyErrorDetail")}
+          small
+          className="provider-readiness-meter__copy"
+        />
       ) : null}
     </div>
   );

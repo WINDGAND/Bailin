@@ -2135,7 +2135,10 @@ body {
 
 .provider-readiness-meter__grid--single {
   grid-template-columns: minmax(0, 1fr);
-  max-width: 220px;
+  /* 「验证 Key 与主模型」失败原因现在是完整的中文诊断句子（不再是一个词的
+     "connection failed"），220px 会把它挤成又高又窄的一列，几乎没法读。
+     放宽到 480px，让错误说明能在合理宽度内正常换行。 */
+  max-width: 480px;
 }
 
 .provider-mode-switch {
@@ -2534,6 +2537,11 @@ body {
 
 .bl-field-hint--error {
   color: var(--danger, #c0392b);
+}
+
+.provider-readiness-meter__copy {
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
 .provider-readiness-meter__hint {

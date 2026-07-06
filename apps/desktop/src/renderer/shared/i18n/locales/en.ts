@@ -659,6 +659,7 @@ export const en: TranslationTree = {
     readinessRunning: "Verifying…",
     readinessOk: "Passed",
     readinessFail: "Failed",
+    copyErrorDetail: "Copy error detail",
     readinessUnavailable: "Not supported on this plan",
     readinessUnavailableVision: "Reference images not supported—try OhMyGPT or OpenAI",
     readinessUnavailableWeb: "Web research not supported—deep creation is limited",

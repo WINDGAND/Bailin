@@ -657,6 +657,7 @@ export const zh = {
     readinessRunning: "验证中…",
     readinessOk: "已通过",
     readinessFail: "未通过",
+    copyErrorDetail: "复制错误详情",
     readinessUnavailable: "此方案不支持",
     readinessUnavailableVision: "此方案不支持参考图识读，请换 OhMyGPT 或 OpenAI",
     readinessUnavailableWeb: "此方案不支持联网调研，深度创建功能受限",
