@@ -28,6 +28,7 @@ import {
   type ImageGenerationConfig
 } from "../adapters/image-generation-adapter.js";
 import { findStarterById, STARTER_META } from "../../shared/starters.js";
+import { sanitizeApiKey } from "../../shared/sanitize-api-key.js";
 import {
   DistillationJobConfigSchema,
   summarizeAppearance,
@@ -152,7 +153,7 @@ export function registerIpc(deps: IpcDeps): void {
     try {
       const { apiKey, ...rest } = input;
       vault.setSetting(SETTING_LLM_PROVIDER, JSON.stringify(rest));
-      vault.setEncryptedString(SETTING_LLM_API_KEY, apiKey);
+      vault.setEncryptedString(SETTING_LLM_API_KEY, sanitizeApiKey(apiKey));
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -203,7 +204,7 @@ export function registerIpc(deps: IpcDeps): void {
       };
       vault.setSetting(SETTING_IMAGE_PROVIDER, JSON.stringify(persisted));
       if (input.apiKey != null && input.apiKey !== "") {
-        vault.setEncryptedString(SETTING_IMAGE_API_KEY, input.apiKey);
+        vault.setEncryptedString(SETTING_IMAGE_API_KEY, sanitizeApiKey(input.apiKey));
       }
       return { ok: true };
     } catch (e) {

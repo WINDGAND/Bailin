@@ -127,7 +127,7 @@ async function runChatTest(
   const chatTest = await bailin.llm.testConnection();
   const state: ReadinessState = chatTest.ok
     ? { status: "ok", latencyMs: chatTest.latencyMs }
-    : { status: "fail", reason: chatTest.error ?? "connection failed" };
+    : { status: "fail", reason: chatTest.error ?? "连接失败：未返回具体错误信息" };
   onProgress("chat", state);
   return state;
 }

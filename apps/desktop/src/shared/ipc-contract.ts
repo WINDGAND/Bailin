@@ -33,7 +33,7 @@ export interface BailinApi {
   llm: {
     setProvider(input: LLMProviderConfig): Promise<{ ok: boolean; error?: string }>;
     getProvider(): Promise<LLMProviderConfig | null>;
-    testConnection(): Promise<{ ok: boolean; latencyMs?: number; error?: string }>;
+    testConnection(): Promise<{ ok: boolean; latencyMs?: number; error?: string; code?: string }>;
     clearKey(): Promise<void>;
   };
 

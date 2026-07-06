@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { ulid } from "ulid";
 import log from "electron-log/main";
 import { STARTER_BUNDLES } from "../shared/starters.js";
+import { sanitizeApiKey } from "../shared/sanitize-api-key.js";
 import type { LocalVault } from "./store/local-vault.js";
 
 /** 读开发环境变量：优先 BAILIN_*，兼容旧版 NUWA_PET_*。 */
@@ -51,7 +52,7 @@ export function applyDevSetup(vault: LocalVault): void {
     "llm_provider_json",
     JSON.stringify({ kind, baseUrl, model, visionModel })
   );
-  vault.setEncryptedString("llm_api_key_enc", apiKey);
+  vault.setEncryptedString("llm_api_key_enc", sanitizeApiKey(apiKey));
   vault.setSetting("first_run_done", "1");
 
   log.info(

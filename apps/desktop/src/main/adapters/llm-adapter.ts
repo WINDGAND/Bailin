@@ -418,7 +418,7 @@ export class LLMAdapter {
     };
   }
 
-  async testConnection(): Promise<{ ok: boolean; latencyMs?: number; error?: string }> {
+  async testConnection(): Promise<{ ok: boolean; latencyMs?: number; error?: string; code?: string }> {
     const p = this.provider();
     if (!p) return { ok: false, error: "未配置 LLM 提供商" };
     const startedAt = Date.now();
@@ -429,9 +429,20 @@ export class LLMAdapter {
         maxTokens: 4,
         stream: false
       });
-      return { ok: out.kind === "done" && (out.text ?? "").length >= 0, latencyMs: Date.now() - startedAt };
+      if (out.kind === "error") {
+        logTestConnectionFailure(out.code, out.message);
+        return {
+          ok: false,
+          latencyMs: Date.now() - startedAt,
+          error: describeTestConnectionError(out.code, out.message),
+          code: out.code
+        };
+      }
+      return { ok: true, latencyMs: Date.now() - startedAt };
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      const message = e instanceof Error ? e.message : String(e);
+      logTestConnectionFailure("EXCEPTION", message);
+      return { ok: false, error: message };
     }
   }
 
@@ -1263,6 +1274,42 @@ function logSearchCall(info: SearchCallLog): void {
 
 function trimRightSlash(s: string): string {
   return s.replace(/\/+$/, "");
+}
+
+/**
+ * 把 chatOnce 返回的 { code, message } 翻译成用户能看懂、能自助排查的中文提示。
+ * 用户报「点击验证没反应，显示 connection failed」的根因就是这里之前完全没有把
+ * 真实错误透传出去（testConnection 只返回 { ok:false }），导致无论是 401 / 网络失败 /
+ * 限流哪种情况，UI 都只能显示写死的兜底文案。这里按 code 给出可执行的排查建议，
+ * 同时保留原始 message，方便用户复制给开发者定位。
+ */
+function describeTestConnectionError(code: string, message: string): string {
+  const raw = message.trim() || "(无响应内容)";
+  switch (code) {
+    case "AUTH_FAILED":
+      return `Key 无效或未授权（HTTP 401/403）。请确认从服务商网站完整复制了 Key（不多不少一个字符），且该 Key 已开通所选模型的权限。原始响应：${raw}`;
+    case "RATE_LIMITED":
+      return `请求被限流（HTTP 429），通常是账户余额不足或请求过于频繁。请前往服务商控制台确认余额后重试。原始响应：${raw}`;
+    case "PROVIDER_ERROR":
+      return `服务商接口返回错误（HTTP 5xx），可能是对方服务暂时不可用。请稍后重试；若持续出现请联系服务商。原始响应：${raw}`;
+    case "NETWORK_ERROR":
+      return `无法连接到服务器。请检查网络连接是否正常，是否有代理/VPN 未生效，以及杀毒软件、防火墙或安全卫士类软件是否拦截了本应用的 HTTPS 请求。原始错误：${raw}`;
+    case "TIMEOUT":
+      return raw;
+    default:
+      return `${code}: ${raw}`;
+  }
+}
+
+/**
+ * 「验证 Key 与主模型」失败时打日志：main.log 里如果没有 [LLM.testConnection] 记录，
+ * 说明请求根本没发出去（比如 provider 未配置）；如果有记录，code/message 就是诊断依据。
+ * 用户反馈问题时，让他们发 %APPDATA%/Bailin/logs/main.log 就能一眼看出失败原因。
+ */
+function logTestConnectionFailure(code: string, message: string): void {
+  const line = `[LLM.testConnection] FAIL code=${code} msg="${message.slice(0, 300)}"`;
+  console.warn(line);
+  getElectronLog()?.warn(line);
 }
 
 function mapHttpToCode(status: number): string {
