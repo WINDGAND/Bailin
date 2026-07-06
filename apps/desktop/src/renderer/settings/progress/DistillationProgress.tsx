@@ -373,7 +373,9 @@ function ResearchAgentsSection({
   researchSummary: ResearchSummaryPayload | null;
 }): JSX.Element {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  // 默认展开——用户反馈调研阶段正在跑的时候想直接看到 6 路 agent 的实时进展，
+  // 不想先点一下才能看；折叠只用于用户自己手动收起之后。
+  const [open, setOpen] = useState(true);
   const doneCount = agents.filter((a) => a.status !== "pending" && a.status !== "running").length;
 
   const summaryText = researchSummary

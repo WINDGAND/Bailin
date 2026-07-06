@@ -4685,7 +4685,10 @@ body {
 }
 
 .distill-stage-rail__node.is-active {
-  background: var(--amber-tint);
+  /* 必须是不透明色——之前用半透明的 --amber-tint 当背景，节点后面 z-index 更低
+     的连接线会从半透明处透出来，看起来像一条线戳穿了数字。color-mix 在这里
+     算出一个不透明的浅琥珀色，视觉上还是"淡琥珀底"，但完全遮住背后的线。 */
+  background: color-mix(in srgb, var(--amber) 16%, var(--paper));
   border: 1.5px solid var(--amber);
   color: var(--amber);
   animation: distill-stage-node-pulse 1.8s var(--ease-in-out) infinite;
