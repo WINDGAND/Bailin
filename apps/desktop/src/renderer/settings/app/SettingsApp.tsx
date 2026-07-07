@@ -15,6 +15,8 @@ import { VisualJobProvider } from "./visual-job-context.js";
 import { VisualJobBanner } from "./VisualJobBanner.js";
 import { DistillationJobProvider } from "./distillation-job-context.js";
 import { DistillationJobBanner } from "./DistillationJobBanner.js";
+import { UpdateProvider, useUpdateInfo } from "./update-context.js";
+import { UpdateBanner } from "./UpdateBanner.js";
 import { useI18n } from "../../shared/i18n/index.js";
 
 type Tab = "library" | "create" | "memory" | "desktop" | "key" | "settings";
@@ -60,10 +62,17 @@ export function SettingsApp(): JSX.Element {
   const [firstRun, setFirstRun] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>("library");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  const [appVersion, setAppVersion] = useState("");
   const dirtyRef = useRef(false);
 
   useEffect(() => {
     void bailin.app.isFirstRun().then((v) => setFirstRun(v));
+  }, [bailin]);
+
+  useEffect(() => {
+    // 之前这里一直是硬编码 "0.0.1"，跟 package.json 的真实版本号对不上——
+    // 现在改用真实版本，同时也是"检查新版本"功能比较的基准。
+    void bailin.app.getVersion().then(setAppVersion);
   }, [bailin]);
 
   const dirtyCtx = useMemo<DirtyContextValue>(
@@ -182,7 +191,7 @@ export function SettingsApp(): JSX.Element {
         }}
       >
         <BrandLogo size={48} className="brand-logo brand-logo--hero" />
-        <div className="eyebrow">Bailin · 0.0.1</div>
+        <div className="eyebrow">{appVersion ? `Bailin · v${appVersion}` : "Bailin"}</div>
         <div className="display display--section" style={{ color: "var(--ink-faint)" }}>
           {t("common.loading")}
         </div>
@@ -203,6 +212,7 @@ export function SettingsApp(): JSX.Element {
 
   return (
     <DirtyContext.Provider value={dirtyCtx}>
+      <UpdateProvider>
       <DistillationJobProvider>
         <VisualJobProvider>
           <div className="settings-shell">
@@ -215,7 +225,7 @@ export function SettingsApp(): JSX.Element {
                 <div className="settings-brand">
                   <BrandLogo size={32} className="settings-brand__logo" alt="Bailin" />
                   <div className="settings-brand__copy" aria-hidden={sidebarCollapsed}>
-                    <div className="eyebrow">Bailin · 0.0.1</div>
+                    <div className="eyebrow">{appVersion ? `Bailin · v${appVersion}` : "Bailin"}</div>
                     <div className="display display--section settings-brand__title">
                       Bailin
                     </div>
@@ -255,6 +265,7 @@ export function SettingsApp(): JSX.Element {
                   >
                     <tabDef.icon size={17} />
                     <span>{t(tabDef.labelKey)}</span>
+                    {tabDef.id === "settings" ? <UpdateNavBadge /> : null}
                   </button>
                 ))}
               </nav>
@@ -269,6 +280,7 @@ export function SettingsApp(): JSX.Element {
             */}
             <main key={tab} className="settings-main fade-in-up">
               <div className="settings-page settings-page--centered">
+                <UpdateBanner />
                 {tab !== "create" ? (
                   <DistillationJobBanner
                     onViewProgress={() => void tryGoTab("create")}
@@ -287,8 +299,16 @@ export function SettingsApp(): JSX.Element {
           </div>
         </VisualJobProvider>
       </DistillationJobProvider>
+      </UpdateProvider>
     </DirtyContext.Provider>
   );
+}
+
+/** 侧栏"设置" tab 上的小红点——有未处理的新版本提醒时亮起。 */
+function UpdateNavBadge(): JSX.Element | null {
+  const { updateInfo } = useUpdateInfo();
+  if (!updateInfo?.hasUpdate) return null;
+  return <span className="settings-nav__badge" aria-hidden="true" />;
 }
 
 // =============================================================

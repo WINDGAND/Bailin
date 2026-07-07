@@ -19,7 +19,7 @@ import type { ChatStreamChunk, ChatVisibilityEvent } from "../../shared/ipc-cont
 
 interface BailinWindow {
   bailin: {
-    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void>; openExternal(url: string): Promise<{ ok: boolean }> };
+    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void>; openExternal(url: string): Promise<{ ok: boolean }>; getVersion(): Promise<string>; checkForUpdates(): Promise<import("../../shared/ipc-contract.js").UpdateCheckResult>; dismissUpdate(latestVersion: string): Promise<void> };
     llm: {
       setProvider(input: unknown): Promise<{ ok: boolean; error?: string }>;
       getProvider(): Promise<unknown>;
@@ -144,6 +144,7 @@ interface BailinWindow {
       profileUpdated(h: (evt: import("../../shared/ipc-contract.js").ProfileUpdatedEvent) => void): () => void;
       navigateSettings(h: (evt: import("../../shared/ipc-contract.js").NavigateSettingsEvent) => void): () => void;
       proactiveSettingsChanged(h: (settings: ProactiveSettings) => void): () => void;
+      updateAvailable(h: (result: import("../../shared/ipc-contract.js").UpdateCheckResult) => void): () => void;
     };
   };
 }
@@ -198,7 +199,10 @@ function makeBailinStub(): BailinWindow["bailin"] {
       openExternal: async (url: string) => {
         window.open(url, "_blank", "noopener,noreferrer");
         return { ok: true };
-      }
+      },
+      getVersion: async () => "0.0.0-stub",
+      checkForUpdates: async () => ({ hasUpdate: false, error: "stub 环境" }),
+      dismissUpdate: async () => {}
     },
     llm: {
       setProvider: async () => ({ ok: false, error: "stub" }),
@@ -396,7 +400,8 @@ function makeBailinStub(): BailinWindow["bailin"] {
       },
       profileUpdated: noopOff,
       navigateSettings: noopOff,
-      proactiveSettingsChanged: noopOff
+      proactiveSettingsChanged: noopOff,
+      updateAvailable: noopOff
     }
   };
 }

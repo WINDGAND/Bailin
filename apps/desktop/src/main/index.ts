@@ -35,8 +35,11 @@ import {
   readImageConfigForMain,
   registerIpc,
   SETTING_LOCALE,
-  SETTING_PET_POS
+  SETTING_PET_POS,
+  SETTING_UPDATE_DISMISSED_TAG
 } from "./ipc/register.js";
+import { UpdateScheduler } from "./update/update-scheduler.js";
+import { checkForUpdates } from "./update/update-checker.js";
 import { getMainTrayLabels, parseUiLocale } from "../shared/ui-labels.js";
 import { registerChatTurnHandlers } from "./ipc/chat-turn-handlers.js";
 import { registerChatSessionHandlers } from "./ipc/chat-session-handlers.js";
@@ -82,6 +85,7 @@ let activeCharacterId: string | null = null;
 let isQuitting = false;
 let ambientMonitor: AmbientMonitor | null = null;
 let llmProactiveTimer: NodeJS.Timeout | null = null;
+let updateScheduler: UpdateScheduler | null = null;
 
 function syncProactiveAmbient(vault: LocalVault): void {
   if (!ambientMonitor) return;
@@ -590,6 +594,14 @@ void app.whenReady().then(() => {
     void proactive.tickLlmWhisper();
   }, 5 * 60_000);
 
+  updateScheduler = new UpdateScheduler({
+    getCurrentVersion: () => app.getVersion(),
+    getDismissedTag: () => vault.getSetting(SETTING_UPDATE_DISMISSED_TAG),
+    checkFn: checkForUpdates,
+    onUpdateAvailable: (result) => appBroadcast(IPC.EventUpdateAvailable, result)
+  });
+  updateScheduler.start();
+
   activeCharacterId = loadActiveCharacterId(vault);
 
   registerIpc({
@@ -696,5 +708,6 @@ app.on("will-quit", () => {
     llmProactiveTimer = null;
   }
   ambientMonitor?.stop();
+  updateScheduler?.stop();
   globalShortcut.unregisterAll();
 });

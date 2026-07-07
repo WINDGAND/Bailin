@@ -15,6 +15,29 @@ import type {
 export type AppLocale = "zh" | "en";
 export type ThemePreference = "light" | "dark" | "system";
 
+/** GitHub Release 检查结果——主进程 checkForUpdates() 的返回值，也是 EventUpdateAvailable 推送的 payload。 */
+export interface UpdateCheckResult {
+  hasUpdate: boolean;
+  /** 不带 "v" 前缀的纯版本号，如 "0.0.4"。 */
+  latestVersion?: string;
+  /** GitHub Release 页面 URL，用于 openExternal 跳转下载。 */
+  releaseUrl?: string;
+  /** Release 正文（Markdown 原文，前端按纯文本展示）。 */
+  releaseNotes?: string;
+  publishedAt?: string;
+  /** 请求失败 / 解析失败时的原因（不影响 hasUpdate 恒为 false 的语义）。 */
+  error?: string;
+  /**
+   * 这个版本是否是用户之前点过「忽略此版本」的那个（仅手动检查会填这个字段）。
+   * 用来防止一个很容易让人觉得「忽略没用」的体验问题：横幅出现 → 用户忽略 →
+   * 马上又手动点了一次「检查更新」→ 因为手动检查本该给真实结果，如果不区分
+   * 这一点就会把刚忽略的横幅立刻又弹出来。有了这个字段，前端可以在
+   * hasUpdate=true 但 dismissed=true 时不重新显示横幅，同时依然如实告诉用户
+   * "有更新"而不是谎称"已是最新版本"。
+   */
+  dismissed?: boolean;
+}
+
 export interface BailinApi {
   // ===== 系统 / 首启 =====
   app: {
@@ -27,6 +50,16 @@ export interface BailinApi {
     setTheme(theme: ThemePreference): Promise<void>;
     /** 用系统默认浏览器打开 http(s) 链接。 */
     openExternal(url: string): Promise<{ ok: boolean }>;
+    /** 真实应用版本号（来自 Electron app.getVersion()，读 package.json）。 */
+    getVersion(): Promise<string>;
+    /**
+     * 手动触发一次 GitHub Release 检查（设置页"检查更新"按钮用）。
+     * 与后台定时检查不同：不管这个版本是否被用户忽略过，都返回真实结果；
+     * 如果发现新版本，同样会广播 EventUpdateAvailable 让横幅出现。
+     */
+    checkForUpdates(): Promise<UpdateCheckResult>;
+    /** 用户点"忽略此版本"：记住这个版本号，后台自动检查不会再为它弹提醒。 */
+    dismissUpdate(latestVersion: string): Promise<void>;
   };
 
   // ===== LLM 提供商 =====
@@ -204,6 +237,8 @@ export interface BailinApi {
     themeChanged(handler: (theme: ThemePreference) => void): () => void;
     profileUpdated(handler: (evt: ProfileUpdatedEvent) => void): () => void;
     navigateSettings(handler: (evt: NavigateSettingsEvent) => void): () => void;
+    /** 主进程查到新版本（且未被忽略）时推送；手动点「检查更新」发现新版本也会走这里。 */
+    updateAvailable(handler: (result: UpdateCheckResult) => void): () => void;
   };
 }
 
@@ -644,6 +679,9 @@ export const IPC = {
   AppGetTheme: "bailin.app.getTheme",
   AppSetTheme: "bailin.app.setTheme",
   AppOpenExternal: "bailin.app.openExternal",
+  AppGetVersion: "bailin.app.getVersion",
+  AppCheckForUpdates: "bailin.app.checkForUpdates",
+  AppDismissUpdate: "bailin.app.dismissUpdate",
 
   LlmSetProvider: "bailin.llm.setProvider",
   LlmGetProvider: "bailin.llm.getProvider",
@@ -736,5 +774,6 @@ export const IPC = {
   EventThemeChanged: "bailin.event.themeChanged",
   EventProfileUpdated: "bailin.event.profileUpdated",
   EventNavigateSettings: "bailin.event.navigateSettings",
-  EventProactiveSettingsChanged: "bailin.event.proactiveSettingsChanged"
+  EventProactiveSettingsChanged: "bailin.event.proactiveSettingsChanged",
+  EventUpdateAvailable: "bailin.event.updateAvailable"
 } as const;

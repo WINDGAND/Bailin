@@ -10,7 +10,10 @@ const api = {
     setLocale: (locale: "zh" | "en") => ipcRenderer.invoke(IPC.AppSetLocale, locale),
     getTheme: () => ipcRenderer.invoke(IPC.AppGetTheme),
     setTheme: (theme: "light" | "dark" | "system") => ipcRenderer.invoke(IPC.AppSetTheme, theme),
-    openExternal: (url: string) => ipcRenderer.invoke(IPC.AppOpenExternal, url)
+    openExternal: (url: string) => ipcRenderer.invoke(IPC.AppOpenExternal, url),
+    getVersion: () => ipcRenderer.invoke(IPC.AppGetVersion),
+    checkForUpdates: () => ipcRenderer.invoke(IPC.AppCheckForUpdates),
+    dismissUpdate: (latestVersion: string) => ipcRenderer.invoke(IPC.AppDismissUpdate, latestVersion)
   },
   llm: {
     setProvider: (input: unknown) => ipcRenderer.invoke(IPC.LlmSetProvider, input),
@@ -175,6 +178,11 @@ const api = {
       const listener = (_e: unknown, p: unknown) => handler(p);
       ipcRenderer.on(IPC.EventProactiveSettingsChanged, listener);
       return () => ipcRenderer.removeListener(IPC.EventProactiveSettingsChanged, listener);
+    },
+    updateAvailable(handler: (result: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventUpdateAvailable, listener);
+      return () => ipcRenderer.removeListener(IPC.EventUpdateAvailable, listener);
     }
   }
 };

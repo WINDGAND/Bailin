@@ -2,6 +2,7 @@ import { useT } from "../../shared/i18n/index.js";
 import { useKeyboard } from "../../shared/keyboard.js";
 import { AppearanceSection } from "./AppearanceSection.js";
 import { LanguageSection } from "../language/LanguageSection.js";
+import { AboutSection } from "./AboutSection.js";
 
 export function GeneralSettingsPanel(): JSX.Element {
   const t = useT();
@@ -54,6 +55,14 @@ export function GeneralSettingsPanel(): JSX.Element {
             <span className="kbd">?</span>
             <span>{t("keyboard.discoverHint")}</span>
           </button>
+        </section>
+
+        <section className="forge-section">
+          <div className="forge-section__head">
+            <span className="bl-field-label">{t("update.aboutSectionLabel")}</span>
+            <span className="forge-section__lede">{t("update.aboutSectionHint")}</span>
+          </div>
+          <AboutSection />
         </section>
       </div>
     </div>

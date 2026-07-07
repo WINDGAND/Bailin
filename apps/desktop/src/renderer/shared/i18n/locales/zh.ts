@@ -59,6 +59,20 @@ export const zh = {
     shortcutsSectionHint: "查看当前窗口可用的快捷键列表。",
     shortcutsSectionNote: "随时按 ? 打开，或点击下方按钮查看。"
   },
+  update: {
+    aboutSectionLabel: "关于",
+    aboutSectionHint: "版本信息与更新检查。",
+    currentVersionLabel: "当前版本",
+    checkNow: "检查更新",
+    checking: "检查中…",
+    upToDate: "已是最新版本",
+    checkFailed: "检查更新失败，请检查网络后重试",
+    bannerTitle: "发现新版本 v{{version}}",
+    viewRelease: "查看/下载新版本",
+    dismiss: "忽略此版本",
+    viewChangelog: "展开完整更新说明",
+    hideChangelog: "收起更新说明"
+  },
   language: {
     zhLabel: "简体中文",
     zhCaption: "默认语言",

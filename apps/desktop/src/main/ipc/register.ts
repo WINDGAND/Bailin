@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, shell } from "electron";
+import { app, ipcMain, BrowserWindow, shell } from "electron";
 import { ulid } from "ulid";
 import {
   IPC,
@@ -29,6 +29,8 @@ import {
 } from "../adapters/image-generation-adapter.js";
 import { findStarterById, STARTER_META } from "../../shared/starters.js";
 import { sanitizeApiKey } from "../../shared/sanitize-api-key.js";
+import { checkForUpdates } from "../update/update-checker.js";
+import { isVersionDismissed } from "../update/version-compare.js";
 import {
   DistillationJobConfigSchema,
   summarizeAppearance,
@@ -81,6 +83,7 @@ const SETTING_LLM_PROVIDER = "llm_provider_json";
 const SETTING_LLM_API_KEY = "llm_api_key_enc";
 export const SETTING_IMAGE_PROVIDER = "image_provider_json";
 export const SETTING_IMAGE_API_KEY = "image_api_key_enc";
+export const SETTING_UPDATE_DISMISSED_TAG = "update.dismissed_tag";
 
 interface ApprovalGate {
   promise: Promise<DistillationApprovalResult>;
@@ -146,6 +149,26 @@ export function registerIpc(deps: IpcDeps): void {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return { ok: false };
     await shell.openExternal(parsed.href);
     return { ok: true };
+  });
+  ipcMain.handle(IPC.AppGetVersion, () => app.getVersion());
+  ipcMain.handle(IPC.AppCheckForUpdates, async () => {
+    // 手动触发：hasUpdate/latestVersion 永远是真实结果，不因为忽略过就谎称
+    // "已是最新版本"。但如果这个版本正是用户刚忽略的那个，就不重新弹横幅——
+    // 否则"忽略此版本"点完立刻手动点一下"检查更新"就会把横幅马上弹回来，
+    // 用户会觉得"忽略"这个功能根本没用。用 dismissed 字段把这个信息带给前端，
+    // 由前端决定 toast 怎么说，而不是在这里直接篡改 hasUpdate。
+    const result = await checkForUpdates(app.getVersion());
+    const dismissed =
+      result.hasUpdate && isVersionDismissed(result.latestVersion, vault.getSetting(SETTING_UPDATE_DISMISSED_TAG));
+    if (result.hasUpdate && !dismissed) {
+      broadcast(IPC.EventUpdateAvailable, result);
+    }
+    return { ...result, dismissed };
+  });
+  ipcMain.handle(IPC.AppDismissUpdate, (_evt, latestVersion: unknown) => {
+    if (typeof latestVersion === "string" && latestVersion) {
+      vault.setSetting(SETTING_UPDATE_DISMISSED_TAG, latestVersion);
+    }
   });
 
   // ===== LLM =====

@@ -61,6 +61,20 @@ export const en: TranslationTree = {
     shortcutsSectionHint: "View shortcuts available in the current window.",
     shortcutsSectionNote: "Press ? anytime, or use the button below."
   },
+  update: {
+    aboutSectionLabel: "About",
+    aboutSectionHint: "Version info and update checks.",
+    currentVersionLabel: "Current version",
+    checkNow: "Check for updates",
+    checking: "Checking…",
+    upToDate: "You're on the latest version",
+    checkFailed: "Update check failed, please check your network and try again",
+    bannerTitle: "New version v{{version}} available",
+    viewRelease: "View / download the update",
+    dismiss: "Dismiss this version",
+    viewChangelog: "Show full changelog",
+    hideChangelog: "Hide changelog"
+  },
   language: {
     zhLabel: "简体中文",
     zhCaption: "Default language",

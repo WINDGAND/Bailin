@@ -4802,6 +4802,31 @@ body {
   border-top: 1px solid var(--grid);
 }
 
+/* ---------- 侧栏"设置" tab 小红点（新版本提醒） ---------- */
+
+.settings-nav__item {
+  /* 徽标需要相对这个按钮定位；两处既有的 .settings-nav__item 定义都没设
+     position，加在这里统一兜底，不会跟任何一层的 .is-active 定位冲突。 */
+  position: relative;
+}
+
+.settings-nav__badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--magenta);
+  box-shadow: 0 0 0 2px var(--paper);
+  pointer-events: none;
+}
+
+.settings-sidebar.is-collapsed .settings-nav__badge {
+  top: 4px;
+  right: 4px;
+}
+
 /* =============================================================
  * Phase 5 · Dark mode 补漏
  *
