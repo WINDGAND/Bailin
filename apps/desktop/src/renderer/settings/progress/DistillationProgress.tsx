@@ -216,7 +216,7 @@ export function DistillationProgress({
       {synthSummary ? (
         <div className="card fade-in" style={{ padding: 14, marginBottom: 16 }}>
           <div className="eyebrow" style={{ marginBottom: 8 }}>
-            {t("distill.phase2Title")}
+            {t("distill.stepTitle", { n: 2, label: t("distill.stageSynthesizing") })}
           </div>
           <p className="body-sm" style={{ margin: "0 0 10px", color: "var(--ink-faint)" }}>
             {t("distill.phase2Hint")}
@@ -225,15 +225,20 @@ export function DistillationProgress({
         </div>
       ) : null}
 
+      {stageDisplay.activeIndex > 2 ? (
+        <div className="card fade-in" style={{ padding: 10, marginBottom: 16 }}>
+          <div className="eyebrow" style={{ marginBottom: 4 }}>
+            {t("distill.stepTitle", { n: 3, label: t("distill.stageBuildingCard") })}
+          </div>
+          <span className="body-sm">{t("distill.buildingCardDone")}</span>
+        </div>
+      ) : null}
+
       {appearanceReady ? (
-        <div
-          className="card fade-in"
-          style={{
-            padding: 10,
-            marginBottom: 16,
-            background: "rgba(31,58,58,0.04)"
-          }}
-        >
+        <div className="card fade-in" style={{ padding: 10, marginBottom: 16 }}>
+          <div className="eyebrow" style={{ marginBottom: 4 }}>
+            {t("distill.stepTitle", { n: 4, label: t("distill.stageResearchingAppearance") })}
+          </div>
           <span className="body-sm">{t("distill.appearanceReady")}</span>
         </div>
       ) : null}
@@ -396,7 +401,7 @@ function ResearchAgentsSection({
     >
       <summary className="distill-collapse__summary">
         <span className="distill-collapse__summary-text">
-          <strong>{t("distill.phase1Title")}</strong>
+          <strong>{t("distill.stepTitle", { n: 1, label: t("distill.stageResearching") })}</strong>
           <span style={{ color: "var(--ink-faint)" }}>{summaryText}</span>
         </span>
         <span className="distill-collapse__toggle">
@@ -651,7 +656,7 @@ function QualityReportCard({
     >
       <summary className="distill-collapse__summary">
         <span className="distill-collapse__summary-text">
-          <strong>{t("distill.phase4Title")}</strong>
+          <strong>{t("distill.stepTitle", { n: 6, label: t("distill.stageQualityCheck") })}</strong>
           <span style={{ color: verdictColor, fontWeight: 600 }}>
             {t("distill.qualityCollapsedSummary", {
               verdict: report.verdict.toUpperCase(),
@@ -922,7 +927,9 @@ function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
   return (
     <div className="card fade-in" style={{ padding: 16, marginBottom: 16 }}>
       <div className="row row--between" style={{ marginBottom: 10 }}>
-        <div className="eyebrow">{t("distill.phase3Title")}</div>
+        <div className="eyebrow">
+          {t("distill.stepTitle", { n: 5, label: t("distill.stageBuildingSprite") })}
+        </div>
         <div className="body-sm" style={{ color: "var(--ink-faint)" }}>
           {t("distill.hatchProgress", {
             done,
