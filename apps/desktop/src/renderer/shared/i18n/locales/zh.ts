@@ -60,6 +60,7 @@ export const zh = {
     shortcutsSectionNote: "随时按 ? 打开，或点击下方按钮查看。"
   },
   update: {
+    eyebrow: "New Release",
     aboutSectionLabel: "关于",
     aboutSectionHint: "版本信息与更新检查。",
     currentVersionLabel: "当前版本",

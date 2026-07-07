@@ -62,6 +62,7 @@ export const en: TranslationTree = {
     shortcutsSectionNote: "Press ? anytime, or use the button below."
   },
   update: {
+    eyebrow: "New Release",
     aboutSectionLabel: "About",
     aboutSectionHint: "Version info and update checks.",
     currentVersionLabel: "Current version",

@@ -1,5 +1,6 @@
 import { useBailin } from "../../shared/use-bailin.js";
 import { useT } from "../../shared/i18n/index.js";
+import { ChatMarkdown } from "../../shared/chat-markdown.js";
 import { useUpdateInfo } from "../app/update-context.js";
 
 /**
@@ -28,25 +29,26 @@ export function AboutSection(): JSX.Element {
         </button>
       </div>
       {updateInfo?.hasUpdate ? (
-        <div
-          className="card"
-          style={{
-            padding: "10px 12px",
-            borderColor: "var(--magenta-soft)"
-          }}
-        >
-          <p className="body-sm" style={{ margin: "0 0 8px", color: "var(--ink)" }}>
-            {t("update.bannerTitle", { version: updateInfo.latestVersion ?? "" })}
-          </p>
-          <button
-            type="button"
-            className="btn btn--magenta btn--sm"
-            onClick={() => {
-              if (updateInfo.releaseUrl) void bailin.app.openExternal(updateInfo.releaseUrl);
-            }}
-          >
-            {t("update.viewRelease")}
-          </button>
+        <div className="update-announce update-announce--inline fade-in">
+          <div className="update-announce__body">
+            <div className="display display--section update-announce__title">
+              {t("update.bannerTitle", { version: updateInfo.latestVersion ?? "" })}
+            </div>
+            {updateInfo.releaseNotes ? (
+              <div className="update-announce__notes">
+                <ChatMarkdown text={updateInfo.releaseNotes} />
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn--magenta btn--sm update-announce__actions"
+              onClick={() => {
+                if (updateInfo.releaseUrl) void bailin.app.openExternal(updateInfo.releaseUrl);
+              }}
+            >
+              {t("update.viewRelease")}
+            </button>
+          </div>
         </div>
       ) : null}
     </div>
