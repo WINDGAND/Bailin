@@ -3,9 +3,9 @@ import { useBailin } from "../../shared/use-bailin.js";
 import { DistillationProgress } from "../progress/DistillationProgress.js";
 import { useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
+import { OptionGroup } from "../../shared/option-group.js";
 import { useDistillationJobs } from "../app/distillation-job-context.js";
 
-type Mode = "deep" | "quick";
 type SourceType = "public-figure" | "fictional" | "original";
 type Track = "utility" | "companion";
 type MaterialMode = "web" | "local-first" | "local-only";
@@ -20,23 +20,6 @@ const LOCAL_ONLY_SUGGEST_MIN_CHARS = 200;
 const MAX_REFERENCE_IMAGES = 4;
 /** 单图大小上限（base64 字符长度，对应约 3MB 原图）。 */
 const MAX_REFERENCE_IMAGE_BYTES = 4 * 1024 * 1024;
-
-const SOURCE_OPTIONS: Array<{
-  id: SourceType;
-  labelKey: "forge.sourcePublicFigure" | "forge.sourceFictional" | "forge.sourceOriginal";
-}> = [
-  { id: "public-figure", labelKey: "forge.sourcePublicFigure" },
-  { id: "fictional", labelKey: "forge.sourceFictional" },
-  { id: "original", labelKey: "forge.sourceOriginal" }
-];
-
-const TRACK_OPTIONS: Array<{
-  id: Track;
-  labelKey: "library.trackUtility" | "library.trackCompanion";
-}> = [
-  { id: "utility", labelKey: "library.trackUtility" },
-  { id: "companion", labelKey: "library.trackCompanion" }
-];
 
 interface ReferenceImage {
   id: string;
@@ -59,7 +42,6 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const [userHint, setUserHint] = useState("");
   const [userMaterial, setUserMaterial] = useState("");
   const [materialMode, setMaterialMode] = useState<MaterialMode>("web");
-  const [mode, setMode] = useState<Mode>("deep");
   const [caps, setCaps] = useState<{ webSearch: boolean; reason: string } | null>(null);
   const [vision, setVision] = useState<{ vision: boolean; reason: string } | null>(null);
 
@@ -68,8 +50,6 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const [urlDraft, setUrlDraft] = useState("");
 
   const [busy, setBusy] = useState(false);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [skeletonNote, setSkeletonNote] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -80,9 +60,6 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
         ]);
         setCaps(c);
         setVision(v);
-        if (!c.webSearch) {
-          if (mode === "deep") setMode("quick");
-        }
       } catch {
         // ignore
       }
@@ -171,13 +148,11 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const webSearchUnavailable = caps != null && !caps.webSearch;
   const deepDisabled = webSearchUnavailable && materialMode !== "local-only";
   const materialLen = userMaterial.trim().length;
-  const showMaterialModeOptions =
-    mode === "deep" && (materialLen > 0 || sourceType === "original");
+  const showMaterialModeOptions = materialLen > 0 || sourceType === "original";
   const effectiveMaterialMode: MaterialMode = showMaterialModeOptions ? materialMode : "web";
   const showLocalFirstSuggest =
-    mode === "deep" && materialMode === "web" && materialLen >= LOCAL_FIRST_SUGGEST_MIN_CHARS;
+    materialMode === "web" && materialLen >= LOCAL_FIRST_SUGGEST_MIN_CHARS;
   const showLocalOnlySuggest =
-    mode === "deep" &&
     materialMode === "web" &&
     sourceType === "original" &&
     materialLen >= LOCAL_ONLY_SUGGEST_MIN_CHARS &&
@@ -188,40 +163,6 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     (referenceImages.length > 0 ? 1 : 0) +
     (userHint.trim().length > 0 ? 1 : 0) +
     (userMaterial.trim().length > 0 ? 1 : 0);
-
-  async function submitQuick(): Promise<void> {
-    setBusy(true);
-    setWarnings([]);
-    setSkeletonNote(null);
-    const r = await bailin.characters.create({
-      characterName: trimmedName,
-      sourceType,
-      track,
-      userHint: userHint.trim() || undefined,
-      userMaterial: userMaterial.trim() || undefined,
-      sourceContext: sourceContext.trim() || undefined,
-      referenceImages: referenceImagesForIpc()
-    });
-    setBusy(false);
-    if (!r.ok) {
-      showToast({ kind: "error", text: r.error ?? t("forge.toastCreateFailed") });
-      return;
-    }
-    const ws = r.warnings ?? [];
-    if (r.isSkeleton) {
-      setSkeletonNote(t("forge.skeletonNote"));
-    }
-    if (ws.length > 0) {
-      setWarnings(ws);
-      showToast({
-        kind: "warn",
-        text: t("forge.toastWarnings", { count: ws.length })
-      });
-      return;
-    }
-    showToast({ kind: "success", text: t("forge.toastSuccess") });
-    onDone();
-  }
 
   async function submitDeep(): Promise<void> {
     setBusy(true);
@@ -248,9 +189,8 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   }
 
   function submit(): void {
-    if (trimmedName.length === 0) return;
-    if (mode === "deep") void submitDeep();
-    else void submitQuick();
+    if (trimmedName.length === 0 || deepDisabled) return;
+    void submitDeep();
   }
 
   function referenceImagesForIpc(): Array<{
@@ -282,20 +222,12 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     );
   }
 
-  const submitLabel = busy
-    ? t("forge.submitStarting")
-    : mode === "deep"
-      ? t("forge.submitDeep")
-      : t("forge.submitQuick");
+  const submitLabel = busy ? t("forge.submitStarting") : t("forge.submitDeep");
 
   const actionsHint =
     trimmedName.length > 0
-      ? mode === "deep"
-        ? t("forge.hintDeepNamed", { name: trimmedName })
-        : t("forge.hintQuickNamed", { name: trimmedName })
-      : mode === "deep"
-        ? t("forge.hintDeepEmpty")
-        : t("forge.hintQuickEmpty");
+      ? t("forge.hintDeepNamed", { name: trimmedName })
+      : t("forge.hintDeepEmpty");
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto" }}>
@@ -345,102 +277,90 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
           placeholder={t("forge.sourceContextPlaceholder")}
         />
 
-        {/* —————— 来源 / 定位 chips —————— */}
-        <div className="forge-meta-row">
-          <div className="forge-chip-group">
-            <span className="bl-field-label">{t("forge.sourceLabel")}</span>
-            <div className="forge-chips" role="radiogroup" aria-label={t("forge.sourceAria")}>
-              {SOURCE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={sourceType === opt.id}
-                  className={`forge-chip ${sourceType === opt.id ? "is-active" : ""}`}
-                  onClick={() => setSourceType(opt.id)}
-                >
-                  {t(opt.labelKey)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="forge-chip-group">
-            <span className="bl-field-label">{t("forge.trackLabel")}</span>
-            <div className="forge-chips" role="radiogroup" aria-label={t("forge.trackAria")}>
-              {TRACK_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={track === opt.id}
-                  className={`forge-chip ${track === opt.id ? "is-active" : ""}`}
-                  onClick={() => setTrack(opt.id)}
-                >
-                  {t(opt.labelKey)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* —————— 蒸馏模式 —————— */}
+        {/* —————— 来源 / 定位（大卡片，对齐主题选择） —————— */}
         <div className="forge-section">
           <div className="forge-section__head">
-            <span className="bl-field-label">{t("forge.modeLabel")}</span>
+            <span className="bl-field-label">{t("forge.sourceLabel")}</span>
           </div>
-          <div className="forge-mode" role="radiogroup" aria-label={t("forge.modeLabel")}>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={mode === "deep"}
-              disabled={deepDisabled}
-              className={`forge-mode__card ${mode === "deep" ? "is-active" : ""}`}
-              onClick={() => !deepDisabled && setMode("deep")}
-            >
-              <div className="forge-mode__title">{t("forge.modeDeepTitle")}</div>
-              <div className="forge-mode__caption">{t("forge.modeDeepCaption")}</div>
-              <div className="forge-mode__hint">{t("forge.modeDeepHint")}</div>
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={mode === "quick"}
-              className={`forge-mode__card ${mode === "quick" ? "is-active" : ""}`}
-              onClick={() => setMode("quick")}
-            >
-              <div className="forge-mode__title">{t("forge.modeQuickTitle")}</div>
-              <div className="forge-mode__caption">{t("forge.modeQuickCaption")}</div>
-              <div className="forge-mode__hint">{t("forge.modeQuickHint")}</div>
-            </button>
+          <OptionGroup<SourceType>
+            value={sourceType}
+            onChange={setSourceType}
+            ariaLabel={t("forge.sourceAria")}
+            className="forge-mode forge-mode--triple"
+            itemClassName="forge-mode__card"
+            options={[
+              {
+                value: "public-figure",
+                label: t("forge.sourcePublicFigure"),
+                caption: t("forge.sourcePublicFigureCaption")
+              },
+              {
+                value: "fictional",
+                label: t("forge.sourceFictional"),
+                caption: t("forge.sourceFictionalCaption")
+              },
+              {
+                value: "original",
+                label: t("forge.sourceOriginal"),
+                caption: t("forge.sourceOriginalCaption")
+              }
+            ]}
+          />
+        </div>
+
+        <div className="forge-section">
+          <div className="forge-section__head">
+            <span className="bl-field-label">{t("forge.trackLabel")}</span>
           </div>
-          {deepDisabled ? (
-            <div className="bl-status-strip is-warn">
-              <div className="bl-status-strip__body">
-                <div className="bl-status-strip__title">{t("forge.deepDisabledTitle")}</div>
-                <div className="bl-status-strip__detail">
-                  {t("forge.deepDisabledBodyBefore")}
-                  <button
-                    type="button"
-                    style={{
-                      color: "inherit",
-                      textDecoration: "underline",
-                      textUnderlineOffset: 2,
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      font: "inherit",
-                      cursor: "pointer"
-                    }}
-                    onClick={() => bailin.pet.openSettings()}
-                  >
-                    {t("nav.key")}
-                  </button>
-                  {t("forge.deepDisabledBodyAfter")}
-                </div>
+          <OptionGroup<Track>
+            value={track}
+            onChange={setTrack}
+            ariaLabel={t("forge.trackAria")}
+            className="forge-mode"
+            itemClassName="forge-mode__card"
+            options={[
+              {
+                value: "utility",
+                label: t("library.trackUtility"),
+                caption: t("forge.trackUtilityCaption")
+              },
+              {
+                value: "companion",
+                label: t("library.trackCompanion"),
+                caption: t("forge.trackCompanionCaption")
+              }
+            ]}
+          />
+        </div>
+
+        {/* —————— 无联网时禁用提示 —————— */}
+        {deepDisabled ? (
+          <div className="bl-status-strip is-warn">
+            <div className="bl-status-strip__body">
+              <div className="bl-status-strip__title">{t("forge.deepDisabledTitle")}</div>
+              <div className="bl-status-strip__detail">
+                {t("forge.deepDisabledBodyBefore")}
+                <button
+                  type="button"
+                  style={{
+                    color: "inherit",
+                    textDecoration: "underline",
+                    textUnderlineOffset: 2,
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    font: "inherit",
+                    cursor: "pointer"
+                  }}
+                  onClick={() => bailin.pet.openSettings()}
+                >
+                  {t("nav.key")}
+                </button>
+                {t("forge.deepDisabledBodyAfter")}
               </div>
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
         {/* —————— 折叠：参考图 + 补充素材等进阶项 —————— */}
         <details className="forge-disclosure">
@@ -629,7 +549,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                 </button>
               </div>
             ) : null}
-            {mode === "deep" && showMaterialModeOptions ? (
+            {showMaterialModeOptions ? (
               <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
                 <legend className="eyebrow" style={{ marginBottom: 8 }}>
                   {t("forge.materialModeLabel")}
@@ -703,65 +623,13 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
           </div>
         </details>
 
-        {/* —————— 失败回退提示 / 警告 —————— */}
-        {skeletonNote ? (
-          <div
-            className="fade-in"
-            style={{
-              padding: 12,
-              borderRadius: 10,
-              background: "rgba(178, 24, 88, 0.06)",
-              border: "1px solid var(--magenta-soft)"
-            }}
-          >
-            <strong style={{ color: "var(--magenta)", fontFamily: "var(--font-display)" }}>
-              {t("forge.skeletonTitle")}
-            </strong>
-            <p className="body-sm" style={{ margin: "4px 0 0", color: "var(--ink-soft)" }}>
-              {skeletonNote}
-            </p>
-          </div>
-        ) : null}
-        {warnings.length > 0 ? (
-          <details
-            open
-            className="fade-in"
-            style={{
-              padding: 12,
-              borderRadius: 10,
-              background: "rgba(31,58,58,0.04)",
-              border: "1px solid var(--grid-strong)"
-            }}
-          >
-            <summary className="eyebrow" style={{ cursor: "pointer" }}>
-              {t("forge.warningsSummary", { count: warnings.length })}
-            </summary>
-            <ul className="body-sm" style={{ margin: "8px 0 0 16px", padding: 0 }}>
-              {warnings.map((w, i) => (
-                <li key={i} style={{ marginBottom: 4 }}>
-                  <code style={{ fontFamily: "var(--font-mono)" }}>{w}</code>
-                </li>
-              ))}
-            </ul>
-            <div className="row row--end gap-2" style={{ marginTop: 10 }}>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => onDone()}
-              >
-                {t("forge.goToLibrary")}
-              </button>
-            </div>
-          </details>
-        ) : null}
-
         {/* —————— 行动栏 —————— */}
         <div className="forge-actions">
           <p className="forge-actions__hint">{actionsHint}</p>
           <button
             type="submit"
             className="btn btn--magenta"
-            disabled={busy || trimmedName.length === 0 || (mode === "deep" && deepDisabled)}
+            disabled={busy || trimmedName.length === 0 || deepDisabled}
           >
             {submitLabel}
           </button>

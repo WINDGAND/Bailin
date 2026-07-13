@@ -1,7 +1,7 @@
 <h1 align="center">Bailin (百灵)</h1>
 
 <p align="center">
-  <strong>A shapeshifting spirit on your desktop</strong> — craft a perspective-driven AI persona in 60 seconds, keep a pixel pet on screen, ask anytime with <code>Ctrl + Shift + P</code>.
+  <strong>A shapeshifting spirit on your desktop</strong> — deep-distill a perspective-driven AI persona in about 5–8 minutes, keep a pixel pet on screen, ask anytime with <code>Ctrl + Shift + P</code>.
 </p>
 
 <!-- README-I18N:START -->
@@ -40,7 +40,7 @@
 
 Bailin is a **fully local**, open-source Windows desktop AI character companion. It does two things:
 
-1. **Craft a persona** — Enter a name; ~60 seconds (quick) or 5–8 minutes (deep) to distill a mental framework, expression DNA, and pixel appearance.
+1. **Craft a persona** — Enter a name; about 5–8 minutes of deep distillation for a mental framework, expression DNA, and pixel appearance.
 2. **Bring them to your desktop** — A pixel pet stays in the corner; press `Ctrl + Shift + P` or click the pet to chat; click the system tray icon to open Settings / Character Library.
 
 > [!TIP]
@@ -52,7 +52,7 @@ Bailin is a **fully local**, open-source Windows desktop AI character companion.
 
 | Capability | Description |
 | --- | --- |
-| **Quick / deep distillation** | Quick mode ~60s; deep mode with 6 research agents + quality checks |
+| **Deep distillation** | 6 research agents + synthesis + quality checks (~5–8 min) |
 | **Pixel desktop pet** | DSL or hatch-pet atlas; transparent, always-on-top, draggable, click-through outside pixels |
 | **Perspective-driven chat** | System prompts built from mental models, heuristics, and expression DNA |
 | **Local memory** | User profile auto-learning; editable and clearable |
@@ -117,10 +117,10 @@ From creation to desktop in four steps:
 
 ### 1. Create a character
 
-Setup wizard or Settings → Create: pick source type (public figure / fictional / original) and track (utility advisor / emotional companion), optional reference images, quick or deep mode.
+Setup wizard or Settings → Create: pick source type (public figure / fictional / original) and track (utility advisor / emotional companion), optional source context and reference images, then start deep creation.
 
 <p align="center">
-  <img src="assets/create.png" alt="Create character — quick and deep modes" width="640" />
+  <img src="assets/create.png" alt="Create character" width="640" />
 </p>
 
 > Built-in starters default to empty. Append `CharacterBundle` entries in `apps/desktop/src/shared/starters.ts`.
@@ -371,7 +371,7 @@ node ./scripts/a11y-scan.mjs
 
 | Phase | Theme | Highlights |
 | --- | --- | --- |
-| **v0.x** (now) | MVP loop | Quick create, desktop pet, local memory, Windows, BYO key |
+| **v0.x** (now) | MVP loop | Deep create, desktop pet, local memory, Windows, BYO key |
 | **v1.0** | Polish | Deep distillation UX, chat improvements, opt-in auto-update |
 | **v1.1** | Multi-pet | Multiple pets on desktop |
 | **v1.2+** | Relationship | Long-term memory, proactive companion |

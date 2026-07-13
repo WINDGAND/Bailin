@@ -318,29 +318,6 @@ export function registerIpc(deps: IpcDeps): void {
     return { ok: true, characterId: bundle.card.id };
   });
 
-  ipcMain.handle(IPC.CharactersCreate, async (_e, input) => {
-    try {
-      const result = await orchestrator.createCharacter(input);
-      vault.upsertCharacter({
-        id: result.bundle.card.id,
-        bundle: result.bundle,
-        isSkeleton: result.isSkeleton,
-        now: Date.now()
-      });
-      deps.setActiveCharacterId(result.bundle.card.id);
-      vault.setSetting(SETTING_ACTIVE_CHARACTER, result.bundle.card.id);
-      broadcast(IPC.EventActiveCharacterChanged, result.bundle);
-      return {
-        ok: true,
-        characterId: result.bundle.card.id,
-        isSkeleton: result.isSkeleton,
-        warnings: result.warnings
-      };
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
-    }
-  });
-
   ipcMain.handle(IPC.CharactersRegenerateSprite, async (_e, characterId: string) => {
     try {
       const bundle = vault.getCharacter(characterId);

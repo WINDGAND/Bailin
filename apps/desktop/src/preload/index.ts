@@ -32,7 +32,6 @@ const api = {
     list: () => ipcRenderer.invoke(IPC.CharactersList),
     get: (id: string) => ipcRenderer.invoke(IPC.CharactersGet, id),
     importStarter: (id: string) => ipcRenderer.invoke(IPC.CharactersImportStarter, id),
-    create: (input: unknown) => ipcRenderer.invoke(IPC.CharactersCreate, input),
     createDeep: (input: unknown) => ipcRenderer.invoke(IPC.CharactersCreateDeep, input),
     approveDistillation: (input: unknown) =>
       ipcRenderer.invoke(IPC.CharactersApproveDistillation, input),

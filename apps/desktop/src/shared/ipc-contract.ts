@@ -99,7 +99,6 @@ export interface BailinApi {
     list(): Promise<CharacterListItem[]>;
     get(characterId: string): Promise<CharacterBundle | null>;
     importStarter(starterId: string): Promise<{ ok: boolean; characterId?: string; error?: string }>;
-    create(input: CreateCharacterInput): Promise<{ ok: boolean; characterId?: string; isSkeleton?: boolean; warnings?: string[]; error?: string }>;
     /** 深度蒸馏：发起后立即返回 jobId，进度通过 EventDistillationProgress 推送。 */
     createDeep(
       input: DistillationJobConfig
@@ -111,7 +110,7 @@ export interface BailinApi {
       /** research checkpoint：补跑指定 Agent（1–6），空则直接进入下一阶段。 */
       supplementalAgentIds?: ResearchAgentId[];
     }): Promise<{ ok: boolean }>;
-    /** Checkpoint 用户「取消 / 退回快速版」。 */
+    /** Checkpoint 用户取消本次深度创建。 */
     cancelDistillation(jobId: string): Promise<{ ok: boolean }>;
     /** 取回某 job 已落盘的调研文档（用于 UI 在 Checkpoint 1 展示）。 */
     getResearchDocs(jobId: string): Promise<ResearchDoc[]>;
@@ -429,22 +428,6 @@ export interface CharacterListItem {
   isActive: boolean;
 }
 
-export interface CreateCharacterInput {
-  characterName: string;
-  sourceType: "public-figure" | "fictional" | "original";
-  track: "utility" | "companion";
-  userHint?: string;
-  userMaterial?: string;
-  /** 可选：出处 / 身份消歧义锚点（同名时锁定正确实体）。 */
-  sourceContext?: string;
-  /**
-   * v0.2：快速模式也支持参考图。若视觉模型（默认豆包 Seed 2.0 Lite）可用且用户上传了图，
-   * 就走 vision 路径；否则降级到纯文本。
-   */
-  referenceImages?: ReferenceImageInput[];
-}
-
-/** 从渲染进程传到 main 的参考图（已转 data URI 或 URL）。 */
 export interface ReferenceImageInput {
   /** https:// URL 或 data:image/...;base64,... */
   url: string;
@@ -699,7 +682,6 @@ export const IPC = {
   CharactersList: "bailin.characters.list",
   CharactersGet: "bailin.characters.get",
   CharactersImportStarter: "bailin.characters.importStarter",
-  CharactersCreate: "bailin.characters.create",
   CharactersCreateDeep: "bailin.characters.createDeep",
   CharactersApproveDistillation: "bailin.characters.approveDistillation",
   CharactersCancelDistillation: "bailin.characters.cancelDistillation",

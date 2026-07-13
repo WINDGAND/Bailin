@@ -45,7 +45,6 @@ interface BailinWindow {
       list(): Promise<Array<{ id: string; name: string; sourceName?: string; track: "utility" | "companion"; isSkeleton: boolean; isActive: boolean }>>;
       get(id: string): Promise<CharacterBundle | null>;
       importStarter(id: string): Promise<{ ok: boolean; characterId?: string; error?: string }>;
-      create(input: unknown): Promise<{ ok: boolean; characterId?: string; isSkeleton?: boolean; warnings?: string[]; error?: string }>;
       createDeep(input: Partial<DistillationJobConfig> & { characterName: string; sourceType: DistillationJobConfig["sourceType"]; track: DistillationJobConfig["track"] }): Promise<{ ok: boolean; jobId?: string; error?: string }>;
       approveDistillation(input: {
         jobId: string;
@@ -234,7 +233,6 @@ function makeBailinStub(): BailinWindow["bailin"] {
         return bs.find((b: any) => b.card.id === id) ?? null;
       },
       importStarter: async () => ({ ok: false, error: "stub" }),
-      create: async () => ({ ok: false, error: "stub" }),
       createDeep: async () => ({ ok: false, error: "stub" }),
       approveDistillation: async () => ({ ok: false }),
       cancelDistillation: async () => ({ ok: false }),

@@ -1,7 +1,6 @@
 import { ulid } from "ulid";
 import {
   AppearanceSpecSchema,
-  parseCard,
   parseSprite,
   applyCharacterNamesToMeta,
   normalizeCharacterNames,
@@ -37,7 +36,6 @@ import {
   buildAppearanceSpecPrompt,
   buildAppearanceVisionExtractionPrompt,
   buildAppearanceVisionVerificationPrompt,
-  buildCharacterCardPrompt,
   buildCharacterNameResolutionPrompt,
   buildCharacterQuoteResolutionPrompt,
   buildCharacterQuoteTranslationPrompt,
@@ -99,25 +97,6 @@ export interface ReferenceImageInput {
   notes?: string;
 }
 
-export interface OrchestrateInput {
-  characterName: string;
-  sourceType: "public-figure" | "fictional" | "original";
-  track: "utility" | "companion";
-  userHint?: string;
-  userMaterial?: string;
-  /** 可选：出处 / 身份消歧义锚点。 */
-  sourceContext?: string;
-  /** v0.2 快速模式也支持参考图（前提是 provider 支持 vision）。 */
-  referenceImages?: ReferenceImageInput[];
-}
-
-export interface OrchestrateResult {
-  ok: true;
-  bundle: CharacterBundle;
-  isSkeleton: boolean;
-  warnings: string[];
-}
-
 export interface RegenerateSpriteResult {
   ok: boolean;
   sprite?: SpriteProgram;
@@ -151,7 +130,6 @@ export type DeepProgressEvent =
 
 /**
  * 深度蒸馏入参：来自 IPC，已经被 DistillationJobConfigSchema 校验。
- * 与快速版 OrchestrateInput 互补。
  */
 export interface DeepOrchestrateInput {
   jobId: string;
@@ -188,116 +166,6 @@ export class BailinOrchestrator {
   /** 是否可以走 hatch-pet 主路径；UI 可据此切换提示。 */
   hasHatchCapability(): boolean {
     return this.hatchPipeline !== null;
-  }
-
-  /**
-   * 三步串行：
-   *   Step 1: 人格卡（CharacterCard 的 card 部分）
-   *   Step 2: 外貌调研（AppearanceSpec）
-   *   Step 3: 像素桌宠（SpriteProgram，基于 appearance 转译）
-   * 任一步失败：对应字段回退到骨架；全失败给完整骨架。
-   */
-  async createCharacter(input: OrchestrateInput): Promise<OrchestrateResult> {
-    const warnings: string[] = [];
-    const id = ulid();
-    const now = Date.now();
-
-    const priority = resolveSourceContextPriority({
-      sourceContext: input.sourceContext,
-      userHint: input.userHint,
-      userMaterial: input.userMaterial,
-      sourceType: input.sourceType
-    });
-    const anchored: OrchestrateInput = {
-      ...input,
-      sourceContext:
-        priority.kind === "explicit" || priority.kind === "hint"
-          ? priority.sourceContext
-          : input.sourceContext
-    };
-
-    // ===== Step 1: 人格卡 =====
-    const cardResult = await this.runCardStep(anchored, warnings);
-
-    // ===== Step 2: 外貌调研 =====
-    // 快速模式：如果用户上传了参考图 + provider 支持 vision，走 vision-first 路径；
-    // 否则退到纯文本 prompt（旧 runAppearanceStep）。
-    const appearanceResult = await this.runAppearanceForQuick(anchored, warnings);
-
-    // ===== Step 3: 形象（atlas 优先，CSS 兜底）=====
-    const spriteResult = appearanceResult
-      ? await this.runVisualStep(
-          id,
-          input.characterName,
-          input.sourceType,
-          appearanceResult,
-          input.referenceImages ?? [],
-          warnings
-        )
-      : null;
-
-    // ===== 组装最终 bundle =====
-    const skeleton = makeSkeletonBundle({
-      id,
-      name: input.characterName,
-      sourceName: input.sourceType !== "original" ? input.characterName : undefined,
-      sourceType: input.sourceType,
-      track: input.track,
-      now
-    });
-
-    const card: CharacterCard = cardResult ?? skeleton.card;
-    // 补齐 id / 时间戳 / track / sourceType / disclaimer 兜底
-    card.id = id;
-    card.schemaVersion = SCHEMA_VERSION;
-    card.createdAt = now;
-    card.updatedAt = now;
-    card.meta.track = input.track;
-    card.meta.sourceType = input.sourceType;
-    if (input.sourceType !== "original" && !card.meta.sourceName) {
-      card.meta.sourceName = input.characterName;
-    }
-
-    await this.finalizeCharacterNames(
-      card,
-      input.characterName,
-      input.sourceType,
-      this.metadataWebSearchEnabled(input.sourceType),
-      warnings
-    );
-
-    const quoteWebSearch = this.metadataWebSearchEnabled(input.sourceType);
-    await this.finalizeCharacterQuote(
-      card,
-      input.sourceType,
-      quoteWebSearch,
-      warnings,
-      undefined,
-      input.userMaterial
-    );
-
-    // 外貌信息回写
-    if (appearanceResult) {
-      card.meta.appearance = appearanceResult;
-      card.meta.avatarHint = summarizeAppearance(appearanceResult);
-    }
-
-    const sprite: SpriteProgram = spriteResult ?? skeleton.sprite;
-    sprite.schemaVersion = SCHEMA_VERSION;
-
-    const isSkeleton =
-      cardResult == null && appearanceResult == null && spriteResult == null;
-
-    return {
-      ok: true,
-      isSkeleton,
-      warnings,
-      bundle: {
-        card,
-        sprite,
-        runtime: defaultRuntimeConfig()
-      }
-    };
   }
 
   /**
@@ -807,89 +675,6 @@ export class BailinOrchestrator {
         input.liveBroadcast?.(evt);
       }
     });
-  }
-
-  private async runCardStep(
-    input: OrchestrateInput,
-    warnings: string[]
-  ): Promise<CharacterCard | null> {
-    const { system, user } = buildCharacterCardPrompt({
-      characterName: input.characterName,
-      sourceType: input.sourceType,
-      track: input.track,
-      userMaterial: input.userMaterial,
-      sourceContext: input.sourceContext
-    });
-    const r = await this.llm.chatOnce({
-      systemPrompt: system,
-      messages: [{ role: "user", content: user }],
-      temperature: 0.4,
-      maxTokens: 3500,
-      stream: false
-    });
-    if (r.kind === "error") {
-      warnings.push(`[step1·card] LLM 调用失败：${r.message}`);
-      return null;
-    }
-    const json = extractJSON(r.text) as Record<string, unknown> | null;
-    if (!json) {
-      warnings.push("[step1·card] LLM 未返回合法 JSON");
-      return null;
-    }
-    // 给 card schema 喂的对象需要 id / schemaVersion / 时间戳，
-    // 这里先填占位，后面 createCharacter 末尾会重置真实值。
-    const seeded: Record<string, unknown> = {
-      ...json,
-      id: "temp",
-      schemaVersion: SCHEMA_VERSION,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    const parsed = parseCard(seeded);
-    if (parsed.ok && parsed.data) return parsed.data;
-    warnings.push(
-      `[step1·card] 校验失败：${(parsed.errors ?? []).map((e) => e.path).slice(0, 6).join(", ")}`
-    );
-    return null;
-  }
-
-  /**
-   * 快速模式外貌路径：
-   *   - 有用户参考图 + provider 支持 vision → 走 vision Step A+B
-   *   - 否则 → 旧的纯文本一次性 prompt
-   */
-  private async runAppearanceForQuick(
-    input: OrchestrateInput,
-    warnings: string[]
-  ): Promise<AppearanceSpec | null> {
-    const refs = input.referenceImages ?? [];
-    const vis = this.llm.detectVisionCapability();
-    if (refs.length > 0 && vis.vision) {
-      // 喂图，让 vision 模型生成 spec
-      const spec = await this.runAppearanceVisionFromImages(
-        {
-          characterName: input.characterName,
-          sourceName:
-            input.sourceType !== "original" ? input.characterName : undefined,
-          sourceType: input.sourceType,
-          track: input.track,
-          userHint: input.userHint,
-          userMaterial: input.userMaterial,
-          sourceContext: input.sourceContext,
-          referenceImages: refs
-        },
-        warnings,
-        { runVerification: false } // 快速模式跳过 verify，省一次调用
-      );
-      if (spec) return spec;
-      // vision 失败 → 退到文本
-    }
-    if (refs.length > 0 && !vis.vision) {
-      warnings.push(
-        `[step2·appearance] 视觉模型不可用（${vis.reason}），上传的参考图被忽略，回退到纯文本路径，结果可能偏离原作。`
-      );
-    }
-    return this.runAppearanceTextOnly(input, warnings);
   }
 
   /** 旧的纯文本一次性 prompt（fallback）。 */
