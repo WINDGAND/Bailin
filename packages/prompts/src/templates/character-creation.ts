@@ -10,6 +10,8 @@ export interface CharacterCardInput {
   sourceType: "public-figure" | "fictional" | "original";
   track: "utility" | "companion";
   userMaterial?: string;
+  /** 用户显式填写的出处 / 身份锚点（同名消歧）。 */
+  sourceContext?: string;
 }
 
 export const CHARACTER_CARD_OUTPUT_SCHEMA_DESCRIPTION = `
@@ -85,7 +87,7 @@ export function buildCharacterCardPrompt(input: CharacterCardInput): {
   system: string;
   user: string;
 } {
-  const { characterName, sourceType, track, userMaterial } = input;
+  const { characterName, sourceType, track, userMaterial, sourceContext } = input;
 
   const system = [
     "你是 百灵 Bailin 的人格蒸馏器。",
@@ -103,6 +105,7 @@ export function buildCharacterCardPrompt(input: CharacterCardInput): {
     "5. 角色卡 disclaimer 必须以 '受 ... 启发' 或类似措辞开头，明确非本人 / 非官方 / 非授权。",
     "6. 任何政治、宗教煽动性、未成年色情内容均不可生成。",
     "7. meta.quoteOneLiner 可留空——后续有专项步骤联网检索角色原话并格式化。",
+    "8. 若用户提供了「出处 / 身份」锚点，必须基于该实体生成，禁止换成同名的其它人物或角色。",
     "",
     "## 输出 JSON 契约",
     "",
@@ -114,6 +117,11 @@ export function buildCharacterCardPrompt(input: CharacterCardInput): {
     `定位：${track === "utility" ? "实用线·思维顾问" : "情感线·桌面陪伴"}。`,
     `类型：${sourceType}。`
   ];
+  if (sourceContext && sourceContext.trim().length > 0) {
+    userParts.push(
+      `出处 / 身份锚点：${sourceContext.trim()}（必须锁定此实体，禁止换成同名其它对象）。`
+    );
+  }
   if (userMaterial && userMaterial.trim().length > 0) {
     userParts.push("");
     userParts.push("以下是用户提供的补充素材（权威性高于你的训练知识，请优先采用）：");

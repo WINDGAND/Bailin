@@ -42,6 +42,11 @@ export const DistillationJobConfigSchema = z.object({
   userMaterial: z.string().max(12000).optional(),
   /** 用户提供的外貌补充（短句）。 */
   userHint: z.string().max(400).optional(),
+  /**
+   * 用户显式填写的「出处 / 身份」消歧义锚点（如作品名、职位）。
+   * 有值时调研优先用此字段，跳过「选最广为人知」的 LLM 猜测。
+   */
+  sourceContext: z.string().max(40).optional(),
   /** 用户提供的参考图 URL 或 data URI，用于深度外貌阶段（旧字段，保留兼容）。 */
   userImageRef: z.string().max(2000).optional(),
   /**

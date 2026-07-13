@@ -45,6 +45,7 @@ import {
 } from "@bailin/prompts";
 import type { LLMAdapter, ChatContentPart } from "../adapters/llm-adapter.js";
 import { runResearchAgents, agentIdsToSlugs, type AgentResearchPlan } from "./research-pipeline.js";
+import { resolveSourceContextPriority } from "./resolve-source-context.js";
 import {
   anyAgentNeedsWebSearch,
   buildAgentPlansFromCoverage,
@@ -104,6 +105,8 @@ export interface OrchestrateInput {
   track: "utility" | "companion";
   userHint?: string;
   userMaterial?: string;
+  /** 可选：出处 / 身份消歧义锚点。 */
+  sourceContext?: string;
   /** v0.2 快速模式也支持参考图（前提是 provider 支持 vision）。 */
   referenceImages?: ReferenceImageInput[];
 }
@@ -199,13 +202,27 @@ export class BailinOrchestrator {
     const id = ulid();
     const now = Date.now();
 
+    const priority = resolveSourceContextPriority({
+      sourceContext: input.sourceContext,
+      userHint: input.userHint,
+      userMaterial: input.userMaterial,
+      sourceType: input.sourceType
+    });
+    const anchored: OrchestrateInput = {
+      ...input,
+      sourceContext:
+        priority.kind === "explicit" || priority.kind === "hint"
+          ? priority.sourceContext
+          : input.sourceContext
+    };
+
     // ===== Step 1: 人格卡 =====
-    const cardResult = await this.runCardStep(input, warnings);
+    const cardResult = await this.runCardStep(anchored, warnings);
 
     // ===== Step 2: 外貌调研 =====
     // 快速模式：如果用户上传了参考图 + provider 支持 vision，走 vision-first 路径；
     // 否则退到纯文本 prompt（旧 runAppearanceStep）。
-    const appearanceResult = await this.runAppearanceForQuick(input, warnings);
+    const appearanceResult = await this.runAppearanceForQuick(anchored, warnings);
 
     // ===== Step 3: 形象（atlas 优先，CSS 兜底）=====
     const spriteResult = appearanceResult
@@ -605,6 +622,7 @@ export class BailinOrchestrator {
         track: config.track,
         userHint: config.userHint,
         userMaterial: config.userMaterial,
+        sourceContext: sourceContext ?? config.sourceContext,
         referenceImages: appearanceRefs,
         onStatusMessage: emitAppearanceStatus
       },
@@ -799,7 +817,8 @@ export class BailinOrchestrator {
       characterName: input.characterName,
       sourceType: input.sourceType,
       track: input.track,
-      userMaterial: input.userMaterial
+      userMaterial: input.userMaterial,
+      sourceContext: input.sourceContext
     });
     const r = await this.llm.chatOnce({
       systemPrompt: system,
@@ -856,6 +875,7 @@ export class BailinOrchestrator {
           track: input.track,
           userHint: input.userHint,
           userMaterial: input.userMaterial,
+          sourceContext: input.sourceContext,
           referenceImages: refs
         },
         warnings,
@@ -880,6 +900,7 @@ export class BailinOrchestrator {
       track: "utility" | "companion";
       userHint?: string;
       userMaterial?: string;
+      sourceContext?: string;
     },
     warnings: string[]
   ): Promise<AppearanceSpec | null> {
@@ -888,7 +909,8 @@ export class BailinOrchestrator {
       sourceType: input.sourceType,
       track: input.track,
       userHint: input.userHint,
-      userMaterial: input.userMaterial
+      userMaterial: input.userMaterial,
+      sourceContext: input.sourceContext
     });
     const r = await this.llm.chatOnce({
       systemPrompt: system,
@@ -979,33 +1001,32 @@ export class BailinOrchestrator {
 
   /**
    * 调研开始前的"消歧义解析"：拿到角色的英文名 + 原作上下文，
-   * 用最便宜的方式（不联网，纯 LLM 一次调用）让后续 6 路 search-preview 都能搜对人。
+   * 用最便宜的方式让后续 6 路 search-preview 都能搜对人。
    *
-   * 来源优先级：
-   *   1. userMaterial / userHint 第一段中含「《XX》」「(XX)」「《XX》中的」之类显式上下文 → 抠出来
-   *   2. 否则用 provider.model（DeepSeek 等便宜模型）跑一次 lookup
-   *   3. 解析失败 → 返回 undefined，调研走纯名字搜索（仍可用，只是更可能漂移）
+   * 来源优先级（见 resolveSourceContextPriority）：
+   *   1. 用户显式填写的 sourceContext
+   *   2. userMaterial / userHint 中的《XX》/ 括号上下文
+   *   3. original → 跳过；其它 → LLM 猜「最广为人知」+ englishName
    */
   private async resolveResearchContext(
     config: DistillationJobConfig,
     warnings: string[]
   ): Promise<{ sourceContext?: string; englishName?: string }> {
-    // Step 1: 显式 hint 解析
-    const extra = `${config.userHint ?? ""}\n${config.userMaterial ?? ""}`.slice(0, 600);
-    const m1 = extra.match(/[《<【](.+?)[》>】]/);
-    const m2 = extra.match(/\(([^)]+)\)|（([^）]+)）/);
-    const hintWork = m1?.[1]?.trim();
-    const parenHint = m2?.[1]?.trim() ?? m2?.[2]?.trim();
-    if (hintWork && hintWork.length <= 40) {
-      return { sourceContext: hintWork, englishName: undefined };
-    }
+    const priority = resolveSourceContextPriority({
+      sourceContext: config.sourceContext,
+      userHint: config.userHint,
+      userMaterial: config.userMaterial,
+      sourceType: config.sourceType
+    });
 
-    // Step 2: 原创角色不需要解析（用户自定义，没有原作可查）
-    if (config.sourceType === "original") {
+    if (priority.kind === "explicit" || priority.kind === "hint") {
+      return { sourceContext: priority.sourceContext, englishName: undefined };
+    }
+    if (priority.kind === "none") {
       return {};
     }
 
-    // Step 3: 不联网的 LLM 一次调用，让模型回答"这个名字最广为人知的身份是什么 + 英文/原文名"
+    // needs_llm：不联网的 LLM 一次调用
     const sys =
       "你是消歧义助手。只返回严格 JSON：{ \"sourceContext\": \"<最广为人知的作品/职业/身份，1-12 字>\", \"englishName\": \"<英文或原文名，若无则空字符串>\" }。" +
       "不要解释，不要 Markdown。如果该名字有多个常见身份，选最广为人知的一个。";
@@ -1024,7 +1045,7 @@ export class BailinOrchestrator {
       });
       if (r.kind === "error") {
         warnings.push(`[research·context-resolve] LLM 失败：${r.message.slice(0, 100)}`);
-        return parenHint ? { sourceContext: parenHint } : {};
+        return {};
       }
       const json = extractJSON(r.text) as
         | { sourceContext?: unknown; englishName?: unknown }
@@ -1032,7 +1053,7 @@ export class BailinOrchestrator {
       const sourceContext =
         typeof json?.sourceContext === "string" && json.sourceContext.trim().length > 0
           ? json.sourceContext.trim().slice(0, 40)
-          : parenHint;
+          : undefined;
       const englishName =
         typeof json?.englishName === "string" && json.englishName.trim().length > 0
           ? json.englishName.trim().slice(0, 60)
@@ -1042,7 +1063,7 @@ export class BailinOrchestrator {
       warnings.push(
         `[research·context-resolve] 异常：${e instanceof Error ? e.message : String(e)}`
       );
-      return parenHint ? { sourceContext: parenHint } : {};
+      return {};
     }
   }
 
@@ -1256,6 +1277,7 @@ export class BailinOrchestrator {
       track: "utility" | "companion";
       userHint?: string;
       userMaterial?: string;
+      sourceContext?: string;
       referenceImages: ReferenceImageInput[];
       onStatusMessage?: (message: string) => void;
     },
@@ -1310,6 +1332,7 @@ export class BailinOrchestrator {
         track: input.track,
         userHint: input.userHint,
         userMaterial: input.userMaterial,
+        sourceContext: input.sourceContext,
         userImageRef: refs[0]?.url
       },
       webSearchEnabled,
@@ -1398,6 +1421,7 @@ export class BailinOrchestrator {
       track: "utility" | "companion";
       userHint?: string;
       userMaterial?: string;
+      sourceContext?: string;
       referenceImages: ReferenceImageInput[];
     },
     warnings: string[],
@@ -1412,6 +1436,7 @@ export class BailinOrchestrator {
       sourceName: input.sourceName,
       sourceType: input.sourceType,
       userHint: input.userHint,
+      sourceContext: input.sourceContext,
       referenceImageCount: refs.length
     });
     const aContent: ChatContentPart[] = [{ type: "text", text: a.user }];
@@ -1443,6 +1468,7 @@ export class BailinOrchestrator {
       sourceType: input.sourceType,
       track: input.track,
       userHint: input.userHint,
+      sourceContext: input.sourceContext,
       visualDescription: description
     });
     const bR = await this.llm.chatOnce({
@@ -1526,6 +1552,7 @@ export class BailinOrchestrator {
       track: "utility" | "companion";
       userHint?: string;
       userMaterial?: string;
+      sourceContext?: string;
       userImageRef?: string;
     },
     webSearchEnabled: boolean,

@@ -11,6 +11,7 @@ type Track = "utility" | "companion";
 type MaterialMode = "web" | "local-first" | "local-only";
 
 const MAX_NAME = 40;
+const MAX_SOURCE_CONTEXT = 40;
 const MAX_USER_HINT = 200;
 const MAX_USER_MATERIAL = 8000;
 /** 与 material-coverage-plan LOCAL_FIRST_SUGGEST_MIN_CHARS 对齐。 */
@@ -52,6 +53,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const { activeJob, startJob, clearJob, cancelJob } = useDistillationJobs();
 
   const [name, setName] = useState("");
+  const [sourceContext, setSourceContext] = useState("");
   const [sourceType, setSourceType] = useState<SourceType>("public-figure");
   const [track, setTrack] = useState<Track>("utility");
   const [userHint, setUserHint] = useState("");
@@ -182,6 +184,10 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     materialLen < LOCAL_FIRST_SUGGEST_MIN_CHARS;
   const visionUnavailable = vision != null && !vision.vision;
   const hasUploadedRefs = referenceImages.length > 0;
+  const extrasFilledCount =
+    (referenceImages.length > 0 ? 1 : 0) +
+    (userHint.trim().length > 0 ? 1 : 0) +
+    (userMaterial.trim().length > 0 ? 1 : 0);
 
   async function submitQuick(): Promise<void> {
     setBusy(true);
@@ -193,6 +199,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       track,
       userHint: userHint.trim() || undefined,
       userMaterial: userMaterial.trim() || undefined,
+      sourceContext: sourceContext.trim() || undefined,
       referenceImages: referenceImagesForIpc()
     });
     setBusy(false);
@@ -227,6 +234,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
       concurrency: 6,
       userHint: userHint.trim() || undefined,
       userMaterial: userMaterial.trim() || undefined,
+      sourceContext: sourceContext.trim() || undefined,
       materialMode: resolvedMode,
       enableWebSearch: !localOnly,
       referenceImages: referenceImagesForIpc()
@@ -328,6 +336,15 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
           <div className="forge-field-name__hint">{t("forge.nameHint")}</div>
         </div>
 
+        <CountedField
+          label={t("forge.sourceContextLabel")}
+          hint={t("forge.sourceContextHint")}
+          value={sourceContext}
+          onChange={setSourceContext}
+          max={MAX_SOURCE_CONTEXT}
+          placeholder={t("forge.sourceContextPlaceholder")}
+        />
+
         {/* —————— 来源 / 定位 chips —————— */}
         <div className="forge-meta-row">
           <div className="forge-chip-group">
@@ -425,114 +442,121 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
           ) : null}
         </div>
 
-        {/* —————— 参考图 —————— */}
-        <fieldset
-          className="forge-section"
-          style={{ border: "none", margin: 0, padding: 0 }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            void handleFiles(e.dataTransfer?.files ?? null);
-          }}
-        >
-          <div className="forge-section__head">
-            <span className="bl-field-label">{t("forge.referenceLabel")}</span>
-
-          </div>
-          <div className="apple-dropzone">
-            <div style={{ marginBottom: 10 }}>
-              <div className="apple-dropzone__title">{t("forge.dropzoneTitle")}</div>
-              <div className="apple-dropzone__hint">
-                {t("forge.dropzoneHint", { max: MAX_REFERENCE_IMAGES })}
-              </div>
-            </div>
-            <div className="forge-ref-controls">
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={referenceImages.length >= MAX_REFERENCE_IMAGES}
-            >
-              {t("forge.chooseFile")}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              style={{ display: "none" }}
-              onChange={(e) => void handleFiles(e.target.files)}
-            />
-            <input
-              className="input"
-              aria-label={t("forge.urlPlaceholder")}
-              placeholder={t("forge.urlPlaceholder")}
-              value={urlDraft}
-              onChange={(e) => setUrlDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAddUrl();
-                }
+        {/* —————— 折叠：参考图 + 补充素材等进阶项 —————— */}
+        <details className="forge-disclosure">
+          <summary>
+            {t("forge.extraMaterial")}
+            {extrasFilledCount > 0
+              ? ` · ${t("forge.extraMaterialFilled", { count: extrasFilledCount })}`
+              : ""}
+          </summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <fieldset
+              className="forge-section"
+              style={{ border: "none", margin: 0, padding: 0 }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
               }}
-              style={{ flex: 1, minWidth: 220 }}
-            />
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={handleAddUrl}
-              disabled={
-                urlDraft.trim().length === 0 ||
-                referenceImages.length >= MAX_REFERENCE_IMAGES
-              }
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleFiles(e.dataTransfer?.files ?? null);
+              }}
             >
-              {t("forge.addUrl")}
-            </button>
-            </div>
-          </div>
-          {referenceImages.length > 0 ? (
-            <div className="forge-ref-thumbs">
-              {referenceImages.map((img) => (
-                <ReferenceThumb
-                  key={img.id}
-                  img={img}
-                  onRemove={() => removeReferenceImage(img.id)}
-                  onSetPrimary={() => setPrimary(img.id)}
-                />
-              ))}
-            </div>
-          ) : null}
-          {visionUnavailable && hasUploadedRefs ? (
-            <div className="bl-status-strip is-warn">
-              <div className="bl-status-strip__body">
-                <div className="bl-status-strip__title">{t("forge.visionUnavailableTitle")}</div>
-                <div className="bl-status-strip__detail">
-                  {t("forge.visionUnavailableBodyBefore")}
-                  <a
-                    href="#"
-                    style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      bailin.pet.openSettings();
-                    }}
+              <div className="forge-section__head">
+                <span className="bl-field-label">{t("forge.referenceLabel")}</span>
+              </div>
+              <div className="apple-dropzone">
+                <div style={{ marginBottom: 10 }}>
+                  <div className="apple-dropzone__title">{t("forge.dropzoneTitle")}</div>
+                  <div className="apple-dropzone__hint">
+                    {t("forge.dropzoneHint", { max: MAX_REFERENCE_IMAGES })}
+                  </div>
+                </div>
+                <div className="forge-ref-controls">
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={referenceImages.length >= MAX_REFERENCE_IMAGES}
                   >
-                    {t("nav.key")}
-                  </a>
-                  {t("forge.visionUnavailableBodyAfter")}
+                    {t("forge.chooseFile")}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: "none" }}
+                    onChange={(e) => void handleFiles(e.target.files)}
+                  />
+                  <input
+                    className="input"
+                    aria-label={t("forge.urlPlaceholder")}
+                    placeholder={t("forge.urlPlaceholder")}
+                    value={urlDraft}
+                    onChange={(e) => setUrlDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddUrl();
+                      }
+                    }}
+                    style={{ flex: 1, minWidth: 220 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={handleAddUrl}
+                    disabled={
+                      urlDraft.trim().length === 0 ||
+                      referenceImages.length >= MAX_REFERENCE_IMAGES
+                    }
+                  >
+                    {t("forge.addUrl")}
+                  </button>
                 </div>
               </div>
-            </div>
-          ) : null}
-        </fieldset>
+              {referenceImages.length > 0 ? (
+                <div className="forge-ref-thumbs">
+                  {referenceImages.map((img) => (
+                    <ReferenceThumb
+                      key={img.id}
+                      img={img}
+                      onRemove={() => removeReferenceImage(img.id)}
+                      onSetPrimary={() => setPrimary(img.id)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {visionUnavailable && hasUploadedRefs ? (
+                <div className="bl-status-strip is-warn">
+                  <div className="bl-status-strip__body">
+                    <div className="bl-status-strip__title">{t("forge.visionUnavailableTitle")}</div>
+                    <div className="bl-status-strip__detail">
+                      {t("forge.visionUnavailableBodyBefore")}
+                      <a
+                        href="#"
+                        style={{
+                          color: "inherit",
+                          textDecoration: "underline",
+                          textUnderlineOffset: 2
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          bailin.pet.openSettings();
+                        }}
+                      >
+                        {t("nav.key")}
+                      </a>
+                      {t("forge.visionUnavailableBodyAfter")}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </fieldset>
 
-        {/* —————— 折叠：补充素材 —————— */}
-        <details className="forge-disclosure">
-          <summary>{t("forge.extraMaterial")}</summary>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <CountedField
               label={t("forge.appearanceHintLabel")}
               hint={t("forge.appearanceHintHint")}
@@ -634,40 +658,43 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                     const suggestLocalOnly =
                       sourceType === "original" && opt.id === "local-only" && materialMode !== "local-only";
                     return (
-                    <label
-                      key={opt.id}
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        alignItems: "flex-start",
-                        cursor: "pointer",
-                        padding: "8px 10px",
-                        borderRadius: 8,
-                        border:
-                          materialMode === opt.id
-                            ? "1px solid var(--teal)"
-                            : suggestLocalOnly
-                              ? "1px dashed var(--teal)"
-                              : "1px solid var(--grid-strong)",
-                        background: materialMode === opt.id ? "rgba(31,58,58,0.04)" : "transparent"
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="materialMode"
-                        checked={materialMode === opt.id}
-                        onChange={() => setMaterialMode(opt.id)}
-                        style={{ marginTop: 3 }}
-                      />
-                      <span>
-                        <span className="body-sm" style={{ fontWeight: 600 }}>
-                          {t(opt.labelKey)}
+                      <label
+                        key={opt.id}
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          alignItems: "flex-start",
+                          cursor: "pointer",
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          border:
+                            materialMode === opt.id
+                              ? "1px solid var(--teal)"
+                              : suggestLocalOnly
+                                ? "1px dashed var(--teal)"
+                                : "1px solid var(--grid-strong)",
+                          background: materialMode === opt.id ? "rgba(31,58,58,0.04)" : "transparent"
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="materialMode"
+                          checked={materialMode === opt.id}
+                          onChange={() => setMaterialMode(opt.id)}
+                          style={{ marginTop: 3 }}
+                        />
+                        <span>
+                          <span className="body-sm" style={{ fontWeight: 600 }}>
+                            {t(opt.labelKey)}
+                          </span>
+                          <span
+                            className="body-sm"
+                            style={{ display: "block", color: "var(--ink-soft)", marginTop: 2 }}
+                          >
+                            {t(opt.hintKey)}
+                          </span>
                         </span>
-                        <span className="body-sm" style={{ display: "block", color: "var(--ink-soft)", marginTop: 2 }}>
-                          {t(opt.hintKey)}
-                        </span>
-                      </span>
-                    </label>
+                      </label>
                     );
                   })}
                 </div>

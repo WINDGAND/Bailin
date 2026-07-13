@@ -435,6 +435,8 @@ export interface CreateCharacterInput {
   track: "utility" | "companion";
   userHint?: string;
   userMaterial?: string;
+  /** 可选：出处 / 身份消歧义锚点（同名时锁定正确实体）。 */
+  sourceContext?: string;
   /**
    * v0.2：快速模式也支持参考图。若视觉模型（默认豆包 Seed 2.0 Lite）可用且用户上传了图，
    * 就走 vision 路径；否则降级到纯文本。

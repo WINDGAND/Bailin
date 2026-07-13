@@ -11,6 +11,8 @@ export interface AppearanceResearchInput {
   track: "utility" | "companion";
   userHint?: string;
   userMaterial?: string;
+  /** 用户显式填写的出处 / 身份锚点（同名消歧）。 */
+  sourceContext?: string;
   /** 用户提供的参考图 URL 或 data URI（深度版第一步会优先采用）。 */
   userImageRef?: string;
 }
@@ -118,7 +120,15 @@ export function buildAppearanceResearchPrompt(input: AppearanceResearchInput): {
   system: string;
   user: string;
 } {
-  const { characterName, sourceName, sourceType, track, userHint, userMaterial } = input;
+  const {
+    characterName,
+    sourceName,
+    sourceType,
+    track,
+    userHint,
+    userMaterial,
+    sourceContext
+  } = input;
 
   const system = [
     "你是 百灵 Bailin 的外貌调研员（appearance researcher）。",
@@ -142,6 +152,11 @@ export function buildAppearanceResearchPrompt(input: AppearanceResearchInput): {
     `请为 "${characterName}"${sourceName ? `（${sourceName}）` : ""} 输出外貌调研 JSON。`,
     `来源类型：${sourceType}；产品定位：${track === "utility" ? "实用·思维顾问" : "情感·桌面陪伴"}。`
   ];
+  if (sourceContext && sourceContext.trim().length > 0) {
+    userLines.push(
+      `出处 / 身份锚点：${sourceContext.trim()}（必须锁定此实体的外貌，禁止换成同名其它对象）。`
+    );
+  }
   if (userHint && userHint.trim().length > 0) {
     userLines.push("");
     userLines.push("用户提供的外貌补充（权威性高于训练知识）：");
@@ -169,7 +184,7 @@ export function buildAppearanceImageSearchPrompt(input: AppearanceResearchInput)
   system: string;
   user: string;
 } {
-  const { characterName, sourceName, sourceType, userHint, userImageRef } = input;
+  const { characterName, sourceName, sourceType, userHint, userImageRef, sourceContext } = input;
 
   const system = [
     "你是 百灵 Bailin 深度外貌蒸馏第 1 步「视觉调研员」。",
@@ -194,6 +209,11 @@ export function buildAppearanceImageSearchPrompt(input: AppearanceResearchInput)
     `调研对象：「${characterName}」${sourceName ? `（${sourceName}）` : ""}`,
     `类型：${sourceType}`
   ];
+  if (sourceContext && sourceContext.trim().length > 0) {
+    userLines.push(
+      `出处 / 身份锚点：${sourceContext.trim()}（搜索与描述必须锁定此实体）。`
+    );
+  }
   if (userHint) {
     userLines.push("", "用户外貌补充（最高权威）：", userHint.trim());
   }
@@ -216,7 +236,7 @@ export function buildAppearanceImageSearchPrompt(input: AppearanceResearchInput)
 export function buildAppearanceSpecPrompt(
   input: AppearanceResearchInput & { visualDescription: string }
 ): { system: string; user: string } {
-  const { characterName, sourceType, track, visualDescription, userHint } = input;
+  const { characterName, sourceType, track, visualDescription, userHint, sourceContext } = input;
 
   const system = [
     "你是 百灵 Bailin 深度外貌蒸馏第 2 步「结构化器」。",
@@ -239,12 +259,17 @@ export function buildAppearanceSpecPrompt(
   const userLines: string[] = [
     `角色：「${characterName}」`,
     `类型：${sourceType}；定位：${track === "utility" ? "实用·思维顾问" : "情感·桌面陪伴"}`,
-    "",
+    ""
+  ];
+  if (sourceContext && sourceContext.trim().length > 0) {
+    userLines.push(`出处 / 身份锚点：${sourceContext.trim()}`, "");
+  }
+  userLines.push(
     "## 第 1 步「公开形象描述」",
     "",
     visualDescription.slice(0, 4000),
     ""
-  ];
+  );
   if (userHint) {
     userLines.push("## 用户外貌补充（最高权威）", "", userHint.trim(), "");
   }
@@ -268,9 +293,11 @@ export function buildAppearanceVisionExtractionPrompt(input: {
   sourceName?: string;
   sourceType: "public-figure" | "fictional" | "original";
   userHint?: string;
+  sourceContext?: string;
   referenceImageCount: number;
 }): { system: string; user: string } {
-  const { characterName, sourceName, sourceType, userHint, referenceImageCount } = input;
+  const { characterName, sourceName, sourceType, userHint, sourceContext, referenceImageCount } =
+    input;
 
   const system = [
     "你是 百灵 Bailin 「视觉读图员」。你现在能直接看到用户随消息附上的角色参考图。",
@@ -306,6 +333,9 @@ export function buildAppearanceVisionExtractionPrompt(input: {
     `类型：${sourceType}`,
     `参考图数量：${referenceImageCount}（按顺序标为 1, 2, 3 …，primary 排第一）`
   ];
+  if (sourceContext && sourceContext.trim().length > 0) {
+    userLines.push(`出处 / 身份锚点：${sourceContext.trim()}`);
+  }
   if (userHint) {
     userLines.push("", "用户外貌补充（最高权威，与图片冲突时以用户为准）：", userHint.trim());
   }
