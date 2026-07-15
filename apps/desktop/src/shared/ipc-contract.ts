@@ -25,8 +25,13 @@ export interface ReleaseSummary {
 }
 
 export type ListReleasesResult =
-  | { ok: true; releases: ReleaseSummary[] }
+  | { ok: true; releases: ReleaseSummary[]; fromCache?: boolean }
   | { ok: false; error: string };
+
+export interface ListReleasesOptions {
+  /** true：忽略本地新鲜期，强制向 GitHub 校验 latest（必要时再拉列表）。 */
+  forceRefresh?: boolean;
+}
 
 /** GitHub Release 检查结果——主进程 checkForUpdates() 的返回值，也是 EventUpdateAvailable 侧栏高亮事件的 payload。 */
 export interface UpdateCheckResult {
@@ -71,7 +76,7 @@ export interface BailinApi {
      * 如果发现新版本，同样会广播 EventUpdateAvailable 用于侧栏高亮，不再用于横幅。
      */
     checkForUpdates(): Promise<UpdateCheckResult>;
-    listReleases(): Promise<ListReleasesResult>;
+    listReleases(options?: ListReleasesOptions): Promise<ListReleasesResult>;
     /** 用户点"忽略此版本"：记住这个版本号，后台自动检查不会再为它弹提醒。 */
     dismissUpdate(latestVersion: string): Promise<void>;
   };

@@ -20,7 +20,7 @@ import type { ChatStreamChunk, ChatVisibilityEvent } from "../../shared/ipc-cont
 
 interface BailinWindow {
   bailin: {
-    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void>; openExternal(url: string): Promise<{ ok: boolean }>; getVersion(): Promise<string>; checkForUpdates(): Promise<import("../../shared/ipc-contract.js").UpdateCheckResult>; listReleases(): Promise<ListReleasesResult>; dismissUpdate(latestVersion: string): Promise<void> };
+    app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void>; openExternal(url: string): Promise<{ ok: boolean }>; getVersion(): Promise<string>; checkForUpdates(): Promise<import("../../shared/ipc-contract.js").UpdateCheckResult>; listReleases(options?: import("../../shared/ipc-contract.js").ListReleasesOptions): Promise<ListReleasesResult>; dismissUpdate(latestVersion: string): Promise<void> };
     llm: {
       setProvider(input: unknown): Promise<{ ok: boolean; error?: string }>;
       getProvider(): Promise<unknown>;
@@ -202,7 +202,7 @@ function makeBailinStub(): BailinWindow["bailin"] {
       },
       getVersion: async () => "0.0.0-stub",
       checkForUpdates: async () => ({ hasUpdate: false, error: "stub 环境" }),
-      listReleases: async () => ({ ok: false, error: "stub 环境" }),
+      listReleases: async (_options?) => ({ ok: false, error: "stub 环境" }),
       dismissUpdate: async () => {}
     },
     llm: {

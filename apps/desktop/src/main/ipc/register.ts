@@ -30,7 +30,11 @@ import {
 import { findStarterById, STARTER_META } from "../../shared/starters.js";
 import { sanitizeApiKey } from "../../shared/sanitize-api-key.js";
 import { checkForUpdates } from "../update/update-checker.js";
-import { fetchReleaseSummaries } from "../update/release-list.js";
+import {
+  fetchReleaseSummaries,
+  type PersistedReleaseCache,
+  type ReleaseListStore
+} from "../update/release-list.js";
 import { isVersionDismissed } from "../../shared/version-compare.js";
 import {
   DistillationJobConfigSchema,
@@ -85,6 +89,7 @@ const SETTING_LLM_API_KEY = "llm_api_key_enc";
 export const SETTING_IMAGE_PROVIDER = "image_provider_json";
 export const SETTING_IMAGE_API_KEY = "image_api_key_enc";
 export const SETTING_UPDATE_DISMISSED_TAG = "update.dismissed_tag";
+export const SETTING_RELEASES_CACHE = "update.releases_cache_json";
 
 interface ApprovalGate {
   promise: Promise<DistillationApprovalResult>;
@@ -166,7 +171,34 @@ export function registerIpc(deps: IpcDeps): void {
     }
     return { ...result, dismissed };
   });
-  ipcMain.handle(IPC.AppListReleases, () => fetchReleaseSummaries());
+  const releaseListStore: ReleaseListStore = {
+    load(): PersistedReleaseCache | null {
+      const raw = vault.getSetting(SETTING_RELEASES_CACHE);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw) as PersistedReleaseCache;
+        if (
+          typeof parsed?.latestTag !== "string" ||
+          typeof parsed?.fetchedAt !== "number" ||
+          !Array.isArray(parsed?.releases)
+        ) {
+          return null;
+        }
+        return parsed;
+      } catch {
+        return null;
+      }
+    },
+    save(data: PersistedReleaseCache): void {
+      vault.setSetting(SETTING_RELEASES_CACHE, JSON.stringify(data));
+    }
+  };
+  ipcMain.handle(IPC.AppListReleases, (_evt, options?: { forceRefresh?: boolean }) =>
+    fetchReleaseSummaries({
+      store: releaseListStore,
+      forceRefresh: options?.forceRefresh === true
+    })
+  );
   ipcMain.handle(IPC.AppDismissUpdate, (_evt, latestVersion: unknown) => {
     if (typeof latestVersion === "string" && latestVersion) {
       vault.setSetting(SETTING_UPDATE_DISMISSED_TAG, latestVersion);

@@ -26,26 +26,29 @@ export function ChangelogPanel(): JSX.Element {
   const [releases, setReleases] = useState<ReleaseSummary[]>([]);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setState("loading");
-    setError("");
-    try {
-      const result = await bailin.app.listReleases();
-      if (result.ok) {
-        setReleases(result.releases);
-        setState("ready");
-      } else {
-        setError(result.error);
+  const load = useCallback(
+    async (forceRefresh = false) => {
+      setState("loading");
+      setError("");
+      try {
+        const result = await bailin.app.listReleases({ forceRefresh });
+        if (result.ok) {
+          setReleases(result.releases);
+          setState("ready");
+        } else {
+          setError(result.error);
+          setState("error");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
         setState("error");
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setState("error");
-    }
-  }, [bailin]);
+    },
+    [bailin]
+  );
 
   useEffect(() => {
-    void load();
+    void load(false);
   }, [load]);
 
   const dayGroups = useMemo(() => groupReleasesByDay(releases, locale), [releases, locale]);
@@ -70,7 +73,7 @@ export function ChangelogPanel(): JSX.Element {
       {state === "error" ? (
         <div className="changelog__state changelog__state--error" role="alert">
           <span>{t("update.changelogError")}</span>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void load()}>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void load(true)}>
             {t("update.changelogRetry")}
           </button>
         </div>
