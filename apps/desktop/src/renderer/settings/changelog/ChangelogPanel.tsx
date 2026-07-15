@@ -14,8 +14,7 @@ type LoadState = "loading" | "error" | "ready";
  *
  * 「忽略此版本」只出现在同时满足两个条件的那一条上——比当前版本新、且正是
  * updateInfo.latestVersion（后台/手动检查记下来的那次结果）——其它历史条目
- * 只给一个「查看 Release」外链，不重复放忽略按钮（忽略语义是针对"最新一次
- * 检测到的新版本"，不是任意历史 Release）。
+ * 只给一个「查看 Release」外链，不重复放忽略按钮。
  */
 export function ChangelogPanel(): JSX.Element {
   const t = useT();
@@ -57,11 +56,11 @@ export function ChangelogPanel(): JSX.Element {
 
   return (
     <div className="changelog">
-      <div className="changelog__header">
-        <div className="eyebrow changelog__eyebrow">{t("update.changelogEyebrow")}</div>
-        <div className="display display--section changelog__title">{t("update.changelogTitle")}</div>
-        <p className="body-md changelog__subtitle">{t("update.changelogSubtitle")}</p>
-      </div>
+      <header className="changelog__header">
+        <div className="eyebrow">{t("update.changelogEyebrow")}</div>
+        <div className="display display--page">{t("update.changelogTitle")}</div>
+        <p className="apple-page-subtitle">{t("update.changelogSubtitle")}</p>
+      </header>
 
       {state === "loading" ? (
         <div className="changelog__state" role="status" aria-live="polite">
@@ -88,25 +87,32 @@ export function ChangelogPanel(): JSX.Element {
       {state === "ready" && dayGroups.length > 0 ? (
         <div className="changelog__timeline">
           {dayGroups.map((day) => (
-            <div key={day.dayKey} className="changelog-day">
-              <div className="changelog-day__heading">{day.dayLabel}</div>
-              {day.items.map((item) => {
-                itemIndex += 1;
-                const isHighlighted =
-                  isNewerVersion(item.version, currentVersion) && updateInfo?.latestVersion === item.version;
-                return (
-                  <ChangelogItemRow
-                    key={item.tag}
-                    item={item}
-                    isHighlighted={isHighlighted}
-                    delayIndex={itemIndex}
-                    onView={() => void bailin.app.openExternal(item.url)}
-                    onDismiss={dismiss}
-                    t={t}
-                  />
-                );
-              })}
-            </div>
+            <section key={day.dayKey} className="changelog-day">
+              <div className="changelog-day__heading">
+                <span className="changelog-day__title">{day.dayTitle}</span>
+                <span className="changelog-day__weekday">{day.dayWeekday}</span>
+                <span className="changelog-day__rule" aria-hidden="true" />
+              </div>
+              <div className="changelog-day__entries">
+                {day.items.map((item) => {
+                  itemIndex += 1;
+                  const isHighlighted =
+                    isNewerVersion(item.version, currentVersion) &&
+                    updateInfo?.latestVersion === item.version;
+                  return (
+                    <ChangelogItemRow
+                      key={item.tag}
+                      item={item}
+                      isHighlighted={isHighlighted}
+                      delayIndex={itemIndex}
+                      onView={() => void bailin.app.openExternal(item.url)}
+                      onDismiss={dismiss}
+                      t={t}
+                    />
+                  );
+                })}
+              </div>
+            </section>
           ))}
         </div>
       ) : null}
@@ -130,18 +136,17 @@ function ChangelogItemRow({
   t: (key: string, params?: Record<string, string | number>) => string;
 }): JSX.Element {
   return (
-    <div
-      className="changelog-item fade-in-up"
+    <article
+      className={`changelog-item fade-in-up${isHighlighted ? " changelog-item--new" : ""}`}
       style={{ animationDelay: `${Math.min(delayIndex, 10) * 45}ms` }}
     >
       <div className="changelog-item__meta">
+        <span className="changelog-item__node" aria-hidden="true" />
         <span className="changelog-item__time">{item.timeLabel}</span>
-        {isHighlighted ? (
-          <span className="changelog-item__status">
-            <i className="changelog-item__dot" aria-hidden="true" />
-            {t("update.changelogStatusUpdate")}
-          </span>
-        ) : null}
+        <span className="changelog-item__status">
+          <i className="changelog-item__dot" aria-hidden="true" />
+          {t("update.changelogStatusUpdate")}
+        </span>
       </div>
       <div className="changelog-item__body">
         <div className="changelog-item__title">{item.title}</div>
@@ -167,6 +172,6 @@ function ChangelogItemRow({
           ) : null}
         </div>
       </div>
-    </div>
+    </article>
   );
 }

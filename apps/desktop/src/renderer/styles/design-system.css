@@ -4827,42 +4827,50 @@ body {
   right: 4px;
 }
 
-/* ---------- 更新日志时间线（侧栏「更新日志」页） ---------- */
+/* ---------- 更新日志时间线（侧栏「更新日志」页） ----------
+ * 方向：编辑部纸页时间线——页头与设置页同级；日期作报头；
+ * 左侧轨线 + 节点；条目落在暖纸面板上，新版本用品红边强调。
+ * -------------------------------------------------------- */
 
 .changelog {
   display: flex;
   flex-direction: column;
-  gap: 30px;
   width: 100%;
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
+  position: relative;
+}
+
+.changelog::before {
+  content: "";
+  position: absolute;
+  inset: -12px -20px auto;
+  height: 160px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 70% 90% at 12% 0%, color-mix(in srgb, var(--magenta) 12%, transparent), transparent 70%),
+    radial-gradient(ellipse 55% 80% at 88% 10%, color-mix(in srgb, var(--paper-warm) 80%, transparent), transparent 65%);
+  opacity: 0.9;
 }
 
 .changelog__header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  position: relative;
+  z-index: 1;
+  margin-bottom: 26px;
 }
 
-.changelog__eyebrow {
-  margin-bottom: 2px;
-}
-
-.changelog__title {
-  margin: 0;
-}
-
-.changelog__subtitle {
-  margin: 0;
+.changelog__header .apple-page-subtitle {
   max-width: 520px;
-  color: var(--ink-soft);
 }
 
 .changelog__state {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 36px 2px;
+  padding: 36px 4px;
   font-size: 13.5px;
   color: var(--ink-soft);
 }
@@ -4872,46 +4880,137 @@ body {
 }
 
 .changelog__timeline {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 36px;
 }
 
 .changelog-day__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.changelog-day__title {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 18px;
   letter-spacing: -0.02em;
   color: var(--ink);
-  padding-bottom: 12px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--grid-strong);
+  flex-shrink: 0;
+}
+
+.changelog-day__weekday {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  flex-shrink: 0;
+}
+
+.changelog-day__rule {
+  flex: 1;
+  height: 1px;
+  margin-left: 4px;
+  background: linear-gradient(90deg, var(--grid-strong), transparent 92%);
+  transform: translateY(-2px);
+}
+
+.changelog-day__entries {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.changelog-day__entries::before {
+  content: "";
+  position: absolute;
+  left: 86px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--magenta) 45%, var(--grid-strong)),
+    var(--grid) 42%,
+    transparent
+  );
+  pointer-events: none;
 }
 
 .changelog-item {
-  display: flex;
-  gap: 20px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--grid);
+  position: relative;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 4px 28px;
+  padding: 18px 20px 18px 14px;
+  background:
+    linear-gradient(165deg, color-mix(in srgb, var(--paper) 70%, transparent), transparent 48%),
+    var(--paper-warm);
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent),
+    0 10px 28px -22px color-mix(in srgb, var(--ink) 28%, transparent);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
-.changelog-item:last-child {
-  border-bottom: none;
+
+.changelog-item:hover {
+  border-color: color-mix(in srgb, var(--magenta) 28%, var(--hairline));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent),
+    0 14px 32px -20px color-mix(in srgb, var(--ink) 32%, transparent);
+  transform: translateY(-1px);
+}
+
+.changelog-item--new {
+  border-color: color-mix(in srgb, var(--magenta) 42%, var(--hairline));
+  box-shadow:
+    inset 3px 0 0 var(--magenta),
+    inset 0 1px 0 color-mix(in srgb, #fff 50%, transparent),
+    0 12px 30px -18px color-mix(in srgb, var(--magenta) 35%, transparent);
 }
 
 .changelog-item__meta {
-  flex: 0 0 96px;
-  width: 96px;
-  min-width: 88px;
-  max-width: 104px;
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding-top: 2px;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 3px;
+}
+
+.changelog-item__node {
+  position: absolute;
+  right: -20px;
+  top: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid color-mix(in srgb, var(--magenta) 70%, var(--ink-faint));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--paper-warm) 88%, transparent);
+}
+
+.changelog-item--new .changelog-item__node {
+  border-color: var(--magenta);
+  background: var(--magenta);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--magenta) 18%, transparent);
 }
 
 .changelog-item__time {
   font-family: var(--font-mono);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
 }
 
@@ -4935,28 +5034,31 @@ body {
   flex-shrink: 0;
 }
 
+.changelog-item--new .changelog-item__status {
+  color: var(--magenta-deep, var(--magenta));
+}
+
+.changelog-item--new .changelog-item__dot {
+  background: var(--magenta);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--magenta) 18%, transparent);
+}
+
 .changelog-item__body {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .changelog-item__title {
   font-family: var(--font-display);
-  font-size: 16.5px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--ink);
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
-/*
- * Release 正文层级：标题用深色加粗放大，正文保持柔和灰字。
- * 覆盖全局 .chat-md__h3 { color: ink-soft; font-size: 12.5px }——
- * GitHub Release 常用 ### 分节，原先几乎和列表正文同色同号，完全扫不动。
- */
 .changelog-item__notes {
   font-size: 13.5px;
   line-height: 1.65;
@@ -5016,13 +5118,33 @@ body {
   font-family: var(--font-mono);
   font-size: 0.92em;
   color: var(--ink);
-  background: var(--paper-warm, rgba(0, 0, 0, 0.04));
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
   padding: 0.08em 0.35em;
   border-radius: 4px;
 }
 
 .changelog-item__actions {
-  margin-top: 8px;
+  margin-top: 4px;
+}
+
+[data-theme="dark"] .changelog::before {
+  opacity: 0.55;
+}
+
+[data-theme="dark"] .changelog-item {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 240, 0.05),
+    0 12px 28px -22px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .changelog-item:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 240, 0.06),
+    0 16px 34px -20px rgba(0, 0, 0, 0.62);
+}
+
+[data-theme="dark"] .changelog-item__node {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--paper) 90%, transparent);
 }
 
 /* =============================================================

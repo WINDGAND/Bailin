@@ -3,8 +3,12 @@ import type { ReleaseSummary } from "../../../shared/ipc-contract.js";
 export interface ReleaseDayGroup {
   /** YYYY-MM-DD in local timezone */
   dayKey: string;
-  /** preformatted heading for UI */
+  /** preformatted heading for UI (date + weekday combined, kept for callers) */
   dayLabel: string;
+  /** Date portion, e.g. 2026年7月15日 */
+  dayTitle: string;
+  /** Weekday portion, e.g. 周三 / Friday */
+  dayWeekday: string;
   items: Array<ReleaseSummary & { timeLabel: string }>;
 }
 
@@ -21,24 +25,36 @@ function formatDayKey(date: Date, timeZone: string): string {
   }).format(date);
 }
 
-function formatDayLabel(date: Date, locale: "zh" | "en", timeZone: string): string {
+function formatDayParts(
+  date: Date,
+  locale: "zh" | "en",
+  timeZone: string
+): { dayTitle: string; dayWeekday: string; dayLabel: string } {
   if (locale === "zh") {
-    return new Intl.DateTimeFormat("zh-CN", {
+    const dayTitle = new Intl.DateTimeFormat("zh-CN", {
       timeZone,
       year: "numeric",
       month: "long",
-      day: "numeric",
+      day: "numeric"
+    }).format(date);
+    const dayWeekday = new Intl.DateTimeFormat("zh-CN", {
+      timeZone,
       weekday: "short"
     }).format(date);
+    return { dayTitle, dayWeekday, dayLabel: `${dayTitle}${dayWeekday}` };
   }
 
-  return new Intl.DateTimeFormat("en-US", {
+  const dayTitle = new Intl.DateTimeFormat("en-US", {
     timeZone,
-    weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric"
   }).format(date);
+  const dayWeekday = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long"
+  }).format(date);
+  return { dayTitle, dayWeekday, dayLabel: `${dayWeekday}, ${dayTitle}` };
 }
 
 function formatTimeLabel(date: Date, locale: "zh" | "en", timeZone: string): string {
@@ -73,9 +89,12 @@ export function groupReleasesByDay(
       continue;
     }
 
+    const parts = formatDayParts(publishedAt, locale, tz);
     groups.push({
       dayKey,
-      dayLabel: formatDayLabel(publishedAt, locale, tz),
+      dayLabel: parts.dayLabel,
+      dayTitle: parts.dayTitle,
+      dayWeekday: parts.dayWeekday,
       items: [item]
     });
   }
