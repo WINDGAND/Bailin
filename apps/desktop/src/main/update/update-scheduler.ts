@@ -1,5 +1,5 @@
 import type { UpdateCheckResult } from "../../shared/ipc-contract.js";
-import { isVersionDismissed } from "./version-compare.js";
+import { isVersionDismissed } from "../../shared/version-compare.js";
 
 export interface UpdateSchedulerDeps {
   getCurrentVersion: () => string;

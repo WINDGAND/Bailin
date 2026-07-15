@@ -83,7 +83,8 @@ export const en: TranslationTree = {
     changelogEmpty: "No releases yet",
     changelogError: "Couldn't load releases. Check your network and try again.",
     changelogRetry: "Retry",
-    changelogStatusUpdate: "Update"
+    changelogStatusUpdate: "Update",
+    changelogViewRelease: "View release"
   },
   language: {
     zhLabel: "简体中文",

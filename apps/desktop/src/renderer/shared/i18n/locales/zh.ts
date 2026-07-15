@@ -81,7 +81,8 @@ export const zh = {
     changelogEmpty: "暂无发布记录",
     changelogError: "加载发布记录失败，请检查网络后重试",
     changelogRetry: "重试",
-    changelogStatusUpdate: "更新"
+    changelogStatusUpdate: "更新",
+    changelogViewRelease: "查看 Release"
   },
   language: {
     zhLabel: "简体中文",

@@ -31,7 +31,7 @@ import { findStarterById, STARTER_META } from "../../shared/starters.js";
 import { sanitizeApiKey } from "../../shared/sanitize-api-key.js";
 import { checkForUpdates } from "../update/update-checker.js";
 import { fetchReleaseSummaries } from "../update/release-list.js";
-import { isVersionDismissed } from "../update/version-compare.js";
+import { isVersionDismissed } from "../../shared/version-compare.js";
 import {
   DistillationJobConfigSchema,
   summarizeAppearance,
