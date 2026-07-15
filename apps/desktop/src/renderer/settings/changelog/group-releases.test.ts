@@ -30,6 +30,8 @@ describe("groupReleasesByDay", () => {
     assert.equal(groups[0]?.dayKey, "2026-07-13");
     assert.equal(groups[0]?.items.length, 2);
     assert.match(groups[0]?.dayLabel ?? "", /2026/);
+    assert.match(groups[0]?.dayTitle ?? "", /2026/);
+    assert.ok((groups[0]?.dayWeekday ?? "").length > 0);
   });
 
   it("formats English midnight as 00:00 (h23, not 24:00)", () => {
