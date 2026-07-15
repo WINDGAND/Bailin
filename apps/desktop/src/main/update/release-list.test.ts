@@ -32,7 +32,7 @@ describe("fetchReleaseSummaries", () => {
   it("maps published non-draft non-prerelease releases on cold start", async () => {
     const store = memoryStore();
     const urls: string[] = [];
-    const fetchImpl = async (input: RequestInfo | URL) => {
+    const fetchImpl = async (input: string | URL) => {
       const url = String(input);
       urls.push(url);
       if (url.includes("/releases/latest")) {
@@ -139,7 +139,7 @@ describe("fetchReleaseSummaries", () => {
         }
       ]
     });
-    const fetchImpl = async (input: RequestInfo | URL) => {
+    const fetchImpl = async (input: string | URL) => {
       const url = String(input);
       urls.push(url);
       if (url.includes("/releases/latest")) {
@@ -176,7 +176,7 @@ describe("fetchReleaseSummaries", () => {
         }
       ]
     });
-    const fetchImpl = async (input: RequestInfo | URL) => {
+    const fetchImpl = async (input: string | URL) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
         return jsonResponse({ tag_name: "v0.0.6" });
@@ -248,7 +248,7 @@ describe("fetchReleaseSummaries", () => {
 
   it("falls back title to tag when name empty", async () => {
     const store = memoryStore();
-    const fetchImpl = async (input: RequestInfo | URL) => {
+    const fetchImpl = async (input: string | URL) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
         return jsonResponse({ tag_name: "v0.0.3" });
