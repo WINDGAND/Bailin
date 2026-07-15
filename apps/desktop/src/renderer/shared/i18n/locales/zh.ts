@@ -5,7 +5,8 @@ export const zh = {
     memory: "用户画像",
     desktop: "桌宠与陪伴",
     key: "模型与 API Key",
-    settings: "设置"
+    settings: "设置",
+    changelog: "更新日志"
   },
   sidebar: {
     collapse: "收起侧边栏",
@@ -72,7 +73,15 @@ export const zh = {
     viewRelease: "查看/下载新版本",
     dismiss: "忽略此版本",
     viewChangelog: "展开完整更新说明",
-    hideChangelog: "收起更新说明"
+    hideChangelog: "收起更新说明",
+    changelogEyebrow: "CHANGELOG",
+    changelogTitle: "更新日志",
+    changelogSubtitle: "最近发生了什么 — 新功能、调整、下线，都写在这里。",
+    changelogLoading: "加载中…",
+    changelogEmpty: "暂无发布记录",
+    changelogError: "加载发布记录失败，请检查网络后重试",
+    changelogRetry: "重试",
+    changelogStatusUpdate: "更新"
   },
   language: {
     zhLabel: "简体中文",
