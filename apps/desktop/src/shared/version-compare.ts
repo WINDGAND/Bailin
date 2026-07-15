@@ -2,6 +2,12 @@
  * 极简版本号比较：项目里没有 electron-updater，也没有 semver 依赖，版本号
  * 都是简单的 `x.y.z` 形式（可能带前导 "v"），没必要为此引入一个完整的
  * semver 解析库——按 "." 分段转数字逐段比较就够用了。
+ *
+ * 放在 shared/ 而不是 main/update/：renderer 侧的 ChangelogPanel 需要对每条
+ * Release 做同样的"是否比当前版本新"判断（决定是否显示「忽略此版本」），
+ * 但 renderer 不能 import main 目录下的模块——所以这份纯函数挪到两侧都能
+ * 引用的 shared/，main（update-checker / update-scheduler / register）改为
+ * 从这里导入。
  */
 
 function parseVersion(raw: string): number[] {

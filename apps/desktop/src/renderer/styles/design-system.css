@@ -4802,7 +4802,7 @@ body {
   border-top: 1px solid var(--grid);
 }
 
-/* ---------- 侧栏"设置" tab 小红点（新版本提醒） ---------- */
+/* ---------- 侧栏"更新日志" tab 小红点（新版本提醒） ---------- */
 
 .settings-nav__item {
   /* 徽标需要相对这个按钮定位；两处既有的 .settings-nav__item 定义都没设
@@ -4827,71 +4827,133 @@ body {
   right: 4px;
 }
 
-/* ---------- 新版本提醒横幅 ---------- */
+/* ---------- 更新日志时间线（侧栏「更新日志」页） ---------- */
 
-.update-announce {
+.changelog {
   display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--magenta-tint) 0%, var(--paper) 62%);
-  border: 1px solid var(--magenta-soft);
-  box-shadow: var(--shadow-card);
+  flex-direction: column;
+  gap: 30px;
+  max-width: 680px;
 }
 
-.update-announce__icon {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--paper);
-  color: var(--magenta);
-  border: 1px solid var(--magenta-soft);
+.changelog__header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.update-announce__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.update-announce__eyebrow {
-  color: var(--magenta);
+.changelog__eyebrow {
   margin-bottom: 2px;
 }
 
-.update-announce__title {
-  margin: 0 0 10px;
+.changelog__title {
+  margin: 0;
 }
 
-.update-announce__notes {
+.changelog__subtitle {
+  margin: 0;
+  max-width: 480px;
+  color: var(--ink-soft);
+}
+
+.changelog__state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 2px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.changelog__state--error {
+  color: var(--magenta-deep);
+}
+
+.changelog__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.changelog-day__heading {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--grid-strong);
+}
+
+.changelog-item {
+  display: flex;
+  gap: 20px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--grid);
+}
+.changelog-item:last-child {
+  border-bottom: none;
+}
+
+.changelog-item__meta {
+  flex: 0 0 96px;
+  width: 96px;
+  min-width: 88px;
+  max-width: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 2px;
+}
+
+.changelog-item__time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.changelog-item__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--emerald);
+}
+
+.changelog-item__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 0 3px var(--emerald-tint);
+  flex-shrink: 0;
+}
+
+.changelog-item__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.changelog-item__title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.changelog-item__notes {
   font-size: 13px;
   color: var(--ink-soft);
-  max-width: 560px;
 }
 
-.update-announce__toggle {
-  margin-top: 2px;
-}
-
-.update-announce__actions {
-  margin-top: 16px;
-}
-
-/* 「关于」小节里内嵌的迷你版本——比横幅更收敛，不需要图标/渐变。 */
-.update-announce--inline {
-  background: var(--magenta-tint);
-  padding: 12px 14px;
-  gap: 0;
-  box-shadow: none;
-}
-
-.update-announce--inline .update-announce__title {
-  margin-bottom: 10px;
-  font-size: 14px;
+.changelog-item__actions {
+  margin-top: 4px;
 }
 
 /* =============================================================

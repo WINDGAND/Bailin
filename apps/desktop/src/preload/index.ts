@@ -13,6 +13,8 @@ const api = {
     openExternal: (url: string) => ipcRenderer.invoke(IPC.AppOpenExternal, url),
     getVersion: () => ipcRenderer.invoke(IPC.AppGetVersion),
     checkForUpdates: () => ipcRenderer.invoke(IPC.AppCheckForUpdates),
+    listReleases: (options?: { forceRefresh?: boolean }) =>
+      ipcRenderer.invoke(IPC.AppListReleases, options),
     dismissUpdate: (latestVersion: string) => ipcRenderer.invoke(IPC.AppDismissUpdate, latestVersion)
   },
   llm: {

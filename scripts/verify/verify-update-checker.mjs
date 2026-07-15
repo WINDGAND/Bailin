@@ -20,7 +20,7 @@ const require = createRequire(import.meta.url);
 
 const versionComparePath = resolve(
   repoRoot,
-  "apps/desktop/dist/main/main/update/version-compare.js"
+  "apps/desktop/dist/main/shared/version-compare.js"
 );
 const updateCheckerPath = resolve(
   repoRoot,

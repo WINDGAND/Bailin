@@ -1,5 +1,5 @@
 import type { UpdateCheckResult } from "../../shared/ipc-contract.js";
-import { isNewerVersion } from "./version-compare.js";
+import { isNewerVersion } from "../../shared/version-compare.js";
 
 /**
  * Bailin 在 GitHub 上的仓库——仅用于拼 Release API 地址，硬编码是有意的：

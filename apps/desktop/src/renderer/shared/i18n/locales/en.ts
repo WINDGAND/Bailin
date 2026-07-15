@@ -7,7 +7,8 @@ export const en: TranslationTree = {
     memory: "User Profile",
     desktop: "Desktop Companion",
     key: "Model & API Key",
-    settings: "Settings"
+    settings: "Settings",
+    changelog: "Changelog"
   },
   sidebar: {
     collapse: "Collapse sidebar",
@@ -62,7 +63,6 @@ export const en: TranslationTree = {
     shortcutsSectionNote: "Press ? anytime, or use the button below."
   },
   update: {
-    eyebrow: "New Release",
     aboutSectionLabel: "About",
     aboutSectionHint: "Version info and update checks.",
     currentVersionLabel: "Current version",
@@ -73,8 +73,15 @@ export const en: TranslationTree = {
     bannerTitle: "New version v{{version}} available",
     viewRelease: "View / download the update",
     dismiss: "Dismiss this version",
-    viewChangelog: "Show full changelog",
-    hideChangelog: "Hide changelog"
+    changelogEyebrow: "CHANGELOG",
+    changelogTitle: "Changelog",
+    changelogSubtitle: "What shipped recently — features, tweaks, and retirements.",
+    changelogLoading: "Loading…",
+    changelogEmpty: "No releases yet",
+    changelogError: "Couldn't load releases. Check your network and try again.",
+    changelogRetry: "Retry",
+    changelogStatusUpdate: "Update",
+    changelogViewRelease: "View release"
   },
   language: {
     zhLabel: "简体中文",
