@@ -240,7 +240,9 @@ export function SettingsApp(): JSX.Element {
                 <div className="settings-brand">
                   <BrandLogo size={32} className="settings-brand__logo" alt="Bailin" />
                   <div className="settings-brand__copy" aria-hidden={sidebarCollapsed}>
-                    <div className="eyebrow">{appVersion ? `Bailin · v${appVersion}` : "Bailin"}</div>
+                    <div className="eyebrow settings-brand__version">
+                      {appVersion ? `v${appVersion}` : "Bailin"}
+                    </div>
                     <div className="display display--section settings-brand__title">
                       Bailin
                     </div>
