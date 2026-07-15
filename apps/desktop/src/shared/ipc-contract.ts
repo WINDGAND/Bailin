@@ -15,7 +15,20 @@ import type {
 export type AppLocale = "zh" | "en";
 export type ThemePreference = "light" | "dark" | "system";
 
-/** GitHub Release 检查结果——主进程 checkForUpdates() 的返回值，也是 EventUpdateAvailable 推送的 payload。 */
+export interface ReleaseSummary {
+  version: string;
+  tag: string;
+  title: string;
+  publishedAt: string;
+  url: string;
+  notesMarkdown: string;
+}
+
+export type ListReleasesResult =
+  | { ok: true; releases: ReleaseSummary[] }
+  | { ok: false; error: string };
+
+/** GitHub Release 检查结果——主进程 checkForUpdates() 的返回值，也是 EventUpdateAvailable 侧栏高亮事件的 payload。 */
 export interface UpdateCheckResult {
   hasUpdate: boolean;
   /** 不带 "v" 前缀的纯版本号，如 "0.0.4"。 */
@@ -55,9 +68,10 @@ export interface BailinApi {
     /**
      * 手动触发一次 GitHub Release 检查（设置页"检查更新"按钮用）。
      * 与后台定时检查不同：不管这个版本是否被用户忽略过，都返回真实结果；
-     * 如果发现新版本，同样会广播 EventUpdateAvailable 让横幅出现。
+     * 如果发现新版本，同样会广播 EventUpdateAvailable 用于侧栏高亮，不再用于横幅。
      */
     checkForUpdates(): Promise<UpdateCheckResult>;
+    listReleases(): Promise<ListReleasesResult>;
     /** 用户点"忽略此版本"：记住这个版本号，后台自动检查不会再为它弹提醒。 */
     dismissUpdate(latestVersion: string): Promise<void>;
   };
@@ -236,7 +250,7 @@ export interface BailinApi {
     themeChanged(handler: (theme: ThemePreference) => void): () => void;
     profileUpdated(handler: (evt: ProfileUpdatedEvent) => void): () => void;
     navigateSettings(handler: (evt: NavigateSettingsEvent) => void): () => void;
-    /** 主进程查到新版本（且未被忽略）时推送；手动点「检查更新」发现新版本也会走这里。 */
+    /** 主进程查到新版本（且未被忽略）时推送，用于侧栏高亮，不再用于横幅。 */
     updateAvailable(handler: (result: UpdateCheckResult) => void): () => void;
   };
 }
@@ -247,7 +261,14 @@ export interface ProactiveBubblePlacementEvent {
   placement: ProactiveBubblePlacement;
 }
 
-export type SettingsTab = "library" | "create" | "memory" | "desktop" | "key" | "settings";
+export type SettingsTab =
+  | "library"
+  | "create"
+  | "memory"
+  | "desktop"
+  | "key"
+  | "settings"
+  | "changelog";
 
 export interface NavigateSettingsEvent {
   tab: SettingsTab;
@@ -666,6 +687,7 @@ export const IPC = {
   AppOpenExternal: "bailin.app.openExternal",
   AppGetVersion: "bailin.app.getVersion",
   AppCheckForUpdates: "bailin.app.checkForUpdates",
+  AppListReleases: "bailin.app.listReleases",
   AppDismissUpdate: "bailin.app.dismissUpdate",
 
   LlmSetProvider: "bailin.llm.setProvider",
