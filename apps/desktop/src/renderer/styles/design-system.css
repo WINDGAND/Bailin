@@ -4833,7 +4833,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 30px;
-  max-width: 680px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
 }
 
 .changelog__header {
@@ -4852,7 +4854,7 @@ body {
 
 .changelog__subtitle {
   margin: 0;
-  max-width: 480px;
+  max-width: 520px;
   color: var(--ink-soft);
 }
 
@@ -4878,11 +4880,11 @@ body {
 .changelog-day__heading {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.01em;
+  font-size: 18px;
+  letter-spacing: -0.02em;
   color: var(--ink);
-  padding-bottom: 10px;
-  margin-bottom: 4px;
+  padding-bottom: 12px;
+  margin-bottom: 6px;
   border-bottom: 1px solid var(--grid-strong);
 }
 
@@ -4942,18 +4944,85 @@ body {
 }
 
 .changelog-item__title {
-  font-size: 14.5px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
   color: var(--ink);
+  line-height: 1.35;
 }
 
+/*
+ * Release 正文层级：标题用深色加粗放大，正文保持柔和灰字。
+ * 覆盖全局 .chat-md__h3 { color: ink-soft; font-size: 12.5px }——
+ * GitHub Release 常用 ### 分节，原先几乎和列表正文同色同号，完全扫不动。
+ */
 .changelog-item__notes {
-  font-size: 13px;
+  font-size: 13.5px;
+  line-height: 1.65;
   color: var(--ink-soft);
 }
 
-.changelog-item__actions {
+.changelog-item__notes .chat-md__h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  line-height: 1.35;
+  margin: 18px 0 8px;
+}
+
+.changelog-item__notes .chat-md__h:first-child {
   margin-top: 4px;
+}
+
+.changelog-item__notes .chat-md__h1 {
+  font-size: 17px;
+}
+
+.changelog-item__notes .chat-md__h2 {
+  font-size: 15.5px;
+}
+
+.changelog-item__notes .chat-md__h3 {
+  font-size: 14.5px;
+  color: var(--ink);
+}
+
+.changelog-item__notes .chat-md__p,
+.changelog-item__notes .chat-md__ul,
+.changelog-item__notes .chat-md__ol {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.changelog-item__notes .chat-md__p {
+  margin: 0 0 10px;
+}
+
+.changelog-item__notes .chat-md__ul,
+.changelog-item__notes .chat-md__ol {
+  margin: 0 0 10px;
+  padding-left: 1.15em;
+}
+
+.changelog-item__notes strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.changelog-item__notes code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--ink);
+  background: var(--paper-warm, rgba(0, 0, 0, 0.04));
+  padding: 0.08em 0.35em;
+  border-radius: 4px;
+}
+
+.changelog-item__actions {
+  margin-top: 8px;
 }
 
 /* =============================================================
