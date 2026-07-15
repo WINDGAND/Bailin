@@ -16,5 +16,6 @@
       "@bailin/sprite-runtime": ["../../packages/sprite-runtime/dist/index.d.ts"]
     }
   },
-  "include": ["src/main/**/*", "src/shared/**/*"]
+  "include": ["src/main/**/*", "src/shared/**/*"],
+  "exclude": ["src/**/*.test.ts"]
 }
