@@ -20,7 +20,7 @@ interface UpdateContextValue {
   checking: boolean;
   /** 设置页"检查更新"按钮用：总是给出真实结果 + toast 反馈，不受忽略状态影响。 */
   checkNow: () => Promise<void>;
-  /** 横幅"忽略此版本"用：记住这个版本号，横幅消失。 */
+  /** 侧栏高亮 / Changelog 忽略此版本用：记住这个版本号，侧栏红点与 Changelog 高亮一并消失。 */
   dismiss: () => void;
 }
 
@@ -49,10 +49,10 @@ export function UpdateProvider({ children }: { children: ReactNode }): JSX.Eleme
     try {
       const result = await bailin.app.checkForUpdates();
       if (result.hasUpdate && !result.dismissed) {
-        // 真的有一个用户还没处理过的新版本：弹横幅。
+        // 真的有一个用户还没处理过的新版本：点亮侧栏红点 + Changelog 高亮。
         setUpdateInfo(result);
       } else if (result.hasUpdate && result.dismissed) {
-        // 有更新，但正是用户刚忽略的那个版本——不重新弹横幅（否则"忽略"
+        // 有更新，但正是用户刚忽略的那个版本——不重新点亮提醒（否则"忽略"
         // 功能形同虚设），但如实告诉用户确实有更新，而不是谎称已是最新。
         showToast({ kind: "info", text: t("update.bannerTitle", { version: result.latestVersion ?? "" }) });
       } else if (result.error) {

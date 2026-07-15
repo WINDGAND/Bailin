@@ -4802,7 +4802,7 @@ body {
   border-top: 1px solid var(--grid);
 }
 
-/* ---------- 侧栏"设置" tab 小红点（新版本提醒） ---------- */
+/* ---------- 侧栏"更新日志" tab 小红点（新版本提醒） ---------- */
 
 .settings-nav__item {
   /* 徽标需要相对这个按钮定位；两处既有的 .settings-nav__item 定义都没设
@@ -4825,73 +4825,6 @@ body {
 .settings-sidebar.is-collapsed .settings-nav__badge {
   top: 4px;
   right: 4px;
-}
-
-/* ---------- 新版本提醒横幅 ---------- */
-
-.update-announce {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--magenta-tint) 0%, var(--paper) 62%);
-  border: 1px solid var(--magenta-soft);
-  box-shadow: var(--shadow-card);
-}
-
-.update-announce__icon {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--paper);
-  color: var(--magenta);
-  border: 1px solid var(--magenta-soft);
-}
-
-.update-announce__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.update-announce__eyebrow {
-  color: var(--magenta);
-  margin-bottom: 2px;
-}
-
-.update-announce__title {
-  margin: 0 0 10px;
-}
-
-.update-announce__notes {
-  font-size: 13px;
-  color: var(--ink-soft);
-  max-width: 560px;
-}
-
-.update-announce__toggle {
-  margin-top: 2px;
-}
-
-.update-announce__actions {
-  margin-top: 16px;
-}
-
-/* 「关于」小节里内嵌的迷你版本——比横幅更收敛，不需要图标/渐变。 */
-.update-announce--inline {
-  background: var(--magenta-tint);
-  padding: 12px 14px;
-  gap: 0;
-  box-shadow: none;
-}
-
-.update-announce--inline .update-announce__title {
-  margin-bottom: 10px;
-  font-size: 14px;
 }
 
 /* ---------- 更新日志时间线（侧栏「更新日志」页） ---------- */

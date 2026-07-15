@@ -61,7 +61,6 @@ export const zh = {
     shortcutsSectionNote: "随时按 ? 打开，或点击下方按钮查看。"
   },
   update: {
-    eyebrow: "New Release",
     aboutSectionLabel: "关于",
     aboutSectionHint: "版本信息与更新检查。",
     currentVersionLabel: "当前版本",
@@ -72,8 +71,6 @@ export const zh = {
     bannerTitle: "发现新版本 v{{version}}",
     viewRelease: "查看/下载新版本",
     dismiss: "忽略此版本",
-    viewChangelog: "展开完整更新说明",
-    hideChangelog: "收起更新说明",
     changelogEyebrow: "CHANGELOG",
     changelogTitle: "更新日志",
     changelogSubtitle: "最近发生了什么 — 新功能、调整、下线，都写在这里。",

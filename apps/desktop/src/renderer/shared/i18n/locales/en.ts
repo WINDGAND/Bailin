@@ -63,7 +63,6 @@ export const en: TranslationTree = {
     shortcutsSectionNote: "Press ? anytime, or use the button below."
   },
   update: {
-    eyebrow: "New Release",
     aboutSectionLabel: "About",
     aboutSectionHint: "Version info and update checks.",
     currentVersionLabel: "Current version",
@@ -74,8 +73,6 @@ export const en: TranslationTree = {
     bannerTitle: "New version v{{version}} available",
     viewRelease: "View / download the update",
     dismiss: "Dismiss this version",
-    viewChangelog: "Show full changelog",
-    hideChangelog: "Hide changelog",
     changelogEyebrow: "CHANGELOG",
     changelogTitle: "Changelog",
     changelogSubtitle: "What shipped recently — features, tweaks, and retirements.",
