@@ -87,6 +87,20 @@ describe("fetchReleaseSummaries", () => {
     assert.match(result.error, /403/);
   });
 
+  it("does not cache failed fetches so retry hits network again", async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return new Response("nope", { status: 503 });
+    };
+    const t0 = 1_000_000;
+    const first = await fetchReleaseSummaries({ fetchImpl, nowMs: t0 });
+    assert.equal(first.ok, false);
+    const second = await fetchReleaseSummaries({ fetchImpl, nowMs: t0 + 1000 });
+    assert.equal(second.ok, false);
+    assert.equal(calls, 2);
+  });
+
   it("reuses cache within TTL", async () => {
     let calls = 0;
     const fetchImpl = async () => {

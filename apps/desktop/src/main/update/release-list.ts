@@ -59,42 +59,34 @@ export async function fetchReleaseSummaries(options?: {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
     });
   } catch (e) {
-    const result: ListReleasesResult = {
+    return {
       ok: false,
       error: e instanceof Error ? e.message : String(e)
     };
-    cache = { expiresAt: nowMs + CACHE_TTL_MS, result };
-    return result;
   }
 
   if (!res.ok) {
-    const result: ListReleasesResult = {
+    return {
       ok: false,
       error: `GitHub API 返回 HTTP ${res.status}`
     };
-    cache = { expiresAt: nowMs + CACHE_TTL_MS, result };
-    return result;
   }
 
   let json: unknown;
   try {
     json = await res.json();
   } catch {
-    const result: ListReleasesResult = {
+    return {
       ok: false,
       error: "GitHub 返回内容无法解析"
     };
-    cache = { expiresAt: nowMs + CACHE_TTL_MS, result };
-    return result;
   }
 
   if (!Array.isArray(json)) {
-    const result: ListReleasesResult = {
+    return {
       ok: false,
       error: "GitHub 响应格式无效"
     };
-    cache = { expiresAt: nowMs + CACHE_TTL_MS, result };
-    return result;
   }
 
   const releases: ReleaseSummary[] = [];
