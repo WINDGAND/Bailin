@@ -2,6 +2,7 @@ import type {
   CharacterBundle,
   DistillationJob,
   DistillationJobConfig,
+  HatchPetRowState,
   QualityReport,
   ResearchAgentId,
   ResearchDoc
@@ -125,9 +126,12 @@ export interface BailinApi {
     /** Checkpoint 用户「同意」继续。 */
     approveDistillation(input: {
       jobId: string;
-      phase: "research";
+      phase: "research" | "sprite";
       /** research checkpoint：补跑指定 Agent（1–6），空则直接进入下一阶段。 */
       supplementalAgentIds?: ResearchAgentId[];
+      /** sprite checkpoint：重试失败行或仍然继续交付。 */
+      spriteAction?: "retry" | "continue";
+      spriteRetryRows?: HatchPetRowState[];
     }): Promise<{ ok: boolean }>;
     /** Checkpoint 用户取消本次深度创建。 */
     cancelDistillation(jobId: string): Promise<{ ok: boolean }>;
@@ -292,6 +296,13 @@ export type DistillationProgressEvent =
   | { kind: "warning"; jobId: string; message: string }
   | { kind: "hatch_progress"; jobId: string; event: HatchProgressEventDTO }
   | {
+      kind: "sprite_incomplete";
+      jobId: string;
+      failedRows: HatchPetRowState[];
+      totalCostUsd: number;
+      rowFailures?: Partial<Record<HatchPetRowState, string>>;
+    }
+  | {
       kind: "done";
       jobId: string;
       characterId: string;
@@ -342,6 +353,8 @@ export type HatchProgressEventDTO =
 
 export type DistillationApprovalResult = {
   supplementalAgentIds?: ResearchAgentId[];
+  spriteAction?: "retry" | "continue";
+  spriteRetryRows?: HatchPetRowState[];
 };
 
 export type MaterialModeUsed = "web" | "local-first" | "local-only";

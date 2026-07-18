@@ -4,6 +4,7 @@ import type {
   DistillationJobConfig,
   QualityReport,
   ResearchAgentId,
+  HatchPetRowState,
   ResearchDoc
 } from "@bailin/character-protocol";
 import type {
@@ -49,8 +50,10 @@ interface BailinWindow {
       createDeep(input: Partial<DistillationJobConfig> & { characterName: string; sourceType: DistillationJobConfig["sourceType"]; track: DistillationJobConfig["track"] }): Promise<{ ok: boolean; jobId?: string; error?: string }>;
       approveDistillation(input: {
         jobId: string;
-        phase: "research";
+        phase: "research" | "sprite";
         supplementalAgentIds?: ResearchAgentId[];
+        spriteAction?: "retry" | "continue";
+        spriteRetryRows?: HatchPetRowState[];
       }): Promise<{ ok: boolean }>;
       cancelDistillation(jobId: string): Promise<{ ok: boolean }>;
       getResearchDocs(jobId: string): Promise<ResearchDoc[]>;

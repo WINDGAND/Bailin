@@ -32,6 +32,7 @@ const STAGE_INDEX: Partial<Record<DistillationJobStatus, number>> = {
   building_card: 2,
   researching_appearance: 3,
   building_sprite: 4,
+  awaiting_sprite_ok: 4,
   quality_check: 5
 };
 

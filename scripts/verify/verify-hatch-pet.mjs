@@ -672,6 +672,54 @@ wideMaxX >= 0 && wideMinX >= 2 && wideMaxX <= DEFAULT_ATLAS_CELL.width - 3
   ? ok(`宽 pose 帧主体未贴边：X=${wideMinX}-${wideMaxX}`)
   : fail(`宽 pose 帧主体贴边/被裁：X=${wideMinX}-${wideMaxX}`);
 
+// ===== 7/7 moderation 检测 + 抠像兜底帧 =====
+console.log("\n[7/7] moderation detection + chroma fallback frame");
+
+function isModerationBlockedSmoke(message) {
+  const text = String(message).toLowerCase();
+  return (
+    text.includes("moderation_blocked") ||
+    text.includes("safety system") ||
+    text.includes("rejected by the safety")
+  );
+}
+
+isModerationBlockedSmoke('HTTP 400: {"code":"moderation_blocked"}')
+  ? ok("isModerationBlocked 识别 moderation_blocked")
+  : fail("isModerationBlocked 未识别 moderation_blocked");
+!isModerationBlockedSmoke("NETWORK_ERROR: terminated")
+  ? ok("isModerationBlocked 不误判网络错误")
+  : fail("isModerationBlocked 误判网络错误");
+
+const fallbackStrip = blankImage(DEFAULT_ATLAS_CELL.width * 2, DEFAULT_ATLAS_CELL.height);
+fillChroma(fallbackStrip, whiteKey);
+drawDisc(
+  fallbackStrip,
+  DEFAULT_ATLAS_CELL.width / 2,
+  DEFAULT_ATLAS_CELL.height - 40,
+  30,
+  40,
+  40,
+  48
+);
+const fallbackFrames = extractStripFrames(
+  {
+    rowIndex: 0,
+    frameCount: 2,
+    stripPng: encodePng(fallbackStrip),
+    chromaKey: whiteKey,
+    chromaSeedThreshold: 30,
+    chromaSpillThreshold: 40,
+    rowState: "idle"
+  },
+  DEFAULT_ATLAS_CELL
+);
+const fallbackFrame0 = decodePng(fallbackFrames[0]?.png ?? encodePng(blankImage(1, 1)));
+const fallbackBorderTransparent = borderSampleTransparent(fallbackFrame0, whiteKey);
+fallbackBorderTransparent >= 0.35
+  ? ok(`抠像兜底帧外圈透明占比 ${(fallbackBorderTransparent * 100).toFixed(0)}%（非整格白底）`)
+  : fail(`抠像兜底帧外圈透明占比 ${(fallbackBorderTransparent * 100).toFixed(0)}% 过低，像未抠白底`);
+
 // ===== 写出样例资产，便于人工肉眼检查 =====
 const outDir = resolve(repoRoot, ".smoke-out", "hatch-pet");
 mkdirSync(outDir, { recursive: true });
