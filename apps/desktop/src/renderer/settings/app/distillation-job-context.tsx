@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import type { ResearchAgentId } from "@bailin/character-protocol";
+import type { HatchPetRowState, ResearchAgentId } from "@bailin/character-protocol";
 import type {
   DistillationProgressEvent,
   ResearchSummaryPayload
@@ -17,6 +17,7 @@ import { useBailin } from "../../shared/use-bailin.js";
 import { useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
 import { ResearchCheckpointDialog } from "../progress/ResearchCheckpointDialog.js";
+import { SpriteCheckpointDialog } from "../progress/SpriteCheckpointDialog.js";
 import {
   INITIAL_STAGE_DISPLAY,
   reduceStageDisplay,
@@ -27,6 +28,7 @@ import {
 export type DistillationBannerStatus =
   | "running"
   | "awaiting_research"
+  | "awaiting_sprite"
   | "done"
   | "failed"
   | "cancelled";
@@ -75,6 +77,12 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
   const [isSkeleton, setIsSkeleton] = useState(false);
   const [researchSummary, setResearchSummary] = useState<ResearchSummaryPayload | null>(null);
   const [showCheckpoint, setShowCheckpoint] = useState(false);
+  const [showSpriteCheckpoint, setShowSpriteCheckpoint] = useState(false);
+  const [spriteFailedRows, setSpriteFailedRows] = useState<HatchPetRowState[]>([]);
+  const [spriteRowFailures, setSpriteRowFailures] = useState<
+    Partial<Record<HatchPetRowState, string>>
+  >({});
+  const [spriteTotalCostUsd, setSpriteTotalCostUsd] = useState(0);
   const activeJobRef = useRef<ActiveDistillationJob | null>(null);
   const bannerStatusRef = useRef<DistillationBannerStatus | null>(null);
 
@@ -95,6 +103,10 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     setIsSkeleton(false);
     setResearchSummary(null);
     setShowCheckpoint(false);
+    setShowSpriteCheckpoint(false);
+    setSpriteFailedRows([]);
+    setSpriteRowFailures({});
+    setSpriteTotalCostUsd(0);
   }, []);
 
   const startJob = useCallback((job: ActiveDistillationJob) => {
@@ -106,6 +118,10 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     setIsSkeleton(false);
     setResearchSummary(null);
     setShowCheckpoint(false);
+    setShowSpriteCheckpoint(false);
+    setSpriteFailedRows([]);
+    setSpriteRowFailures({});
+    setSpriteTotalCostUsd(0);
   }, []);
 
   const clearJob = useCallback(() => {
@@ -122,7 +138,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     const job = activeJobRef.current;
     if (!job) return;
     const status = bannerStatusRef.current;
-    if (status === "running" || status === "awaiting_research") {
+    if (status === "running" || status === "awaiting_research" || status === "awaiting_sprite") {
       await bailin.characters.cancelDistillation(job.jobId);
       return;
     }
@@ -144,6 +160,22 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     [bailin]
   );
 
+  const resolveSprite = useCallback(
+    async (action: "retry" | "continue") => {
+      const job = activeJobRef.current;
+      if (!job) return;
+      setShowSpriteCheckpoint(false);
+      setBannerStatus("running");
+      await bailin.characters.approveDistillation({
+        jobId: job.jobId,
+        phase: "sprite",
+        spriteAction: action,
+        spriteRetryRows: action === "retry" ? spriteFailedRows : undefined
+      });
+    },
+    [bailin, spriteFailedRows]
+  );
+
   useEffect(() => {
     const off = bailin.on.distillationProgress((evt: DistillationProgressEvent) => {
       const job = activeJobRef.current;
@@ -160,10 +192,22 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
           if (evt.phase === "awaiting_research_ok") {
             setBannerStatus("awaiting_research");
             setShowCheckpoint(true);
-          } else if (bannerStatusRef.current === "awaiting_research") {
+          } else if (evt.phase === "awaiting_sprite_ok") {
+            setBannerStatus("awaiting_sprite");
+            setShowSpriteCheckpoint(true);
+          } else if (
+            bannerStatusRef.current === "awaiting_research" ||
+            bannerStatusRef.current === "awaiting_sprite"
+          ) {
             setBannerStatus("running");
             setShowCheckpoint(false);
+            setShowSpriteCheckpoint(false);
           }
+          break;
+        case "sprite_incomplete":
+          setSpriteFailedRows(evt.failedRows);
+          setSpriteRowFailures(evt.rowFailures ?? {});
+          setSpriteTotalCostUsd(evt.totalCostUsd);
           break;
         case "research_complete":
           setResearchSummary(evt.summary);
@@ -173,6 +217,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
           setBannerStatus("done");
           setIsSkeleton(evt.isSkeleton);
           setShowCheckpoint(false);
+          setShowSpriteCheckpoint(false);
           showToast({
             kind: "success",
             text: evt.isSkeleton
@@ -184,6 +229,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
           setBannerStatus("failed");
           setFailureReason(evt.reason);
           setShowCheckpoint(false);
+          setShowSpriteCheckpoint(false);
           showToast({
             kind: "error",
             text: t("distill.toastFailed", { name: job.characterName })
@@ -192,6 +238,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
         case "cancelled":
           setBannerStatus("cancelled");
           setShowCheckpoint(false);
+          setShowSpriteCheckpoint(false);
           showToast({
             kind: "warn",
             text: t("distill.toastCancelled", { name: job.characterName })
@@ -244,6 +291,16 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
           researchSummary={researchSummary}
           onApprove={() => void approveResearch()}
           onSupplement={(agentIds) => void approveResearch(agentIds)}
+          onCancel={() => void cancelJob()}
+        />
+      ) : null}
+      {showSpriteCheckpoint ? (
+        <SpriteCheckpointDialog
+          failedRows={spriteFailedRows}
+          rowFailures={spriteRowFailures}
+          totalCostUsd={spriteTotalCostUsd}
+          onRetry={() => void resolveSprite("retry")}
+          onContinue={() => void resolveSprite("continue")}
           onCancel={() => void cancelJob()}
         />
       ) : null}

@@ -208,14 +208,18 @@ export class ImageGenerationAdapter {
       transparentWanted: req.transparentBackground === true
     };
 
-    const first = await this.postJsonAndDecodeImage(
-      requestUrl,
-      resolved.apiKey,
-      body,
-      tierName,
-      tier,
-      req.timeoutMs ?? 120_000,
-      startedAt,
+    const first = await this.requestWithTransientRetry(
+      (phase) =>
+        this.postJsonAndDecodeImage(
+          requestUrl,
+          resolved.apiKey,
+          body,
+          tierName,
+          tier,
+          req.timeoutMs ?? 120_000,
+          startedAt,
+          { ...logCtx, phase: phase ?? "first" }
+        ),
       logCtx
     );
 
@@ -235,14 +239,18 @@ export class ImageGenerationAdapter {
         { size: req.size, quality: req.quality },
         { transparentBackground: false }
       );
-      return this.postJsonAndDecodeImage(
-        requestUrl,
-        resolved.apiKey,
-        retryBody,
-        tierName,
-        tier,
-        req.timeoutMs ?? 120_000,
-        Date.now(),
+      return this.requestWithTransientRetry(
+        (phase) =>
+          this.postJsonAndDecodeImage(
+            requestUrl,
+            resolved.apiKey,
+            retryBody,
+            tierName,
+            tier,
+            req.timeoutMs ?? 120_000,
+            Date.now(),
+            { ...logCtx, phase: phase ?? "retry-no-transparent", bodyKeys: Object.keys(retryBody) }
+          ),
         { ...logCtx, phase: "retry-no-transparent", bodyKeys: Object.keys(retryBody) }
       );
     }
@@ -316,14 +324,18 @@ export class ImageGenerationAdapter {
     };
 
     const form = await buildForm(wantTransparent);
-    const first = await this.postFormAndDecodeImage(
-      requestUrl,
-      resolved.apiKey,
-      form,
-      tierName,
-      tier,
-      req.timeoutMs ?? 180_000,
-      startedAt,
+    const first = await this.requestWithTransientRetry(
+      (phase) =>
+        this.postFormAndDecodeImage(
+          requestUrl,
+          resolved.apiKey,
+          form,
+          tierName,
+          tier,
+          req.timeoutMs ?? 180_000,
+          startedAt,
+          { ...logCtx, phase: phase ?? "first" }
+        ),
       logCtx
     );
     if (
@@ -339,14 +351,22 @@ export class ImageGenerationAdapter {
         note: "first edit rejected by provider, retry without background:transparent"
       });
       const retryForm = await buildForm(false);
-      return this.postFormAndDecodeImage(
-        requestUrl,
-        resolved.apiKey,
-        retryForm,
-        tierName,
-        tier,
-        req.timeoutMs ?? 180_000,
-        Date.now(),
+      return this.requestWithTransientRetry(
+        (phase) =>
+          this.postFormAndDecodeImage(
+            requestUrl,
+            resolved.apiKey,
+            retryForm,
+            tierName,
+            tier,
+            req.timeoutMs ?? 180_000,
+            Date.now(),
+            {
+              ...logCtx,
+              phase: phase ?? "retry-no-transparent",
+              bodyKeys: logCtx.bodyKeys.filter((k) => k !== "background")
+            }
+          ),
         {
           ...logCtx,
           phase: "retry-no-transparent",
@@ -355,6 +375,34 @@ export class ImageGenerationAdapter {
       );
     }
     return first;
+  }
+
+  /**
+   * 对 NETWORK_ERROR / TIMEOUT / RATE_LIMITED / PROVIDER_ERROR 做指数退避重试（最多 2 次）。
+   * 透明背景 fallback 在外层单独处理，此处只包单次 HTTP 往返。
+   */
+  private async requestWithTransientRetry(
+    fn: (phase: NonNullable<ImageLogCtx["phase"]>) => Promise<ImageGenerationResponse>,
+    logCtx: ImageLogCtx
+  ): Promise<ImageGenerationResponse> {
+    let last = await fn("first");
+    for (let i = 0; i < TRANSIENT_RETRY_DELAYS_MS.length; i += 1) {
+      if (last.kind !== "error" || !isTransientImageError(last.code)) break;
+      const phase: NonNullable<ImageLogCtx["phase"]> =
+        i === 0 ? "retry-transient-1" : "retry-transient-2";
+      const delayMs = TRANSIENT_RETRY_DELAYS_MS[i]!;
+      logImageCall({
+        ...logCtx,
+        phase,
+        ok: false,
+        httpDt: last.durationMs,
+        errorPreview: last.message.slice(0, 200),
+        note: `transient ${last.code}, retry in ${delayMs}ms`
+      });
+      await sleepMs(delayMs);
+      last = await fn(phase);
+    }
+    return last;
   }
 
   /** 配置文件解析；缺失字段用默认填补。 */
@@ -726,6 +774,33 @@ export function shouldRetryWithoutTransparent(
   );
 }
 
+/** 内容审核拦截：Azure/OpenAI image safety 返回 moderation_blocked 等。 */
+export function isModerationBlocked(message: string): boolean {
+  const text = message.toLowerCase();
+  return (
+    text.includes("moderation_blocked") ||
+    text.includes("safety system") ||
+    text.includes("rejected by the safety")
+  );
+}
+
+const TRANSIENT_IMAGE_ERROR_CODES = [
+  "NETWORK_ERROR",
+  "TIMEOUT",
+  "RATE_LIMITED",
+  "PROVIDER_ERROR"
+] as const;
+
+function isTransientImageError(code: string): boolean {
+  return (TRANSIENT_IMAGE_ERROR_CODES as readonly string[]).includes(code);
+}
+
+const TRANSIENT_RETRY_DELAYS_MS = [1000, 3000];
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function buildTierRequestBody(
   tier: ImageTierConfig,
   prompt: string,
@@ -788,8 +863,8 @@ export interface ImageLogCtx {
   bodyKeys: string[];
   supportsTransparent: boolean;
   transparentWanted: boolean;
-  /** "first" / "retry-no-transparent" 之类的阶段标记。 */
-  phase?: "first" | "retry-no-transparent";
+  /** "first" / "retry-no-transparent" / "retry-transient-*" 之类的阶段标记。 */
+  phase?: "first" | "retry-no-transparent" | "retry-transient-1" | "retry-transient-2";
 }
 
 interface ImageCallLog extends ImageLogCtx {

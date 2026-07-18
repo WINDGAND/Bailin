@@ -30,6 +30,8 @@ export interface HatchPetBaseInput {
     | "painterly";
   /** chroma key 颜色，模型必须画在这个底色之上，便于后处理 alpha 去背景。 */
   chromaKey?: { r: number; g: number; b: number };
+  /** 去标识化：prompt 中不写真实姓名，用于 moderation 软化重试。 */
+  anonymize?: boolean;
 }
 
 export interface HatchPetRowInput {
@@ -40,6 +42,8 @@ export interface HatchPetRowInput {
   cell: { width: number; height: number };
   stylePreset?: HatchPetBaseInput["stylePreset"];
   chromaKey?: { r: number; g: number; b: number };
+  /** 去标识化：prompt 中不写真实姓名，用于 moderation 软化重试。 */
+  anonymize?: boolean;
 }
 
 const ROW_DESCRIPTIONS: Record<HatchPetRowState, string> = {
@@ -106,13 +110,40 @@ function chromaClause(c?: HatchPetBaseInput["chromaKey"]): string {
   return `Background must be a flat solid RGB(${c.r},${c.g},${c.b}) chroma key area, with no gradient or noise, so it can be cleanly removed afterwards.`;
 }
 
+function identityClause(input: { characterName: string; anonymize?: boolean }): string {
+  if (input.anonymize) {
+    return (
+      "An original mascot character (visually inspired by a well-known public figure's described appearance) — " +
+      "do not depict any real celebrity by name or likeness to a specific famous person."
+    );
+  }
+  return `A friendly chibi-style desktop companion sprite of ${input.characterName}, front-facing, full body, centered, compact silhouette.`;
+}
+
+function rowIdentityClause(input: {
+  characterName: string;
+  rowState: HatchPetRowState;
+  frameCount: number;
+  anonymize?: boolean;
+}): string {
+  if (input.anonymize) {
+    return (
+      `A horizontal animation strip of ${input.frameCount} frames showing an original mascot performing the action: "${input.rowState}". ` +
+      "Identity must match the canonical base. Do not depict any real celebrity by name."
+    );
+  }
+  return (
+    `A horizontal animation strip of ${input.frameCount} frames showing ${input.characterName} performing the action: "${input.rowState}". Identity must match the canonical base.`
+  );
+}
+
 /**
  * base prompt：单张 chibi 正面全身立绘，cell 尺寸预算 192×208。
  */
 export function buildHatchPetBasePrompt(input: HatchPetBaseInput): string {
   const desc = describeAppearance(input.appearance);
   const lines = [
-    `A friendly chibi-style desktop companion sprite of ${input.characterName}, front-facing, full body, centered, compact silhouette.`,
+    identityClause(input),
     desc,
     input.userHint ? `Extra identity cues: ${input.userHint}` : "",
     styleClause(input.stylePreset),
@@ -132,7 +163,7 @@ export function buildHatchPetRowPrompt(input: HatchPetRowInput): string {
   const stripWidth = input.cell.width * input.frameCount;
   const action = ROW_DESCRIPTIONS[input.rowState];
   const lines = [
-    `A horizontal animation strip of ${input.frameCount} frames showing ${input.characterName} performing the action: "${input.rowState}". Identity must match the canonical base.`,
+    rowIdentityClause(input),
     `Strip canvas: ${stripWidth} × ${input.cell.height} px; cleanly divisible into ${input.frameCount} equal-width frames.`,
     `Frame-by-frame action: ${action}.`,
     "Cadence must visibly alternate across the loop — do not repeat one nearly-static frame.",

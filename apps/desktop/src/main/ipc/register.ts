@@ -100,7 +100,7 @@ interface ApprovalGate {
 interface DeepJobState {
   jobId: string;
   abortCtl: AbortController;
-  approvals: Map<"research", ApprovalGate>;
+  approvals: Map<"research" | "sprite", ApprovalGate>;
 }
 
 function makeGate(): ApprovalGate {
@@ -476,7 +476,10 @@ export function registerIpc(deps: IpcDeps): void {
     vault.upsertJob(job);
 
     const abortCtl = new AbortController();
-    const approvals = new Map<"research", ApprovalGate>([["research", makeGate()]]);
+    const approvals = new Map<"research" | "sprite", ApprovalGate>([
+      ["research", makeGate()],
+      ["sprite", makeGate()]
+    ]);
     activeJobs.set(jobId, { jobId, abortCtl, approvals });
 
     // 后台跑 generator，不阻塞 IPC 返回
@@ -579,18 +582,26 @@ export function registerIpc(deps: IpcDeps): void {
       _e,
       input: {
         jobId: string;
-        phase: "research";
+        phase: "research" | "sprite";
         supplementalAgentIds?: DistillationApprovalResult["supplementalAgentIds"];
+        spriteAction?: DistillationApprovalResult["spriteAction"];
+        spriteRetryRows?: DistillationApprovalResult["spriteRetryRows"];
       }
     ) => {
     const state = activeJobs.get(input.jobId);
     if (!state) return { ok: false };
-    const gate = state.approvals.get("research");
+    const gate = state.approvals.get(input.phase);
     if (!gate) return { ok: false };
-    gate.resolve({
-      supplementalAgentIds:
-        input.phase === "research" ? input.supplementalAgentIds : undefined
-    });
+    if (input.phase === "research") {
+      gate.resolve({
+        supplementalAgentIds: input.supplementalAgentIds
+      });
+    } else {
+      gate.resolve({
+        spriteAction: input.spriteAction ?? "continue",
+        spriteRetryRows: input.spriteRetryRows
+      });
+    }
     return { ok: true };
   }
   );

@@ -24,6 +24,7 @@ import {
   type CharacterCard,
   type DistillationJob,
   type DistillationJobConfig,
+  type HatchPetRowState,
   type QualityReport,
   type ResearchAgentId,
   type ResearchDoc,
@@ -124,6 +125,13 @@ export type DeepProgressEvent =
   | { kind: "quality_report"; jobId: string; report: QualityReport }
   | { kind: "warning"; jobId: string; message: string }
   | { kind: "hatch_progress"; jobId: string; event: HatchProgressEventDTO }
+  | {
+      kind: "sprite_incomplete";
+      jobId: string;
+      failedRows: HatchPetRowState[];
+      totalCostUsd: number;
+      rowFailures?: Partial<Record<HatchPetRowState, string>>;
+    }
   | { kind: "done"; jobId: string; bundle: CharacterBundle; isSkeleton: boolean; warnings: string[] }
   | { kind: "failed"; jobId: string; reason: string; warnings: string[] }
   | { kind: "cancelled"; jobId: string };
@@ -135,7 +143,7 @@ export interface DeepOrchestrateInput {
   jobId: string;
   config: DistillationJobConfig;
   /** 上层用于在 Checkpoint 等待用户确认；resolve 后继续；reject 则取消。 */
-  awaitApproval: (phase: "research") => Promise<DistillationApprovalResult>;
+  awaitApproval: (phase: "research" | "sprite") => Promise<DistillationApprovalResult>;
   /** 是否启用风格测试（额外 LLM 调用），默认 true。 */
   runVoiceTest?: boolean;
   /**
@@ -192,7 +200,7 @@ export class BailinOrchestrator {
       role: r.role,
       notes: r.notes
     }));
-    const sprite = await this.runVisualStep(
+    const visual = await this.runVisualStep(
       input.card.id,
       input.card.meta.name,
       input.card.meta.sourceType,
@@ -200,7 +208,7 @@ export class BailinOrchestrator {
       refs,
       warnings
     );
-    if (!sprite) {
+    if (!visual.sprite) {
       return {
         ok: false,
         error: warnings[warnings.length - 1] ?? "形象生成失败",
@@ -208,7 +216,7 @@ export class BailinOrchestrator {
         sprite: makeSkeletonSprite(input.card.meta.track)
       };
     }
-    return { ok: true, sprite, warnings };
+    return { ok: true, sprite: visual.sprite, warnings };
   }
 
   /**
@@ -517,7 +525,7 @@ export class BailinOrchestrator {
       card.meta.appearance = appearanceForSprite;
       card.meta.avatarHint = summarizeAppearance(appearanceForSprite);
     }
-    const sprite = await this.runVisualStep(
+    let visualResult = await this.runVisualStep(
       cardId,
       config.characterName,
       config.sourceType,
@@ -525,7 +533,6 @@ export class BailinOrchestrator {
       appearanceRefs,
       warnings,
       (evt) => {
-        // 实时把 hatch 事件推给 UI；避免等 5~10 分钟才看到第一行进度
         input.liveBroadcast?.({
           kind: "hatch_progress",
           jobId,
@@ -533,7 +540,86 @@ export class BailinOrchestrator {
         });
       }
     );
-    const finalSprite: SpriteProgram = sprite ?? skeleton.sprite;
+    let finalSprite: SpriteProgram = visualResult.sprite ?? skeleton.sprite;
+
+    while (visualResult.failedRows.length > 0) {
+      if (aborted()) {
+        yield { kind: "cancelled", jobId };
+        return;
+      }
+      yield {
+        kind: "sprite_incomplete",
+        jobId,
+        failedRows: visualResult.failedRows,
+        totalCostUsd: visualResult.totalCostUsd,
+        rowFailures: visualResult.failedRowReasons
+      };
+      yield phaseEvent(
+        jobId,
+        "awaiting_sprite_ok",
+        85,
+        `${visualResult.failedRows.length} 个姿态生成失败，等待确认`
+      );
+
+      let approval: DistillationApprovalResult;
+      try {
+        approval = await input.awaitApproval("sprite");
+      } catch {
+        yield { kind: "cancelled", jobId };
+        return;
+      }
+
+      if (approval.spriteAction !== "retry" || !this.hatchPipeline) {
+        break;
+      }
+
+      const rowsToRetry = approval.spriteRetryRows ?? visualResult.failedRows;
+      yield phaseEvent(
+        jobId,
+        "building_sprite",
+        82,
+        `正在重试 ${rowsToRetry.length} 个失败姿态…`
+      );
+
+      const retryResult = await this.hatchPipeline.retryRows(
+        {
+          characterId: cardId,
+          characterName: config.characterName,
+          appearance: appearanceForSprite,
+          userReferences: appearanceRefs,
+          onProgress: (evt) => {
+            input.liveBroadcast?.({
+              kind: "hatch_progress",
+              jobId,
+              event: toHatchDTO(evt)
+            });
+          },
+          signal: input.signal
+        },
+        rowsToRetry
+      );
+
+      for (const w of retryResult.warnings) {
+        warnings.push(`[step3·hatch-retry] ${w}`);
+      }
+      if (retryResult.errors.length > 0) {
+        yield yieldWarn(`[step3·hatch-retry] ${retryResult.errors.join(" | ")}`);
+        break;
+      }
+      if (retryResult.program) {
+        const parsed = parseSprite(retryResult.program);
+        if (parsed.ok && parsed.data) {
+          finalSprite = parsed.data;
+        }
+      }
+      visualResult = {
+        sprite: finalSprite,
+        failedRows: retryResult.failedRows,
+        totalCostUsd: retryResult.totalCostUsd,
+        failedRowReasons: retryResult.failedRowReasons
+      };
+    }
+
     finalSprite.schemaVersion = SCHEMA_VERSION;
 
     // ===== Phase 4: 质量自检（含定向重提炼闭环，最多 MAX_SYNTHESIS_ROUNDS 轮）=====
@@ -620,7 +706,7 @@ export class BailinOrchestrator {
     // 注意：appearance 即使为 null 也会用 minimalAppearance 兜底进 sprite，
     // 因此 sprite 通常非 null。"骨架"严格定义为「人格 + 真实外貌 + sprite 三步全失败」。
     const isSkeleton =
-      synthCard == null && appearance == null && sprite == null;
+      synthCard == null && appearance == null && finalSprite == null;
 
     const bundle: CharacterBundle = {
       card,
@@ -1473,7 +1559,7 @@ export class BailinOrchestrator {
     if (!appearance) {
       return { ok: false, error: "外貌生成失败", warnings };
     }
-    const sprite = await this.runVisualStep(
+    const visual = await this.runVisualStep(
       input.card.id,
       input.card.meta.name,
       input.card.meta.sourceType,
@@ -1481,10 +1567,10 @@ export class BailinOrchestrator {
       refs,
       warnings
     );
-    if (!sprite) {
+    if (!visual.sprite) {
       return { ok: false, appearance, error: "sprite 生成失败", warnings };
     }
-    return { ok: true, appearance, sprite, warnings };
+    return { ok: true, appearance, sprite: visual.sprite, warnings };
   }
 
   /**
@@ -1531,12 +1617,23 @@ export class BailinOrchestrator {
   private async runVisualStep(
     characterId: string,
     characterName: string,
-    sourceType: "public-figure" | "fictional" | "original",
+    _sourceType: "public-figure" | "fictional" | "original",
     appearance: AppearanceSpec,
     referenceImages: ReferenceImageInput[],
     warnings: string[],
     onHatchProgress?: (evt: HatchProgressEvent) => void
-  ): Promise<SpriteProgram | null> {
+  ): Promise<{
+    sprite: SpriteProgram | null;
+    failedRows: HatchPetRowState[];
+    totalCostUsd: number;
+    failedRowReasons: Partial<Record<HatchPetRowState, string>>;
+  }> {
+    const emptyVisual = {
+      sprite: null as SpriteProgram | null,
+      failedRows: [] as HatchPetRowState[],
+      totalCostUsd: 0,
+      failedRowReasons: {} as Partial<Record<HatchPetRowState, string>>
+    };
     if (this.hatchPipeline) {
       try {
         const result = await this.hatchPipeline.run({
@@ -1547,9 +1644,16 @@ export class BailinOrchestrator {
           onProgress: onHatchProgress
         });
         for (const w of result.warnings) warnings.push(`[step3·hatch] ${w}`);
-        if (result.ok && result.program) {
+        if (result.program) {
           const parsed = parseSprite(result.program);
-          if (parsed.ok && parsed.data) return parsed.data;
+          if (parsed.ok && parsed.data) {
+            return {
+              sprite: parsed.data,
+              failedRows: result.failedRows,
+              totalCostUsd: result.totalCostUsd,
+              failedRowReasons: result.failedRowReasons
+            };
+          }
           warnings.push(
             `[step3·hatch] 生成的 atlas 未通过 schema：${(parsed.errors ?? [])
               .map((e) => `${e.path}=${e.message}`)
@@ -1574,7 +1678,7 @@ export class BailinOrchestrator {
         warnings.push(
           "图像生成暂时没有完成，已先生成一只程序化像素形象；之后可在角色仓库点「重画形象」。"
         );
-        return parsed.data;
+        return { ...emptyVisual, sprite: parsed.data };
       }
       warnings.push("[step3·programmatic] 程序化像素形象未通过 schema");
     } catch (e) {
@@ -1582,7 +1686,7 @@ export class BailinOrchestrator {
         `[step3·programmatic] 程序化像素形象失败：${e instanceof Error ? e.message : String(e)}`
       );
     }
-    return null;
+    return emptyVisual;
   }
 
 }

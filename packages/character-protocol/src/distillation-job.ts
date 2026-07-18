@@ -14,6 +14,7 @@ export const DistillationJobStatusSchema = z.enum([
   "building_card", // Phase 3a
   "researching_appearance", // Phase 3b
   "building_sprite", // Phase 3c
+  "awaiting_sprite_ok", // Checkpoint: 姿态生图部分失败，等待用户确认
   "quality_check", // Phase 4
   "done",
   "failed",

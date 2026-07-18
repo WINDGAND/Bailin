@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ulid } from "ulid";
 import {
@@ -36,10 +36,11 @@ import {
 } from "@bailin/pet-atlas-tools";
 import type { LocalVault } from "../store/local-vault.js";
 import {
+  isModerationBlocked,
   modelSupportsTransparent,
   resolveParamMode,
   type ImageGenerationAdapter,
-  type ImageGenerationConfig,
+  type ImageGenerationResponse,
   type ImageTierName
 } from "../adapters/image-generation-adapter.js";
 
@@ -58,8 +59,8 @@ import {
  *   - atlas spritesheet 同时落盘 + 写入 data URI 到 SpriteProgram，
  *     这样桌宠窗口不依赖任何额外协议就能渲染（webSecurity 不变）。
  *   - 9 行 prompt 都把 canonical base 当 anchor 输入，确保身份一致。
- *   - 异常单行：不阻塞整体流程；失败的行用 base + opacity 兜底，
- *     保证用户至少能看到一只「站着的」桌宠。
+ *   - 异常单行：记录 failedRows；失败行优先用已成功行的抠像帧兜底，
+ *     仅在整轮无成功行时才回退未抠像 base。
  */
 
 export interface ReferenceImageInput {
@@ -110,6 +111,37 @@ export interface HatchPipelineResult {
   durationMs: number;
   warnings: string[];
   errors: string[];
+  /** 最终仍未能成功生成的姿态行（供 checkpoint / 部分重试用）。 */
+  failedRows: HatchPetRowState[];
+  /** 各行失败原因（若有）。 */
+  failedRowReasons: Partial<Record<HatchPetRowState, string>>;
+}
+
+type RowResultEntry = { png?: Buffer; failed?: string; cost?: number };
+
+interface GenerationCostContext {
+  runningCost: { value: number };
+  estimatedCost: number;
+  warnings: string[];
+  costCapExceeded(): boolean;
+}
+
+interface FinalizeArgs {
+  input: HatchPipelineInput;
+  tier: ImageTierName;
+  chroma: { r: number; g: number; b: number };
+  useTransparent: boolean;
+  basePng: Buffer;
+  rowResults: Record<HatchPetRowState, RowResultEntry>;
+  frameCounts: Record<HatchPetRowState, number>;
+  cell: { width: number; height: number };
+  grid: { columns: number; rows: number };
+  totalCost: number;
+  warnings: string[];
+  errors: string[];
+  runId: string;
+  start: number;
+  manifest: ReturnType<typeof prepareHatchPetRun>;
 }
 
 export type HatchProgressEvent =
@@ -165,6 +197,8 @@ function buildChromaRowSlot(
 /** 9 行 strip 默认并发数；可通过 input.rowConcurrency 或 BAILIN_HATCH_ROW_CONCURRENCY 覆盖。 */
 const DEFAULT_HATCH_ROW_CONCURRENCY = 4;
 const MAX_HATCH_ROW_CONCURRENCY = 6;
+const COST_SOFT_CAP_MULTIPLIER = 1.5;
+const FALLBACK_ROW_PRIORITY: HatchPetRowState[] = ["idle", "waving", "running-right"];
 
 function resolveHatchRowConcurrency(input?: number): number {
   const fromEnv = Number(process.env.BAILIN_HATCH_ROW_CONCURRENCY ?? process.env.NUWA_PET_HATCH_ROW_CONCURRENCY);
@@ -193,6 +227,38 @@ async function runWithConcurrency<T>(
   }
 }
 
+function pickFallbackFrame(
+  rowFramesPng: Partial<Record<HatchPetRowState, Buffer[]>>
+): Buffer | null {
+  for (const state of FALLBACK_ROW_PRIORITY) {
+    const frame = rowFramesPng[state]?.[0];
+    if (frame) return frame;
+  }
+  for (const state of HATCH_PET_ROW_STATES) {
+    const frame = rowFramesPng[state]?.[0];
+    if (frame) return frame;
+  }
+  return null;
+}
+
+function makeCostContext(estimatedCost: number, warnings: string[]): GenerationCostContext {
+  const runningCost = { value: 0 };
+  return {
+    runningCost,
+    estimatedCost,
+    warnings,
+    costCapExceeded() {
+      return runningCost.value > estimatedCost * COST_SOFT_CAP_MULTIPLIER;
+    }
+  };
+}
+
+function addCost(costCtx: GenerationCostContext, costUsd?: number): void {
+  if (costUsd != null && Number.isFinite(costUsd)) {
+    costCtx.runningCost.value += costUsd;
+  }
+}
+
 export class HatchPetPipeline {
   constructor(private deps: HatchPipelineDeps) {}
 
@@ -215,12 +281,12 @@ export class HatchPetPipeline {
         totalCostUsd: 0,
         durationMs: Date.now() - start,
         warnings,
-        errors
+        errors,
+        failedRows: [],
+        failedRowReasons: {}
       };
     }
-
     // 关键决策：根据本次生图模型是否支持透明背景，选择整轮的 chroma key 策略。
-    // gpt-image-2 不支持透明 → 用白色 chroma，prompt 让模型画白底；
     // gpt-image-1 支持透明 → 用绿色 chroma，模型给透明也能兼容。
     // 这个决策对 base/row 所有调用统一生效，确保拼 atlas 时不会一半白底一半绿底。
     const imgCfg = this.deps.imageGen.getConfig();
@@ -245,6 +311,7 @@ export class HatchPetPipeline {
 
     const totalJobsCount = manifest.jobs.filter((j: HatchJobSpec) => !j.mirrorableFrom).length;
     const estimatedCost = totalJobsCount * 0.05;
+    const costCtx = makeCostContext(estimatedCost, warnings);
     input.onProgress?.({
       kind: "start",
       runId,
@@ -257,9 +324,16 @@ export class HatchPetPipeline {
     let basePng: Buffer;
     let baseCost = 0;
     try {
-      const { png, costUsd } = await this.generateBase(input, tier, chroma, useTransparent);
+      const { png, costUsd } = await this.generateBase(
+        input,
+        tier,
+        chroma,
+        useTransparent,
+        costCtx
+      );
       basePng = makeCanonicalBase({ imagePng: png, cell });
       baseCost = costUsd ?? 0;
+      addCost(costCtx, baseCost);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       errors.push(`base 生成失败：${msg}`);
@@ -274,17 +348,16 @@ export class HatchPetPipeline {
         totalCostUsd: baseCost,
         durationMs: Date.now() - start,
         warnings,
-        errors
+        errors,
+        failedRows: [...HATCH_PET_ROW_STATES],
+        failedRowReasons: {}
       };
     }
     let totalCost = baseCost;
 
     // ===== Step 2: 9 行 strip（有限并发） =====
     const rowConcurrency = resolveHatchRowConcurrency(input.rowConcurrency);
-    const rowResults: Record<
-      HatchPetRowState,
-      { png?: Buffer; failed?: string; cost?: number }
-    > = {} as Record<HatchPetRowState, { png?: Buffer; failed?: string }>;
+    const rowResults = {} as Record<HatchPetRowState, RowResultEntry>;
 
     const generateOneRow = async (rowState: HatchPetRowState): Promise<void> => {
       if (input.signal?.aborted) return;
@@ -303,9 +376,11 @@ export class HatchPetPipeline {
           input,
           tier,
           chroma,
-          useTransparent
+          useTransparent,
+          costCtx
         );
         rowResults[rowState] = { png: result.png, cost: result.costUsd };
+        addCost(costCtx, result.costUsd);
         input.onProgress?.({
           kind: "job_done",
           jobId: `row-${rowState}`,
@@ -361,20 +436,188 @@ export class HatchPetPipeline {
       totalCost += rowResults[rowState]?.cost ?? 0;
     }
 
-    // ===== Step 3: 抠 chroma + 裁帧 =====
-    const rowFramesPng: Record<HatchPetRowState, Buffer[]> = {} as Record<
-      HatchPetRowState,
-      Buffer[]
-    >;
+    if (input.signal?.aborted) return abortResult(start);
+
+    return this.finalizeAndPersist({
+      input,
+      tier,
+      chroma,
+      useTransparent,
+      basePng,
+      rowResults,
+      frameCounts,
+      cell,
+      grid,
+      totalCost,
+      warnings,
+      errors,
+      runId,
+      start,
+      manifest
+    });
+  }
+
+  /**
+   * 仅重试指定姿态行：复用已落盘的 base 与成功行 raw strip，覆盖写 atlas。
+   */
+  async retryRows(
+    input: HatchPipelineInput,
+    rowsToRetry: HatchPetRowState[]
+  ): Promise<HatchPipelineResult> {
+    const start = Date.now();
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    const runId = ulid();
+    const tier: ImageTierName = input.tier ?? "standard";
+    const cell = { ...DEFAULT_ATLAS_CELL };
+    const grid = { ...DEFAULT_ATLAS_GRID };
+    const frameCounts = { ...DEFAULT_ROW_FRAME_COUNTS };
+    const assetDir = this.deps.vault.getPetAssetDir(input.characterId);
+    const basePath = join(assetDir, "canonical-base.png");
+
+    let basePng: Buffer;
+    try {
+      basePng = readFileSync(basePath);
+    } catch {
+      return {
+        ok: false,
+        totalCostUsd: 0,
+        durationMs: Date.now() - start,
+        warnings,
+        errors: ["缺少 canonical-base.png，无法部分重试"],
+        failedRows: rowsToRetry,
+        failedRowReasons: {}
+      };
+    }
+
+    const imgCfg = this.deps.imageGen.getConfig();
+    const tierCfg = imgCfg?.tiers?.[tier];
+    const useTransparent = tierCfg ? modelSupportsTransparent(tierCfg.model) : true;
+    const chroma = useTransparent ? CHROMA_GREEN : CHROMA_WHITE;
+
+    const manifest = prepareHatchPetRun({
+      runId,
+      cell,
+      grid,
+      frameCounts,
+      userReferenceCount: input.userReferences.length,
+      allowMirrorRunningLeft: input.allowMirror ?? true,
+      estimatedCostPerImageUsd: 0.05
+    });
+    const estimatedCost = rowsToRetry.length * 0.05;
+    const costCtx = makeCostContext(estimatedCost, warnings);
+
+    const rowResults = {} as Record<HatchPetRowState, RowResultEntry>;
+    const retrySet = new Set(rowsToRetry);
+
+    for (const rowState of HATCH_PET_ROW_STATES) {
+      if (retrySet.has(rowState)) continue;
+      const rawPath = join(assetDir, `raw-row-${rowState}.png`);
+      try {
+        rowResults[rowState] = { png: readFileSync(rawPath), cost: 0 };
+      } catch {
+        return {
+          ok: false,
+          totalCostUsd: 0,
+          durationMs: Date.now() - start,
+          warnings,
+          errors: [`缺少 raw-row-${rowState}.png，无法部分重试`],
+          failedRows: rowsToRetry,
+          failedRowReasons: {}
+        };
+      }
+    }
+
+    let totalCost = 0;
+    for (const rowState of rowsToRetry) {
+      if (input.signal?.aborted) return abortResult(start);
+      const t0 = Date.now();
+      input.onProgress?.({
+        kind: "job_start",
+        jobId: `row-${rowState}`,
+        rowState
+      });
+      try {
+        const result = await this.generateRow(
+          rowState,
+          frameCounts[rowState],
+          cell,
+          basePng,
+          input,
+          tier,
+          chroma,
+          useTransparent,
+          costCtx
+        );
+        rowResults[rowState] = { png: result.png, cost: result.costUsd };
+        addCost(costCtx, result.costUsd);
+        totalCost += result.costUsd ?? 0;
+        input.onProgress?.({
+          kind: "job_done",
+          jobId: `row-${rowState}`,
+          rowState,
+          durationMs: Date.now() - t0,
+          costUsd: result.costUsd
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        rowResults[rowState] = { failed: msg };
+        warnings.push(`row-${rowState} 重试失败：${msg}`);
+        input.onProgress?.({
+          kind: "job_failed",
+          jobId: `row-${rowState}`,
+          rowState,
+          reason: msg
+        });
+      }
+    }
+
+    return this.finalizeAndPersist({
+      input,
+      tier,
+      chroma,
+      useTransparent,
+      basePng,
+      rowResults,
+      frameCounts,
+      cell,
+      grid,
+      totalCost,
+      warnings,
+      errors,
+      runId,
+      start,
+      manifest
+    });
+  }
+
+  private async finalizeAndPersist(args: FinalizeArgs): Promise<HatchPipelineResult> {
+    const {
+      input,
+      tier,
+      chroma,
+      useTransparent,
+      basePng,
+      rowResults,
+      frameCounts,
+      cell,
+      grid,
+      totalCost,
+      warnings,
+      errors,
+      runId,
+      start,
+      manifest
+    } = args;
+
+    const rowFramesPng = {} as Record<HatchPetRowState, Buffer[]>;
+    const failedRows: HatchPetRowState[] = [];
     let chromaStrategy: ChromaStrategy = useTransparent ? "green" : "white";
+
     for (const rowState of HATCH_PET_ROW_STATES) {
       const r = rowResults[rowState];
-      if (!r.png) {
-        // 失败行：回退为 base 重复 N 帧，保证至少有动作（虽然没有变化）
-        warnings.push(`row-${rowState} 用 base 兜底为 ${frameCounts[rowState]} 帧`);
-        const repeats: Buffer[] = [];
-        for (let i = 0; i < frameCounts[rowState]; i += 1) repeats.push(basePng);
-        rowFramesPng[rowState] = repeats;
+      if (!r?.png) {
+        failedRows.push(rowState);
         continue;
       }
       try {
@@ -390,22 +633,38 @@ export class HatchPetPipeline {
         rowFramesPng[rowState] = frames.map((f: ExtractedFrame) => f.png);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        warnings.push(`row-${rowState} 裁帧失败：${msg}，用 base 兜底`);
-        const repeats: Buffer[] = [];
-        for (let i = 0; i < frameCounts[rowState]; i += 1) repeats.push(basePng);
-        rowFramesPng[rowState] = repeats;
+        failedRows.push(rowState);
+        warnings.push(`row-${rowState} 裁帧失败：${msg}`);
       }
     }
 
-    // ===== Step 4: 拼 atlas =====
+    const fallbackFrame = pickFallbackFrame(rowFramesPng);
+    for (const rowState of failedRows) {
+      const count = frameCounts[rowState];
+      if (fallbackFrame) {
+        warnings.push(`row-${rowState} 用已成功行抠像帧兜底为 ${count} 帧`);
+        rowFramesPng[rowState] = Array.from({ length: count }, () => fallbackFrame);
+      } else {
+        warnings.push(`row-${rowState} 整轮无成功行，用未抠像 base 兜底为 ${count} 帧`);
+        rowFramesPng[rowState] = Array.from({ length: count }, () => basePng);
+      }
+    }
+
+    const uniqueFailedRows = [...new Set(failedRows)];
+    const failedRowReasons: Partial<Record<HatchPetRowState, string>> = {};
+    for (const rowState of uniqueFailedRows) {
+      const reason = rowResults[rowState]?.failed;
+      if (reason) failedRowReasons[rowState] = reason;
+    }
+
     if (input.signal?.aborted) return abortResult(start);
+
     const composeRows = HATCH_PET_ROW_STATES.map((state, idx) => ({
       rowIndex: idx,
       framesPng: rowFramesPng[state] ?? []
     }));
     const atlasPng = composeAtlas({ cell, grid, rows: composeRows });
 
-    // ===== Step 5: 校验 =====
     const rowFrameCounts: Record<number, number> = {};
     const rowStates: Record<number, string> = {};
     HATCH_PET_ROW_STATES.forEach((state, idx) => {
@@ -418,8 +677,6 @@ export class HatchPetPipeline {
       grid,
       rowFrameCounts,
       rowStates,
-      // gpt-image 产出的 1024×1024 方图经「切槽 + fit 到 192×208」
-      // 后，角色占格比例可能偏小；这属于 QA 警告，不应让整只桌宠失败。
       minOpaquePerFrame: Math.floor(cell.width * cell.height * 0.015)
     });
     input.onProgress?.({ kind: "atlas_composed", report: validation });
@@ -429,7 +686,6 @@ export class HatchPetPipeline {
       );
     }
 
-    // ===== Step 6: QA 资产 =====
     const contactSheet = makeContactSheet({
       rows: HATCH_PET_ROW_STATES.map((state) => ({
         label: state,
@@ -443,7 +699,6 @@ export class HatchPetPipeline {
       cell
     });
 
-    // ===== Step 7: 落盘 =====
     const assetDir = this.deps.vault.getPetAssetDir(input.characterId);
     const atlasPath = join(assetDir, "spritesheet.png");
     const contactPath = join(assetDir, "contact-sheet.png");
@@ -474,6 +729,7 @@ export class HatchPetPipeline {
             chromaSpillThreshold: chroma === CHROMA_WHITE ? 40 : 75,
             durationMs: Date.now() - start,
             totalCostUsd: totalCost,
+            failedRows: uniqueFailedRows,
             validation,
             manifest
           },
@@ -493,7 +749,6 @@ export class HatchPetPipeline {
       atlasPath
     });
 
-    // ===== Step 8: 组装 SpriteProgram =====
     const stateBindings = defaultAtlasStateBindings(frameCounts);
     const atlas: AtlasPet = {
       spritesheetUrl: bufferToDataUrl(atlasPng, "image/png"),
@@ -528,8 +783,6 @@ export class HatchPetPipeline {
     };
 
     return {
-      // 只要 atlas 尺寸正确且未使用格子透明，就视为可用资产；
-      // 低 opaque / 小角色等问题作为 QA warning 给用户看。
       ok: validation.sizeOk && validation.trailingTransparent,
       program,
       atlas,
@@ -537,49 +790,76 @@ export class HatchPetPipeline {
       totalCostUsd: totalCost,
       durationMs: Date.now() - start,
       warnings,
-      errors
+      errors,
+      failedRows: uniqueFailedRows,
+      failedRowReasons
     };
+  }
+
+  private async invokeWithModerationRetry(
+    label: string,
+    costCtx: GenerationCostContext,
+    call: (anonymize: boolean) => Promise<ImageGenerationResponse>
+  ): Promise<{ png: Buffer; costUsd?: number }> {
+    const first = await call(false);
+    if (first.kind === "done") {
+      return { png: first.buffer, costUsd: first.estimatedCostUsd };
+    }
+    if (isModerationBlocked(first.message)) {
+      if (costCtx.costCapExceeded()) {
+        costCtx.warnings.push(
+          `${label} 成本已超预估 ${COST_SOFT_CAP_MULTIPLIER} 倍，跳过自动软化重试`
+        );
+        throw new Error(`${first.code}: ${first.message}`);
+      }
+      const retry = await call(true);
+      if (retry.kind === "done") {
+        costCtx.warnings.push(`${label} moderation 拦截后去标识化重试成功`);
+        return { png: retry.buffer, costUsd: retry.estimatedCostUsd };
+      }
+      throw new Error(`${retry.code}: ${retry.message}`);
+    }
+    throw new Error(`${first.code}: ${first.message}`);
   }
 
   private async generateBase(
     input: HatchPipelineInput,
     tier: ImageTierName,
     chroma: { r: number; g: number; b: number },
-    transparentBackground: boolean
+    transparentBackground: boolean,
+    costCtx: GenerationCostContext
   ): Promise<{ png: Buffer; costUsd?: number }> {
-    const prompt = buildHatchPetBasePrompt({
-      characterName: input.characterName,
-      appearance: input.appearance,
-      userHint: undefined,
-      stylePreset: input.stylePreset ?? "auto",
-      chromaKey: chroma
-    });
-
-    // 当前 ohmygpt /images/edits 对多图 multipart 支持不稳定：
-    // image[0]/image[1] 会被识别为 0 张图，重复 image 会 500。
-    // 所以 base 阶段只使用第一张主参考图；其它参考信息已被 AppearanceSpec 吸收。
     const userRefs = input.userReferences.slice(0, 1).map((r) => r.url);
     const label = `hatch:${input.characterName.slice(0, 16)}:base`;
 
-    const res =
-      userRefs.length > 0
-        ? await this.deps.imageGen.edit({
-            prompt,
-            images: userRefs,
-            tier,
-            transparentBackground,
-            requestLabel: label
-          })
-        : await this.deps.imageGen.generate({
-            prompt,
-            tier,
-            transparentBackground,
-            requestLabel: label
-          });
-    if (res.kind === "error") {
-      throw new Error(`${res.code}: ${res.message}`);
-    }
-    return { png: res.buffer, costUsd: res.estimatedCostUsd };
+    return this.invokeWithModerationRetry(
+      label,
+      costCtx,
+      (anonymize) => {
+        const prompt = buildHatchPetBasePrompt({
+          characterName: input.characterName,
+          appearance: input.appearance,
+          userHint: undefined,
+          stylePreset: input.stylePreset ?? "auto",
+          chromaKey: chroma,
+          anonymize
+        });
+        return userRefs.length > 0
+          ? this.deps.imageGen.edit({
+              prompt,
+              images: userRefs,
+              tier,
+              transparentBackground,
+              requestLabel: label
+            })
+          : this.deps.imageGen.generate({
+              prompt,
+              tier,
+              transparentBackground,
+              requestLabel: label
+            });
+      }
+    );
   }
 
   private async generateRow(
@@ -590,35 +870,33 @@ export class HatchPetPipeline {
     input: HatchPipelineInput,
     tier: ImageTierName,
     chroma: { r: number; g: number; b: number },
-    transparentBackground: boolean
+    transparentBackground: boolean,
+    costCtx: GenerationCostContext
   ): Promise<{ png: Buffer; costUsd?: number }> {
-    const prompt = buildHatchPetRowPrompt({
-      characterName: input.characterName,
-      appearance: input.appearance,
-      rowState,
-      frameCount,
-      cell,
-      stylePreset: input.stylePreset ?? "auto",
-      chromaKey: chroma
-    });
-    const images: string[] = [
-      bufferToDataUrl(canonicalBasePng, "image/png")
-    ];
+    const images: string[] = [bufferToDataUrl(canonicalBasePng, "image/png")];
     const tierCfg = this.deps.imageGen.getConfig().tiers[tier];
-    const res = await this.deps.imageGen.edit({
-      prompt,
-      images,
-      tier,
-      transparentBackground,
-      // row strip 是宽幅，OpenAI Images 不允许任意宽高比；openaiImages 模式按 1024×1024 兜底，
-      // pet-atlas-tools 在裁帧时会 resize 到目标 cell。
-      ...(resolveParamMode(tierCfg) === "openaiImages" ? { size: "1024x1024" } : {}),
-      requestLabel: `hatch:${input.characterName.slice(0, 16)}:row-${rowState}`
+    const label = `hatch:${input.characterName.slice(0, 16)}:row-${rowState}`;
+
+    return this.invokeWithModerationRetry(label, costCtx, (anonymize) => {
+      const prompt = buildHatchPetRowPrompt({
+        characterName: input.characterName,
+        appearance: input.appearance,
+        rowState,
+        frameCount,
+        cell,
+        stylePreset: input.stylePreset ?? "auto",
+        chromaKey: chroma,
+        anonymize
+      });
+      return this.deps.imageGen.edit({
+        prompt,
+        images,
+        tier,
+        transparentBackground,
+        ...(resolveParamMode(tierCfg) === "openaiImages" ? { size: "1024x1024" } : {}),
+        requestLabel: label
+      });
     });
-    if (res.kind === "error") {
-      throw new Error(`${res.code}: ${res.message}`);
-    }
-    return { png: res.buffer, costUsd: res.estimatedCostUsd };
   }
 }
 
@@ -628,7 +906,9 @@ function abortResult(start: number): HatchPipelineResult {
     totalCostUsd: 0,
     durationMs: Date.now() - start,
     warnings: [],
-    errors: ["pipeline aborted"]
+    errors: ["pipeline aborted"],
+    failedRows: [],
+    failedRowReasons: {}
   };
 }
 
