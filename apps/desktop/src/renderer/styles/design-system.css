@@ -1313,7 +1313,6 @@ body {
   grid-row: unset;
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 12rem;
   overflow: hidden;
   visibility: visible;
   opacity: 1;
@@ -1329,6 +1328,11 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 版本号：eyebrow 默认 0.2em 字距会把 "v0.0.7" 撑出侧栏被截成 v0.0... */
+.settings-brand__version {
+  letter-spacing: 0.06em;
 }
 
 .settings-brand__title {
