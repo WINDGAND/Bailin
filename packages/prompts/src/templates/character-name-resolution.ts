@@ -5,6 +5,10 @@
 export interface CharacterNameResolutionInput {
   characterName: string;
   sourceType: "public-figure" | "fictional" | "original";
+  /** 出处 / 身份消歧义锚点（如「斩赤红之瞳」「NBA 球星」），来自身份契约。 */
+  sourceContext?: string;
+  /** 身份定位提示（如「男主角」），来自身份契约的复合输入拆分。 */
+  identityHint?: string;
   /** 人格卡或调研阶段已产出的候选名，供 LLM 参考。 */
   hints?: {
     name?: string;
@@ -17,7 +21,7 @@ export interface CharacterNameResolutionInput {
 export function buildCharacterNameResolutionPrompt(
   input: CharacterNameResolutionInput
 ): { system: string; user: string } {
-  const { characterName, sourceType, hints } = input;
+  const { characterName, sourceType, sourceContext, identityHint, hints } = input;
 
   const system = [
     "你是百灵 Bailin 的角色命名专员。",
@@ -30,6 +34,11 @@ export function buildCharacterNameResolutionPrompt(
     "4. chineseName 必须是中文（外国角色译名用间隔号 · 分隔姓与名，如「科比·布莱恩特」「薇尔莉特·伊芙加登」）。",
     "5. englishName 必须是拉丁字母官方写法（可含空格、点、连字符）。",
     "6. 两行名称必须都填写，不可留空。",
+    "7. **如果用户提供了 sourceContext（出处 / 身份锚点），必须锁定该出处内的角色**——",
+    "   同名角色在不同作品/领域可能是完全不同的人，禁止解析成其它作品/领域里的同名实体。",
+    "   例：sourceContext=「斩赤红之瞳」+ 角色名「塔兹米」→ 必须解析该动漫的男主角 Tatsumi，不能解析成其它作品的同名角色。",
+    "8. 额外返回 matchedSourceContext（你实际核实到的出处，越具体越好）与 confidence；",
+    "   如果无法确认与给定 sourceContext 一致，confidence 必须是 low，不可假装 high。",
     "",
     "命名规则：",
     "- 中国 / 华人公众人物：中文名用大众最熟知的写法；英文名优先查官方或媒体常用英文译名（如 周杰伦 → Jay Chou，不是 Zhou Jielun）。",
@@ -42,7 +51,7 @@ export function buildCharacterNameResolutionPrompt(
     "- 中日韩动漫角色：中文名遵循大陆常见译名；英文名用罗马字官方写法。",
     "",
     "JSON 格式：",
-    '{ "chineseName": "string", "englishName": "string" }'
+    '{ "chineseName": "string", "englishName": "string", "matchedSourceContext": "string", "confidence": "high|low" }'
   ].join("\n");
 
   const userParts = [
@@ -50,6 +59,15 @@ export function buildCharacterNameResolutionPrompt(
     `类型：${sourceType}。`,
     "用户输入可能缺少间隔号或拼写不规范，你必须检索后给出权威写法。"
   ];
+
+  if (sourceContext && sourceContext.trim().length > 0) {
+    userParts.push(
+      `出处 / 身份锚点：${sourceContext.trim()}（必须锁定此出处内的角色，禁止解析成其它同名实体）。`
+    );
+  }
+  if (identityHint && identityHint.trim().length > 0) {
+    userParts.push(`身份定位提示：${identityHint.trim()}`);
+  }
 
   if (hints?.name || hints?.sourceName || hints?.chineseName || hints?.englishName) {
     userParts.push("", "模型/卡片已有候选（**仅供参考，错误时必须纠正**）：");

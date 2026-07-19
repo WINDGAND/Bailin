@@ -27,16 +27,23 @@ export function DistillationJobBanner({
 
   const { characterName } = activeJob;
   const displayPhase = translatePhaseMessage(phaseLabel, t, locale);
-  const isRunning = bannerStatus === "running" || bannerStatus === "awaiting_research";
+  const isRunning =
+    bannerStatus === "running" ||
+    bannerStatus === "awaiting_research" ||
+    bannerStatus === "awaiting_sprite";
 
   let borderColor: string | undefined;
   if (bannerStatus === "failed") borderColor = "rgba(220, 38, 38, 0.35)";
   else if (bannerStatus === "done") borderColor = "rgba(22, 163, 74, 0.35)";
-  else if (bannerStatus === "awaiting_research") borderColor = "rgba(217, 154, 58, 0.45)";
+  else if (bannerStatus === "awaiting_research" || bannerStatus === "awaiting_sprite") {
+    borderColor = "rgba(217, 154, 58, 0.45)";
+  }
 
   let mainText: string;
   if (bannerStatus === "awaiting_research") {
     mainText = t("distill.bannerAwaitingResearch", { name: characterName });
+  } else if (bannerStatus === "awaiting_sprite") {
+    mainText = t("distill.bannerAwaitingSprite", { name: characterName });
   } else if (bannerStatus === "done") {
     mainText = t("distill.bannerDone", { name: characterName });
   } else if (bannerStatus === "failed") {

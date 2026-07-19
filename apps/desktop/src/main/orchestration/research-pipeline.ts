@@ -75,6 +75,8 @@ export interface RunResearchAgentsInput {
   onlyAgents?: ResearchAgentSlug[];
   /** 每路 Agent 的联网 / 本地策略；缺省则全部使用 webSearchEnabled。 */
   agentPlans?: AgentResearchPlan[];
+  /** 用户取消蒸馏时传入；会与单 agent 超时 signal 合并。 */
+  signal?: AbortSignal;
 }
 
 export interface RunResearchAgentsResult {
@@ -100,6 +102,8 @@ export async function runResearchAgents(
   const concurrency = Math.max(1, Math.min(6, input.concurrency));
 
   const runOne = async (slug: ResearchAgentSlug): Promise<void> => {
+    if (input.signal?.aborted) return;
+
     const agentId = SLUG_TO_AGENT_ID[slug];
     const plan = input.agentPlans?.find((p) => p.slug === slug);
     const webForAgent = plan?.webSearchEnabled ?? input.webSearchEnabled;
@@ -142,8 +146,9 @@ export async function runResearchAgents(
     });
     input.onAgentStart?.(slug, agentName);
     const agentStartedAt = Date.now();
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), input.timeoutMs);
+    const timeoutCtl = new AbortController();
+    const timer = setTimeout(() => timeoutCtl.abort(), input.timeoutMs);
+    const signal = mergeAbortSignals(input.signal, timeoutCtl.signal);
 
     const requestLabel = `research:${slug}:${truncateForLabel(input.characterName)}`;
     try {
@@ -153,7 +158,7 @@ export async function runResearchAgents(
         temperature: 0.4,
         maxTokens: 4500,
         stream: false,
-        signal: controller.signal,
+        signal,
         enableWebSearch: webForAgent,
         maxToolCalls: 6,
         modelOverride: webForAgent ? input.researchModel : undefined,
@@ -162,8 +167,9 @@ export async function runResearchAgents(
       });
 
       const durationMs = Date.now() - agentStartedAt;
+      if (input.signal?.aborted) return;
       if (result.kind === "error") {
-        const isTimeout = controller.signal.aborted;
+        const isTimeout = timeoutCtl.signal.aborted && !input.signal?.aborted;
         const safeMessage = researchErrorToUserMessage(result.message, isTimeout);
         const errLine = `[research-pipeline] ${requestLabel} FAILED kind=error code=${result.code} dt=${durationMs}ms`;
         console.warn(errLine);
@@ -210,6 +216,7 @@ export async function runResearchAgents(
       docs.push(doc);
       input.onAgentDone?.(doc);
     } catch (e) {
+      if (input.signal?.aborted) return;
       const safeMessage = researchErrorToUserMessage(
         e instanceof Error ? e.message : String(e),
         false
@@ -233,7 +240,14 @@ export async function runResearchAgents(
   };
 
   while (queue.length > 0 || inflight.size > 0) {
+    if (input.signal?.aborted) {
+      queue.length = 0;
+      if (inflight.size === 0) break;
+      await Promise.race(inflight);
+      continue;
+    }
     while (queue.length > 0 && inflight.size < concurrency) {
+      if (input.signal?.aborted) break;
       const slug = queue.shift()!;
       const task = runOne(slug).finally(() => {
         inflight.delete(task);
@@ -275,6 +289,25 @@ function researchErrorToUserMessage(raw: string, timeout: boolean): string {
 
 function truncateForLabel(s: string): string {
   return s.slice(0, 32).replace(/\s+/g, "_");
+}
+
+function mergeAbortSignals(
+  userSignal: AbortSignal | undefined,
+  timeoutSignal: AbortSignal
+): AbortSignal {
+  if (!userSignal) return timeoutSignal;
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([userSignal, timeoutSignal]);
+  }
+  const ac = new AbortController();
+  const abort = (): void => ac.abort();
+  if (userSignal.aborted || timeoutSignal.aborted) {
+    ac.abort();
+    return ac.signal;
+  }
+  userSignal.addEventListener("abort", abort, { once: true });
+  timeoutSignal.addEventListener("abort", abort, { once: true });
+  return ac.signal;
 }
 
 /**

@@ -290,7 +290,10 @@ export class ImageGenerationAdapter {
         const src = req.images[i];
         if (!src) continue;
         const blob = await dataUrlOrUrlToBlob(src);
-        form.set(req.images.length === 1 ? "image" : `image[${i}]`, blob, `ref-${i}.png`);
+        // OpenAI/Azure 兼容 Images Edits 端点识别名为 `image` 的 multipart part。
+        // 多图通过重复同名字段表达；`image[0]` / `image[1]` 会被部分兼容服务
+        // 当成完全不同的未知字段，最终返回 “At least one image is required”。
+        form.append("image", blob, `ref-${i}.png`);
       }
       if (req.mask) {
         const blob = await dataUrlOrUrlToBlob(req.mask);

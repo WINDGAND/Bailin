@@ -69,6 +69,11 @@ export function ResearchCheckpointDialog(props: {
     });
   }
 
+  const sortedAgents = useMemo(() => {
+    if (!review) return [];
+    return [...review.agents].sort((a, b) => a.agentId - b.agentId);
+  }, [review]);
+
   return (
     <div
       className="modal-backdrop"
@@ -79,132 +84,139 @@ export function ResearchCheckpointDialog(props: {
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="modal" style={{ width: 580, maxHeight: "85vh", overflowY: "auto" }}>
-        <div className="eyebrow" style={{ marginBottom: 8 }}>
+      <div className="modal checkpoint-dialog">
+        <div className="eyebrow checkpoint-dialog__eyebrow">
           {t("distill.checkpoint1Eyebrow")}
         </div>
-        <div
-          id="checkpoint-title"
-          className="display display--section"
-          style={{ marginBottom: 12 }}
-        >
+        <div id="checkpoint-title" className="display display--section checkpoint-dialog__title">
           {t("distill.checkpoint1Title")}
         </div>
-        {researchSummary && review ? (
-          <div style={{ marginBottom: 14 }}>
-            <p className="body-sm" style={{ margin: 0, fontWeight: 600 }}>
-              {t("distill.checkpointReviewOneLiner", {
-                ok: researchSummary.okCount,
-                local: review.localMaterialAgentCount,
-                supplement: supplementCount
-              })}
-            </p>
-            <p className="body-sm" style={{ margin: "6px 0 0", color: "var(--ink-faint)" }}>
-              {t("distill.checkpointResearchStats", {
-                ok: researchSummary.okCount,
-                failed: researchSummary.failedCount,
-                seconds: Math.round(researchSummary.totalDurationMs / 1000)
-              })}
-            </p>
-            {review.lowSourceWarning ? (
-              <p className="body-sm" style={{ margin: "6px 0 0", color: "var(--amber)" }}>
-                {t("distill.checkpointReviewLowSource")}
-              </p>
-            ) : null}
-            {review.gapResearchWarning ? (
-              <p className="body-sm" style={{ margin: "6px 0 0", color: "var(--amber)" }}>
-                {t("distill.checkpointReviewGapWarning")}
-              </p>
-            ) : null}
 
-            <details style={{ marginTop: 12 }}>
-              <summary className="eyebrow" style={{ cursor: "pointer" }}>
-                {t("distill.checkpointReviewDetails")}
-              </summary>
-              <p className="body-sm" style={{ margin: "8px 0 0" }}>
-                {t("distill.checkpointReviewSources", {
-                  count: review.totalUniqueUrls,
-                  ratio: review.primaryRatioLabel
+        {researchSummary && review ? (
+          <div className="checkpoint-dialog__body">
+            <div className="checkpoint-dialog__stats">
+              <p className="checkpoint-dialog__stat checkpoint-dialog__stat--strong">
+                {t("distill.checkpointReviewOneLiner", {
+                  ok: researchSummary.okCount,
+                  local: review.localMaterialAgentCount,
+                  supplement: supplementCount
                 })}
               </p>
-
-              <table
-                className="body-sm"
-                style={{ width: "100%", marginTop: 12, borderCollapse: "collapse" }}
-              >
-                <thead>
-                  <tr style={{ textAlign: "left", color: "var(--ink-faint)" }}>
-                    <th style={{ padding: "4px 6px 4px 0", width: 28 }} />
-                    <th style={{ padding: "4px 6px" }}>#</th>
-                    <th style={{ padding: "4px 6px" }}>{t("distill.checkpointReviewFindings")}</th>
-                    <th style={{ padding: "4px 6px" }}>URL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {review.agents.map((row) => (
-                    <tr key={row.agentId}>
-                      <td style={{ padding: "4px 6px 4px 0" }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedAgents.has(row.agentId)}
-                          onChange={() => toggleAgent(row.agentId)}
-                          aria-label={t(agentNameKey(row.agentId))}
-                        />
-                      </td>
-                      <td style={{ padding: "4px 6px", whiteSpace: "nowrap" }}>
-                        {row.agentId} {t(agentNameKey(row.agentId))}
-                        <div style={{ color: "var(--ink-faint)", fontSize: 12 }}>
-                          {row.status} · {row.confidence}
-                          {!row.webSearchUsed ? " · local" : ""}
-                        </div>
-                      </td>
-                      <td style={{ padding: "4px 6px" }}>
-                        {row.keyFindings.length > 0
-                          ? row.keyFindings.join(" · ")
-                          : t("distill.checkpointReviewNone")}
-                      </td>
-                      <td style={{ padding: "4px 6px" }}>{row.uniqueUrlCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {review.weakDimensions.length > 0 ? (
-                <div style={{ marginTop: 10 }}>
-                  <div className="eyebrow">{t("distill.checkpointReviewWeak")}</div>
-                  <p className="body-sm" style={{ margin: "4px 0 0" }}>
-                    {review.weakDimensions.join(" · ")}
-                  </p>
-                </div>
-              ) : null}
-
-              {review.contradictions.length > 0 ? (
-                <div style={{ marginTop: 10 }}>
-                  <div className="eyebrow">{t("distill.checkpointReviewContradictions")}</div>
-                  <ul className="body-sm" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
-                    {review.contradictions.map((c, i) => (
-                      <li key={i}>{c}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              <p className="body-sm" style={{ marginTop: 12, color: "var(--ink-faint)" }}>
-                {t("distill.checkpointSelectAgents")}
+              <p className="checkpoint-dialog__stat">
+                {t("distill.checkpointResearchStats", {
+                  ok: researchSummary.okCount,
+                  failed: researchSummary.failedCount,
+                  seconds: Math.round(researchSummary.totalDurationMs / 1000)
+                })}
               </p>
+              {review.lowSourceWarning ? (
+                <p className="checkpoint-dialog__stat checkpoint-dialog__stat--warn">
+                  {t("distill.checkpointReviewLowSource")}
+                </p>
+              ) : null}
+              {review.gapResearchWarning ? (
+                <p className="checkpoint-dialog__stat checkpoint-dialog__stat--warn">
+                  {t("distill.checkpointReviewGapWarning")}
+                </p>
+              ) : null}
+            </div>
+
+            <ul className="checkpoint-agent-list" aria-label={t("distill.checkpointSelectAgents")}>
+              {sortedAgents.map((row) => {
+                const selected = selectedAgents.has(row.agentId);
+                const indexLabel = String(row.agentId).padStart(2, "0");
+                const findings =
+                  row.keyFindings.length > 0
+                    ? row.keyFindings.join(" · ")
+                    : t("distill.checkpointReviewNone");
+                const metaParts = [
+                  row.status,
+                  row.confidence,
+                  !row.webSearchUsed ? "local" : null,
+                  t("distill.checkpointReviewUrlCount", { count: row.uniqueUrlCount })
+                ].filter(Boolean);
+
+                return (
+                  <li
+                    key={row.agentId}
+                    className={`checkpoint-agent-item${selected ? " is-selected" : ""}${
+                      isSupplementCandidate(row) ? " is-weak" : ""
+                    }`}
+                  >
+                    <label className="checkpoint-agent-row">
+                      <input
+                        type="checkbox"
+                        className="checkpoint-agent-check"
+                        checked={selected}
+                        onChange={() => toggleAgent(row.agentId)}
+                        aria-label={t(agentNameKey(row.agentId))}
+                      />
+                      <span className="checkpoint-agent-index" aria-hidden="true">
+                        {indexLabel}
+                      </span>
+                      <span className="checkpoint-agent-main">
+                        <span className="checkpoint-agent-title-row">
+                          <span className="checkpoint-agent-title">
+                            {t(agentNameKey(row.agentId))}
+                          </span>
+                          <span className="checkpoint-agent-meta">{metaParts.join(" · ")}</span>
+                        </span>
+                        <span className="checkpoint-agent-finding">{findings}</span>
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {review.contradictions.length > 0 ? (
+              <section className="checkpoint-dialog__signals" aria-labelledby="checkpoint-conflicts">
+                <h4 className="checkpoint-dialog__signals-title" id="checkpoint-conflicts">
+                  {t("distill.checkpointReviewContradictions")}
+                </h4>
+                <ul className="checkpoint-dialog__signals-list">
+                  {review.contradictions.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            <details className="checkpoint-dialog__more">
+              <summary className="checkpoint-dialog__more-summary">
+                {t("distill.checkpointReviewDetails")}
+              </summary>
+              <div className="checkpoint-dialog__more-body">
+                <p className="checkpoint-dialog__stat">
+                  {t("distill.checkpointReviewSources", {
+                    count: review.totalUniqueUrls,
+                    ratio: review.primaryRatioLabel
+                  })}
+                </p>
+                {review.weakDimensions.length > 0 ? (
+                  <div className="checkpoint-dialog__weak">
+                    <div className="checkpoint-dialog__weak-title">
+                      {t("distill.checkpointReviewWeak")}
+                    </div>
+                    <p className="checkpoint-dialog__stat">
+                      {review.weakDimensions.join(" · ")}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </details>
+
+            <p className="checkpoint-dialog__hint">{t("distill.checkpointSelectAgents")}</p>
           </div>
         ) : null}
-        <div className="row row--end gap-2" style={{ flexDirection: "column", alignItems: "stretch" }}>
+
+        <div className="checkpoint-dialog__actions">
           {selectedAgents.size > 0 ? (
-            <p
-              className="body-sm"
-              style={{ margin: "0 0 4px", color: "var(--ink-faint)", textAlign: "right" }}
-            >
+            <p className="checkpoint-dialog__actions-hint">
               {t("distill.checkpointSupplementHint")}
             </p>
           ) : null}
-          <div className="row row--end gap-2">
+          <div className="checkpoint-dialog__actions-row">
             <button
               type="button"
               className="btn btn--ghost"

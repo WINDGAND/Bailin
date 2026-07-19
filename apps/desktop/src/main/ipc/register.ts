@@ -348,6 +348,7 @@ export function registerIpc(deps: IpcDeps): void {
     vault.upsertCharacter({ id: bundle.card.id, bundle, isSkeleton: false, now });
     deps.setActiveCharacterId(bundle.card.id);
     vault.setSetting(SETTING_ACTIVE_CHARACTER, bundle.card.id);
+    deps.ensurePetOnScreen();
     broadcast(IPC.EventActiveCharacterChanged, bundle);
     return { ok: true, characterId: bundle.card.id };
   });
@@ -539,6 +540,9 @@ export function registerIpc(deps: IpcDeps): void {
             vault.updateJobStatus(jobId, "done", 100, "完成");
             deps.setActiveCharacterId(bundle.card.id);
             vault.setSetting(SETTING_ACTIVE_CHARACTER, bundle.card.id);
+            // 与 CharactersActivate 对齐：写入当前角色后必须把宠物窗拉到前台，
+            // 否则库里会显示「已在桌面」，但窗体若曾被隐藏用户看不到新宠。
+            deps.ensurePetOnScreen();
             broadcast(IPC.EventActiveCharacterChanged, bundle);
             // 转发给渲染进程
             const forwardEvt: DistillationProgressEvent = {

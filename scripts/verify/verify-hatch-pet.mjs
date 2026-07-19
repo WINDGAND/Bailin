@@ -62,7 +62,11 @@ const {
   countInteriorTransparentPixels,
   removeChromaBackgroundConnected,
   measureFrameAnchor,
-  stripMatchesEqualSlotLayout
+  stripMatchesEqualSlotLayout,
+  selectStripRawFrames,
+  computeRowBodyReference,
+  computeCanonicalBodyScale,
+  finalizeAlignedFrames
 } = require(toolsPath);
 
 let allOk = true;
@@ -720,6 +724,159 @@ fallbackBorderTransparent >= 0.35
   ? ok(`抠像兜底帧外圈透明占比 ${(fallbackBorderTransparent * 100).toFixed(0)}%（非整格白底）`)
   : fail(`抠像兜底帧外圈透明占比 ${(fallbackBorderTransparent * 100).toFixed(0)}% 过低，像未抠白底`);
 
+// ===== 8/8 跨行统一尺度：修复"待机大、奔跑小"与识别"待机胸像/半身"（Kunling bad case） =====
+console.log("\n[8/8] cross-row canonical scale (Kunling bad case)");
+
+// --- 8a. 尺度跳变：idle 全身且窄，running 行里混入一帧「大跨步」极宽帧， ---
+//     导致该行共享的单一 scale 被这一帧拖累，全行（含其余窄帧）被整体缩小。
+const cx0 = (w) => Math.floor(w / 2);
+const idleFrameCount = 6;
+const idleStrip = blankImage(cell.width * idleFrameCount, cell.height);
+fillChroma(idleStrip, chromaKey);
+for (let i = 0; i < idleFrameCount; i += 1) {
+  const cx = i * cell.width + cx0(cell.width);
+  fillRect(idleStrip, cx - 25, 15, 50, 170, 90, 150, 210);
+}
+const runFrameCount = DEFAULT_ROW_FRAME_COUNTS["running-right"];
+const runStrip = blankImage(cell.width * runFrameCount, cell.height);
+fillChroma(runStrip, chromaKey);
+for (let i = 0; i < runFrameCount; i += 1) {
+  const cx = i * cell.width + cx0(cell.width);
+  if (i === Math.floor(runFrameCount / 2)) {
+    // 大跨步帧：宽度远超其余窄帧，aspect < 1.05 但仍是完整全身（非半身），
+    // 只是该姿态本身很宽——正是这种孤立宽帧会把整行的 scale 拖垮。
+    fillRect(runStrip, cx - 150, 30, 300, 150, 90, 150, 210);
+  } else {
+    fillRect(runStrip, cx - 25, 15, 50, 170, 90, 150, 210);
+  }
+}
+
+const idleSlot = {
+  rowIndex: 0,
+  frameCount: idleFrameCount,
+  stripPng: encodePng(idleStrip),
+  chromaKey,
+  chromaThreshold: 60,
+  rowState: "idle"
+};
+const runSlot = {
+  rowIndex: 1,
+  frameCount: runFrameCount,
+  stripPng: encodePng(runStrip),
+  chromaKey,
+  chromaThreshold: 60,
+  rowState: "running-right"
+};
+
+function medianNarrowFrameHeight(alignedFrames, wideIndex) {
+  const heights = alignedFrames
+    .map((f, idx) => (idx === wideIndex ? null : opaqueBounds(decodePng(f.png)).h))
+    .filter((h) => h != null)
+    .sort((a, b) => a - b);
+  return heights[Math.floor(heights.length / 2)];
+}
+
+// —— 旧行为对照：逐行各自 extractStripFrames（无 forcedScale），idle 与 running
+//    各自独立按自己的最大内容尺寸伸展到满格——running 因大跨步帧被整体压小。
+const legacyIdleFrames = extractStripFrames(idleSlot, cell);
+const legacyRunFrames = extractStripFrames(runSlot, cell);
+const legacyIdleH = medianNarrowFrameHeight(legacyIdleFrames, -1);
+const legacyRunH = medianNarrowFrameHeight(legacyRunFrames, Math.floor(runFrameCount / 2));
+const legacyDeviation = Math.abs(legacyIdleH - legacyRunH) / Math.max(1, legacyIdleH);
+// 逐行独立缩放：running 行内混入的一帧大跨步宽姿态会把该行的共享 scale 拖到
+// 「按宽度收缩」，而 idle 行仍按高度撑满——即便其余窄帧本意画的是同样大小的
+// 身体，legacy 也会让它们看起来比 idle 小一圈，这正是「待机大、奔跑小」的成因。
+legacyDeviation > 0.03
+  ? ok(`旧行为（逐行独立缩放）暴露可测量的尺度落差：idle=${legacyIdleH}px vs running=${legacyRunH}px，偏差 ${(legacyDeviation * 100).toFixed(1)}%`)
+  : fail(`旧行为未能暴露尺度落差（idle=${legacyIdleH}px vs running=${legacyRunH}px），回归用例设计需要调整`);
+
+// —— 新行为：先测量两行的身体尺度，取统一 canonical scale，再各自对齐 ——
+const idleRaw = selectStripRawFrames(idleSlot, cell);
+const runRaw = selectStripRawFrames(runSlot, cell);
+const refs = [computeRowBodyReference(idleRaw), computeRowBodyReference(runRaw)];
+const forcedScale = computeCanonicalBodyScale(refs, cell);
+const idleAligned = finalizeAlignedFrames(idleRaw, cell, {
+  alignMode: "standing",
+  safeMargin: 12,
+  bboxPadding: 8,
+  forcedScale
+});
+const runAligned = finalizeAlignedFrames(runRaw, cell, {
+  alignMode: "motion",
+  safeMargin: 12,
+  bboxPadding: 8,
+  forcedScale
+});
+const fixedIdleH = medianNarrowFrameHeight(idleAligned, -1);
+const fixedRunH = medianNarrowFrameHeight(runAligned, Math.floor(runFrameCount / 2));
+const fixedDeviation = Math.abs(fixedIdleH - fixedRunH) / Math.max(1, fixedIdleH);
+fixedDeviation <= 0.1 && fixedDeviation < legacyDeviation
+  ? ok(`统一 forcedScale 后 idle=${fixedIdleH}px vs running=${fixedRunH}px，偏差 ${(fixedDeviation * 100).toFixed(1)}% ≤ 10% 且优于旧行为的 ${(legacyDeviation * 100).toFixed(1)}%`)
+  : fail(`统一 forcedScale 后 idle=${fixedIdleH}px vs running=${fixedRunH}px，偏差 ${(fixedDeviation * 100).toFixed(1)}% 未改善或仍过大`);
+
+const fixedAtlas = composeAtlas({
+  cell,
+  grid,
+  rows: [
+    { rowIndex: 0, framesPng: idleAligned.map((f) => f.png) },
+    { rowIndex: 1, framesPng: runAligned.map((f) => f.png) }
+  ]
+});
+const fixedReport = validateAtlas({
+  atlasPng: fixedAtlas,
+  cell,
+  grid,
+  rowFrameCounts: { 0: idleFrameCount, 1: runFrameCount },
+  rowStates: { 0: "idle", 1: "running-right" }
+});
+fixedReport.failedRowIndices.length === 0
+  ? ok("统一 forcedScale 后 validateAtlas 不再标记尺度跳变 failedRowIndices")
+  : fail(`统一 forcedScale 后仍有 failedRowIndices=[${fixedReport.failedRowIndices.join(",")}]：${fixedReport.issues.slice(0, 3).join(" | ")}`);
+
+// --- 8b. 半身/胸像：idle 全部帧都只画出宽而不高的胸像（aspect < 1.05）。 ---
+//     forcedScale 只统一「尺度」，无法把本来就没画全身的内容变成全身；
+//     validateAtlas 必须始终标记该行失败，交由 pipeline 层触发重新生成，
+//     而不是静默交付半身待机动画。
+const bustFrameCount = 6;
+const bustStrip = blankImage(cell.width * bustFrameCount, cell.height);
+fillChroma(bustStrip, chromaKey);
+for (let i = 0; i < bustFrameCount; i += 1) {
+  const cx = i * cell.width + cx0(cell.width);
+  fillRect(bustStrip, cx - 55, cell.height - 90, 110, 60, 200, 120, 60);
+}
+const bustSlot = {
+  rowIndex: 0,
+  frameCount: bustFrameCount,
+  stripPng: encodePng(bustStrip),
+  chromaKey,
+  chromaThreshold: 60,
+  rowState: "idle"
+};
+const bustRaw = selectStripRawFrames(bustSlot, cell);
+const bustRef = computeRowBodyReference(bustRaw);
+const bustForcedScale = computeCanonicalBodyScale([bustRef, refs[1]], cell);
+const bustAligned = finalizeAlignedFrames(bustRaw, cell, {
+  alignMode: "standing",
+  safeMargin: 12,
+  bboxPadding: 8,
+  forcedScale: bustForcedScale
+});
+const bustAtlas = composeAtlas({
+  cell,
+  grid,
+  rows: [{ rowIndex: 0, framesPng: bustAligned.map((f) => f.png) }]
+});
+const bustReport = validateAtlas({
+  atlasPng: bustAtlas,
+  cell,
+  grid,
+  rowFrameCounts: { 0: bustFrameCount },
+  rowStates: { 0: "idle" }
+});
+bustReport.failedRowIndices.includes(0)
+  ? ok("半身 idle 行即使套用统一 forcedScale，仍被 validateAtlas 正确标记为失败（需 pipeline 重新生成，而非交付半身）")
+  : fail("半身 idle 行未被标记失败——存在静默交付半身待机动画的风险");
+
 // ===== 写出样例资产，便于人工肉眼检查 =====
 const outDir = resolve(repoRoot, ".smoke-out", "hatch-pet");
 mkdirSync(outDir, { recursive: true });
@@ -729,6 +886,8 @@ writeFileSync(resolve(outDir, "atlas.png"), atlasPng);
 writeFileSync(resolve(outDir, "layout-guide.png"), guidePng);
 writeFileSync(resolve(outDir, "contact-sheet.png"), sheetPng);
 writeFileSync(resolve(outDir, "report.json"), JSON.stringify(report, null, 2));
+writeFileSync(resolve(outDir, "cross-row-fixed-atlas.png"), fixedAtlas);
+writeFileSync(resolve(outDir, "cross-row-bust-atlas.png"), bustAtlas);
 ok(`样例资产已写到 ${outDir}`);
 
 if (!allOk) {

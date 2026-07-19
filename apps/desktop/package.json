@@ -15,6 +15,7 @@
     "prestart": "pnpm run build:main && pnpm run build:preload",
     "start": "electron .",
     "typecheck": "pnpm --dir ../.. -r --filter @bailin/character-protocol --filter @bailin/prompts --filter @bailin/pet-atlas-tools --filter @bailin/sprite-runtime run build && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "test": "node ../../scripts/run-node-tests.mjs src",
     "package": "node ./scripts/package-win.mjs"
   },
   "dependencies": {
@@ -41,6 +42,7 @@
     "react-dom": "^18.3.1",
     "sharp": "^0.35.2",
     "to-ico": "^1.1.5",
+    "tsx": "^4.19.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.8"
   },

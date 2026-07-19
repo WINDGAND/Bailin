@@ -40,6 +40,13 @@ export interface RowAlignOptions {
   safeMargin?: number;
   /** cropOpaqueBounds 额外 padding；默认 8。 */
   bboxPadding?: number;
+  /**
+   * 跨行统一 scale（见 computeCanonicalBodyScale）。传入时作为该行 scale 的起点，
+   * 而不是仅用本行自己的 maxW / maxContentH 计算——这是修复「idle 和 running 大小不一致」
+   * 的关键：所有行必须共用同一个身体尺度锚点，各行只在自己需要更小时才继续收缩
+   * （水平越界 / 站立行超高仍会各自 clamp，不会变得比 forcedScale 更大）。
+   */
+  forcedScale?: number;
 }
 
 export interface RowSlot {
@@ -91,7 +98,11 @@ export function applyStripChromaPipeline(strip: RawImage, slot: RowSlot): RawIma
       const spill =
         slot.chromaSpillThreshold ?? seed + (isGreenKey ? 15 : 10);
       const edgeSpill = seed + (isGreenKey ? 10 : 8);
-      const maxIsland = 0;
+      // 绿幕常被头发/四肢包成小块孤岛；只清除接近纯 key 色的小孤岛，
+      // 避免把角色内部大面积或低亮度绿色服饰当背景。
+      // 生图 strip 往往是 1024px 方图，缩进 atlas 后约缩小 4-5 倍；
+      // 目标帧里约 70px 的绿幕洞在原图可能超过 1,500px。
+      const maxIsland = isGreenKey ? 4096 : 0;
       const chromaOpts = {
         chromaKey: key,
         seedThreshold: seed,
@@ -104,6 +115,7 @@ export function applyStripChromaPipeline(strip: RawImage, slot: RowSlot): RawIma
       processed = removeChromaBackgroundConnected(processed, chromaOpts);
       processed = repairInteriorAlphaHoles(processed);
       processed = polishChromaMatte(processed, chromaOpts);
+      processed = repairInteriorAlphaHoles(processed);
     }
   } else {
     processed = repairInteriorAlphaHoles(processed);
@@ -144,7 +156,8 @@ const MOTION_ROW_STATES = new Set([
   "running-right",
   "running-left",
   "jumping",
-  "running"
+  "running",
+  "failed"
 ]);
 
 /** 根据 hatch 行状态推断垂直锚定模式。 */
@@ -163,11 +176,26 @@ function buildRowAlignOptions(slot: RowSlot): RowAlignOptions {
 
 export function extractStripFrames(
   slot: RowSlot,
-  cell: CellSpec
+  cell: CellSpec,
+  opts?: { forcedScale?: number }
 ): ExtractedFrame[] {
+  const rawFrames = selectStripRawFrames(slot, cell);
+  const alignOpts = buildRowAlignOptions(slot);
+  return finalizeAlignedFrames(rawFrames, cell, {
+    ...alignOpts,
+    forcedScale: opts?.forcedScale
+  });
+}
+
+/**
+ * 从行 strip 中选出「未缩放对齐」的原始候选帧（等宽 slot 或连通组件二选一）。
+ * 拆出这一步是为了让 hatch-pet-pipeline 能在真正对齐前先跨行测量身体尺度
+ * （见 computeRowBodyReference / computeCanonicalBodyScale），
+ * 避免每行各自算 scale 导致 idle/running 忽大忽小。
+ */
+export function selectStripRawFrames(slot: RowSlot, cell: CellSpec): RawImage[] {
   let strip = decodePng(slot.stripPng);
   strip = applyStripChromaPipeline(strip, slot);
-  const alignOpts = buildRowAlignOptions(slot);
 
   const preferComponent = !stripMatchesEqualSlotLayout(
     strip,
@@ -175,12 +203,7 @@ export function extractStripFrames(
     cell
   );
   if (preferComponent) {
-    const componentFrames = extractComponentFrames(
-      strip,
-      slot.frameCount,
-      cell,
-      alignOpts
-    );
+    const componentFrames = extractComponentRawFrames(strip, slot.frameCount);
     if (componentFrames) return componentFrames;
   }
 
@@ -190,18 +213,117 @@ export function extractStripFrames(
     slotRawFrames.every((f) => countOpaquePixels(f) > 24) &&
     !rowFramesLookSlotSplit(slotRawFrames);
   if (slotUsable) {
-    return finalizeAlignedFrames(slotRawFrames, cell, alignOpts);
+    return slotRawFrames;
   }
 
-  const componentFrames = extractComponentFrames(
-    strip,
-    slot.frameCount,
-    cell,
-    alignOpts
-  );
+  const componentFrames = extractComponentRawFrames(strip, slot.frameCount);
   if (componentFrames) return componentFrames;
 
-  return finalizeAlignedFrames(slotRawFrames, cell, alignOpts);
+  return slotRawFrames;
+}
+
+/** 全身判定的最小 bbox 高宽比；半身/胸像通常 <1，直立全身通常 >=1.1。 */
+export const MIN_FULL_BODY_ASPECT = 1.05;
+
+export interface RowBodyReference {
+  /** 该行（净化+裁边后）内容的最大高度，用于跨行统一 scale 的锚点。 */
+  maxContentH: number;
+  /** 该行内容高度中位数；用于抵抗单帧夸张动作并归一化不同生图尺度。 */
+  medianContentH: number;
+  /** 该行内容的最大宽度。 */
+  maxW: number;
+  /** 参与测量的帧里，判定为「全身」的比例（0..1）。 */
+  fullBodyFrameRatio: number;
+  /** 参与测量的帧数（去掉完全空白帧）。 */
+  measuredFrameCount: number;
+}
+
+/**
+ * 测量一行「净化后原始帧」（selectStripRawFrames 的输出）的身体尺度指标。
+ * 内部会先做 purifyFrameSilhouette + cropOpaqueBounds（与 alignRowFramesToCell 的
+ * prepared 步骤一致），确保测量口径和实际对齐时一致。
+ */
+export function computeRowBodyReference(
+  rawFrames: RawImage[],
+  opts?: { padding?: number; minFullBodyAspect?: number }
+): RowBodyReference {
+  const padding = opts?.padding ?? 8;
+  const minAspect = opts?.minFullBodyAspect ?? MIN_FULL_BODY_ASPECT;
+  let maxContentH = 1;
+  let maxW = 1;
+  const contentHeights: number[] = [];
+  let fullBodyCount = 0;
+  let measured = 0;
+  for (const raw of rawFrames) {
+    const frame = cropOpaqueBounds(purifyFrameSilhouette(raw), padding);
+    const bbox = measureOpaqueBBox(frame);
+    if (!bbox) continue;
+    measured += 1;
+    const h = bbox.maxY - bbox.minY + 1;
+    const w = bbox.maxX - bbox.minX + 1;
+    maxContentH = Math.max(maxContentH, h);
+    contentHeights.push(h);
+    maxW = Math.max(maxW, Math.max(w, frame.width));
+    if (h / Math.max(1, w) >= minAspect) fullBodyCount += 1;
+  }
+  return {
+    maxContentH,
+    medianContentH: Math.max(1, median(contentHeights)),
+    maxW,
+    fullBodyFrameRatio: measured > 0 ? fullBodyCount / measured : 0,
+    measuredFrameCount: measured
+  };
+}
+
+/**
+ * 跨行统一 scale：以「看起来像全身」的行为准（fullBodyFrameRatio >= 0.5），
+ * 取这些行里最大的内容高宽作为锚点；如果一行都不合格（极端情况），才退回全部行。
+ * 这样某一行意外裁出半身/胸像时，不会把错误的小尺度污染到其它正常行。
+ */
+export function computeCanonicalBodyScale(
+  refs: RowBodyReference[],
+  cell: CellSpec,
+  opts?: { safeMargin?: number; horizMargin?: number }
+): number {
+  const safeMargin = opts?.safeMargin ?? 12;
+  const horizMargin = opts?.horizMargin ?? 4;
+  const innerH = Math.max(1, cell.height - safeMargin * 2);
+  const plausible = refs.filter((r) => r.fullBodyFrameRatio >= 0.5);
+  const source = plausible.length > 0 ? plausible : refs;
+  const maxContentH = Math.max(1, ...source.map((r) => r.maxContentH));
+  const maxW = Math.max(1, ...source.map((r) => r.maxW));
+  return Math.max(
+    0.05,
+    Math.min((cell.width - horizMargin * 2) / maxW, innerH / maxContentH)
+  );
+}
+
+/**
+ * 为每一行分别计算归一化倍率。
+ *
+ * 生图模型会把同一个角色在不同动作 strip 中画成不同的源像素尺寸，因此“所有行
+ * 共用同一个倍率”并不能得到相同的可见人物大小。这里把每行的中位内容高度归一到
+ * cell 的可用高度；最终的水平越界保护仍由 alignRowFramesToCell 负责。
+ */
+export function computeCanonicalRowScales(
+  refs: RowBodyReference[],
+  cell: CellSpec,
+  opts?: { safeMargin?: number; horizMargin?: number; targetFillRatio?: number }
+): number[] {
+  const safeMargin = opts?.safeMargin ?? 12;
+  const horizMargin = opts?.horizMargin ?? 4;
+  const targetFillRatio = opts?.targetFillRatio ?? 1;
+  const innerH = Math.max(1, cell.height - safeMargin * 2);
+  const targetContentH = innerH * Math.max(0.5, Math.min(1, targetFillRatio));
+  return refs.map((ref) =>
+    Math.max(
+      0.05,
+      Math.min(
+        targetContentH / Math.max(1, ref.medianContentH),
+        (cell.width - horizMargin * 2) / Math.max(1, ref.maxW)
+      )
+    )
+  );
 }
 
 /** 等宽 slot 切缝内缩：方图/密排 strip 需要更大 inset 才能隔离邻帧。 */
@@ -407,7 +529,8 @@ function removeEdgeSliverComponents(frame: RawImage): RawImage {
   return frame;
 }
 
-function finalizeAlignedFrames(
+/** 把「未缩放原始帧」对齐、缩放、粘贴进 cell，产出最终 ExtractedFrame[]。 */
+export function finalizeAlignedFrames(
   rawFrames: RawImage[],
   cell: CellSpec,
   alignOpts: RowAlignOptions
@@ -427,12 +550,10 @@ function finalizeAlignedFrames(
  * 这里先用「非透明列投影」找出独立角色块，再按 x 坐标排序取前 frameCount 个。
  * 如果找不到足够块，才回退到等宽 slot 裁切。
  */
-function extractComponentFrames(
+function extractComponentRawFrames(
   strip: RawImage,
-  frameCount: number,
-  cell: CellSpec,
-  alignOpts: RowAlignOptions
-): ExtractedFrame[] | null {
+  frameCount: number
+): RawImage[] | null {
   const ranges = findConnectedComponents(strip, {
     minOpaquePixels: Math.max(24, Math.floor(strip.width * strip.height * 0.0002)),
     minWidth: Math.max(4, Math.floor(strip.width * 0.01)),
@@ -464,7 +585,7 @@ function extractComponentFrames(
 
   const rawFrames = buildCandidateFrames(strip, source, frameCount);
   if (rawFrames.length === 0) return null;
-  return finalizeAlignedFrames(rawFrames, cell, alignOpts);
+  return rawFrames;
 }
 
 function buildCandidateFrames(
@@ -670,10 +791,9 @@ export function alignRowFramesToCell(
   const innerBottom = cell.height - safeMargin;
   const innerH = Math.max(1, innerBottom - innerTop);
   const targetFootCenterX = cell.width / 2;
-  let scale = Math.min(
-    (cell.width - horizMargin * 2) / maxW,
-    innerH / maxContentH
-  );
+  let scale =
+    opts?.forcedScale ??
+    Math.min((cell.width - horizMargin * 2) / maxW, innerH / maxContentH);
 
   for (const frame of prepared) {
     const bbox = measureOpaqueBBox(frame);
@@ -691,11 +811,9 @@ export function alignRowFramesToCell(
     }
     const relTop = bbox.minY;
     const relBottom = bbox.maxY;
-    if (alignMode === "standing") {
-      const bodyH = relBottom - relTop + 1;
-      const bound = innerH / bodyH;
-      if (bound > 0) scale = Math.min(scale, bound);
-    }
+    const bodyH = relBottom - relTop + 1;
+    const bound = innerH / bodyH;
+    if (bound > 0) scale = Math.min(scale, bound);
   }
   scale = Math.max(0.05, scale);
 
@@ -1005,6 +1123,11 @@ export interface AtlasValidationReport {
   trailingTransparent: boolean;
   /** atlas 尺寸是否与 grid × cell 一致。 */
   sizeOk: boolean;
+  /**
+   * 存在「关键失败」（空白帧 / 半身裁切 / 与其它行尺度突变）的行索引。
+   * 调用方（hatch-pet-pipeline）应把这些行并入 failedRows，走一次重试而不是静默交付。
+   */
+  failedRowIndices: number[];
 }
 
 export interface AtlasValidationInput {
@@ -1025,6 +1148,12 @@ export interface AtlasValidationInput {
   maxFootYRange?: number;
   /** 单帧外圈 1px 允许的不透明像素数；默认 12。 */
   maxBorderOpaquePerFrame?: number;
+  /** 全身判定最小高宽比；默认 MIN_FULL_BODY_ASPECT（1.05）。 */
+  minFullBodyAspect?: number;
+  /** 一行里判定为「半身/裁切」需要的非全身帧比例阈值；默认 0.5（过半非全身即判失败）。 */
+  maxHalfBodyFrameRatio?: number;
+  /** 跨行内容高度相对全局中位数的最大偏差比例；默认 0.35（超出 ±35% 视为尺度突变）。 */
+  maxScaleJumpRatio?: number;
 }
 
 export function validateAtlas(input: AtlasValidationInput): AtlasValidationReport {
@@ -1043,13 +1172,19 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
     input.minOpaquePerFrame ?? Math.floor(cell.width * cell.height * 0.04);
   const maxInteriorHoles =
     input.maxInteriorTransparentPixels ??
-    Math.max(1, Math.floor(cell.width * cell.height * 0.001));
+    Math.max(1, Math.floor(cell.width * cell.height * 0.002));
   const maxCentroidXRange = input.maxCentroidXRange ?? 2;
   const maxFootYRange = input.maxFootYRange ?? 2;
   const maxBorderOpaque =
     input.maxBorderOpaquePerFrame ?? 12;
+  const minFullBodyAspect = input.minFullBodyAspect ?? MIN_FULL_BODY_ASPECT;
+  const maxHalfBodyFrameRatio = input.maxHalfBodyFrameRatio ?? 0.5;
+  const maxScaleJumpRatio = input.maxScaleJumpRatio ?? 0.35;
   const rowPixelCounts: AtlasValidationReport["rowPixelCounts"] = [];
   let trailingTransparent = true;
+  const failedRowIndices = new Set<number>();
+  /** 每行内容高度的中位数，用于跨行尺度突变检测（idle 与 running 忽大忽小）。 */
+  const rowMedianContentHeights: Array<{ row: number; median: number }> = [];
 
   for (let row = 0; row < grid.rows; row += 1) {
     const frameCount = input.rowFrameCounts[row];
@@ -1068,6 +1203,9 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
     const footCenterXs: number[] = [];
     const footYs: number[] = [];
     const headTopYs: number[] = [];
+    const contentHeights: number[] = [];
+    let halfBodyFrames = 0;
+    let measuredFrames = 0;
     const safeMargin = 12;
     for (let col = 0; col < grid.columns; col += 1) {
       const frame = extract(img, col * cell.width, row * cell.height, cell.width, cell.height);
@@ -1078,6 +1216,7 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
           issues.push(
             `row ${row} frame ${col} 不透明像素 ${count} < min ${minOpaque}，可能是空白帧`
           );
+          failedRowIndices.add(row);
         }
         const interiorHoles = countInteriorTransparentPixels(frame);
         if (interiorHoles > maxInteriorHoles) {
@@ -1112,6 +1251,13 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
                 `row ${row} frame ${col} 主体右缘 X=${bbox.maxX} > ${cell.width - 3}，可能被裁切`
               );
             }
+            const bboxH = bbox.maxY - bbox.minY + 1;
+            const bboxW = bbox.maxX - bbox.minX + 1;
+            measuredFrames += 1;
+            contentHeights.push(bboxH);
+            if (bboxH / Math.max(1, bboxW) < minFullBodyAspect) {
+              halfBodyFrames += 1;
+            }
           }
         }
       } else if (count > 0) {
@@ -1120,6 +1266,15 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
           `row ${row} col ${col}（超过 frameCount=${frameCount}）残留 ${count} 不透明像素`
         );
       }
+    }
+    if (measuredFrames > 0 && halfBodyFrames / measuredFrames > 1 - maxHalfBodyFrameRatio) {
+      issues.push(
+        `row ${row} ${halfBodyFrames}/${measuredFrames} 帧高宽比 < ${minFullBodyAspect}，疑似半身/胸像裁切`
+      );
+      failedRowIndices.add(row);
+    }
+    if (contentHeights.length > 0) {
+      rowMedianContentHeights.push({ row, median: median(contentHeights) });
     }
     if (footCenterXs.length >= 2) {
       const footCxRange = Math.max(...footCenterXs) - Math.min(...footCenterXs);
@@ -1147,13 +1302,39 @@ export function validateAtlas(input: AtlasValidationInput): AtlasValidationRepor
     rowPixelCounts.push({ rowIndex: row, perFrame });
   }
 
+  // 跨行尺度突变检测：idle 站立时身体高度和 running 冲刺时不应忽大忽小。
+  // 用全部行内容高度中位数的「中位数」作参照，比直接取均值更抗单一异常行干扰。
+  if (rowMedianContentHeights.length >= 2) {
+    const overallMedian = median(rowMedianContentHeights.map((r) => r.median));
+    for (const { row, median: rowMedian } of rowMedianContentHeights) {
+      if (overallMedian <= 0) continue;
+      const deviation = Math.abs(rowMedian - overallMedian) / overallMedian;
+      if (deviation > maxScaleJumpRatio) {
+        issues.push(
+          `row ${row} 内容高度中位数 ${rowMedian.toFixed(1)}px 与全局中位数 ${overallMedian.toFixed(1)}px 偏差 ${(deviation * 100).toFixed(0)}% > ${(maxScaleJumpRatio * 100).toFixed(0)}%，疑似尺度突变（该行姿态与其它行大小不一致）`
+        );
+        failedRowIndices.add(row);
+      }
+    }
+  }
+
   return {
     ok: sizeOk && trailingTransparent && issues.length === 0,
     issues,
     rowPixelCounts,
     trailingTransparent,
-    sizeOk
+    sizeOk,
+    failedRowIndices: [...failedRowIndices].sort((a, b) => a - b)
   };
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
+    : sorted[mid]!;
 }
 
 export interface ContactSheetInput {

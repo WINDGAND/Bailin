@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useBailin } from "../../shared/use-bailin.js";
 import { getCharacterDisplayNames } from "../../shared/character-display-name.js";
 import { PetPreview } from "../../shared/pet-preview.js";
@@ -11,12 +12,17 @@ import {
 } from "../../shared/feedback.js";
 import type {
   CharacterBundle,
+  QualityCheckItem,
   QualityReport,
   ResearchDoc,
   SpriteProgram
 } from "@bailin/character-protocol";
 import { useT } from "../../shared/i18n/index.js";
+import { ChatMarkdown } from "../../shared/chat-markdown.js";
+import { Icon } from "../../shared/icon.js";
 import { useVisualJobs } from "../app/visual-job-context.js";
+import { resolveCharacterSignature } from "./character-signature.js";
+import { runDetailTransition } from "./detail-transition.js";
 
 interface LibraryItem {
   id: string;
@@ -33,6 +39,8 @@ const TRACK_KEYS: Record<LibraryItem["track"], "library.trackUtility" | "library
 };
 
 const LIBRARY_PAGE_SIZE = 6;
+
+type PageDirection = "forward" | "backward";
 
 function libraryItemMatchesSearch(item: LibraryItem, query: string): boolean {
   const q = query.trim().toLowerCase();
@@ -77,24 +85,53 @@ export function CharacterLibrary({
   const [researchDocs, setResearchDocs] = useState<ResearchDoc[]>([]);
   const [qualityReport, setQualityReport] = useState<QualityReport | undefined>(undefined);
   const [openedAgentId, setOpenedAgentId] = useState<number | null>(null);
+  const [appearanceMenuOpen, setAppearanceMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [listPage, setListPage] = useState(1);
+  const [pageMotion, setPageMotion] = useState<{ nonce: number; direction: PageDirection }>({
+    nonce: 0,
+    direction: "forward"
+  });
+  const pickRequestRef = useRef(0);
+  const newRefFileInput = useRef<HTMLInputElement | null>(null);
+  const appearanceMenuRef = useRef<HTMLDivElement | null>(null);
+  const appearanceMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   async function pick(id: string): Promise<void> {
+    const requestId = ++pickRequestRef.current;
     setSelectedId(id);
     setOpenedAgentId(null);
+    setAppearanceMenuOpen(false);
+
     try {
-      const b = await bailin.characters.get(id);
+      const [b, extra] = await Promise.all([
+        bailin.characters.get(id),
+        bailin.characters.getResearchByCharacter(id)
+      ]);
+      if (requestId !== pickRequestRef.current) return;
       if (!b) {
         showToast({ kind: "warn", text: t("library.toastNotFound") });
         setSelected(null);
         return;
       }
-      setSelected(b);
-      const extra = await bailin.characters.getResearchByCharacter(id);
-      setResearchDocs(extra.docs);
-      setQualityReport(extra.qualityReport);
+      const viewTransitionDocument = document as Document & {
+        startViewTransition?: (update: () => void) => unknown;
+      };
+      runDetailTransition(
+        () => {
+          flushSync(() => {
+            setSelected(b);
+            setResearchDocs(extra.docs);
+            setQualityReport(extra.qualityReport);
+          });
+        },
+        {
+          startViewTransition:
+            viewTransitionDocument.startViewTransition?.bind(viewTransitionDocument)
+        }
+      );
     } catch (e) {
+      if (requestId !== pickRequestRef.current) return;
       showToast({
         kind: "error",
         text: t("library.toastReadFailed", {
@@ -232,8 +269,6 @@ export function CharacterLibrary({
     }
   }
 
-  const newRefFileInput = useRef<HTMLInputElement | null>(null);
-
   const qualityWarning = useMemo<{ severity: "warn" | "error"; text: string } | null>(
     () => deriveQualityWarning(qualityReport, selected?.researchDocs, t),
     [qualityReport, selected, t]
@@ -244,6 +279,17 @@ export function CharacterLibrary({
       selected
         ? getCharacterDisplayNames(selected.card.meta)
         : null,
+    [selected]
+  );
+  const selectedSignature = useMemo(
+    () =>
+      selected
+        ? resolveCharacterSignature({
+            quoteOneLiner: selected.card.meta.quoteOneLiner,
+            signatureVocabulary: selected.card.expressionDNA.vocabulary.signature,
+            selfIntro: selected.card.identity.selfIntro
+          })
+        : "",
     [selected]
   );
 
@@ -282,6 +328,41 @@ export function CharacterLibrary({
     if (listPage > totalPages) setListPage(totalPages);
   }, [listPage, totalPages]);
 
+  useEffect(() => {
+    if (!appearanceMenuOpen) return;
+    function onPointerDown(e: MouseEvent): void {
+      const target = e.target as Node;
+      if (appearanceMenuRef.current?.contains(target)) return;
+      if (appearanceMenuTriggerRef.current?.contains(target)) return;
+      setAppearanceMenuOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        setAppearanceMenuOpen(false);
+        appearanceMenuTriggerRef.current?.focus();
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [appearanceMenuOpen]);
+
+  useEffect(() => {
+    if (selectedRegenerating) setAppearanceMenuOpen(false);
+  }, [selectedRegenerating]);
+
+  function changeListPage(nextPage: number): void {
+    if (nextPage < 1 || nextPage > totalPages || nextPage === currentPage) return;
+    setPageMotion((current) => ({
+      nonce: current.nonce + 1,
+      direction: nextPage > currentPage ? "forward" : "backward"
+    }));
+    setListPage(nextPage);
+  }
+
   return (
     <div>
       <div className="row row--between" style={{ marginBottom: 26 }}>
@@ -318,10 +399,18 @@ export function CharacterLibrary({
           {items === null ? (
             <>
               {[0, 1, 2].map((i) => (
-                <div key={i} className="card" style={{ padding: 14 }}>
-                  <Skeleton width="60%" height={14} />
-                  <div style={{ marginTop: 8 }}>
-                    <Skeleton width="40%" height={11} />
+                <div
+                  key={i}
+                  className="plain-list__item"
+                  style={{ display: "flex", gap: 12, alignItems: "center", cursor: "default" }}
+                  aria-hidden="true"
+                >
+                  <Skeleton width={44} height={44} radius={10} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Skeleton width="60%" height={14} />
+                    <div style={{ marginTop: 8 }}>
+                      <Skeleton width="40%" height={11} />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -330,8 +419,12 @@ export function CharacterLibrary({
             <EmptyLibrary onNew={onNewClick} t={t} />
           ) : filteredItems!.length === 0 ? (
             <div
-              className="card"
-              style={{ padding: "24px 16px", textAlign: "center", borderTop: "1px solid var(--grid-strong)" }}
+              className="plain-list__item"
+              style={{
+                padding: "24px 16px",
+                textAlign: "center",
+                cursor: "default"
+              }}
             >
               <p className="body-sm" style={{ color: "var(--ink-soft)", margin: 0 }}>
                 {t("library.searchNoResults")}
@@ -347,17 +440,18 @@ export function CharacterLibrary({
               const itemBusy = itemJob?.status === "running";
               return (
                 <button
-                  key={c.id}
+                  key={`${pageMotion.nonce}-${c.id}`}
+                  type="button"
                   className={
                     selectedId === c.id
-                      ? "plain-list__item is-selected fade-in-up"
-                      : "plain-list__item fade-in-up"
+                      ? `plain-list__item is-selected library-list-item--page-in library-list-item--${pageMotion.direction}`
+                      : `plain-list__item library-list-item--page-in library-list-item--${pageMotion.direction}`
                   }
                   style={{
                     display: "flex",
                     gap: 12,
                     alignItems: "center",
-                    animationDelay: `${Math.min(i * 30, 120)}ms`
+                    animationDelay: `${Math.min(i * 24, 120)}ms`
                   }}
                   onClick={() => void pick(c.id)}
                 >
@@ -391,13 +485,13 @@ export function CharacterLibrary({
                         {displayName.chineseName}
                       </span>
                       {c.isActive ? (
-                        <span className="bl-tag bl-tag--active" style={{ transform: "scale(0.92)" }}>
+                        <span className="bl-tag bl-tag--sm bl-tag--active">
                           <span className="bl-tag__dot" />
                           {t("library.current")}
                         </span>
                       ) : null}
                       {itemBusy ? (
-                        <span className="bl-tag" style={{ transform: "scale(0.92)" }}>
+                        <span className="bl-tag bl-tag--sm">
                           <Spinner />
                           {t("library.processing")}
                         </span>
@@ -454,7 +548,7 @@ export function CharacterLibrary({
                   type="button"
                   className="btn btn--ghost"
                   disabled={currentPage <= 1}
-                  onClick={() => setListPage((p) => Math.max(1, p - 1))}
+                  onClick={() => changeListPage(currentPage - 1)}
                 >
                   {t("library.paginationPrev")}
                 </button>
@@ -462,7 +556,7 @@ export function CharacterLibrary({
                   type="button"
                   className="btn btn--ghost"
                   disabled={currentPage >= totalPages}
-                  onClick={() => setListPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => changeListPage(currentPage + 1)}
                 >
                   {t("library.paginationNext")}
                 </button>
@@ -472,11 +566,11 @@ export function CharacterLibrary({
         </div>
 
         {/* —————— 详情 —————— */}
-        <div className="bl-card" style={{ minHeight: 380 }}>
+        <div className="bl-card library-detail-surface" style={{ minHeight: 380 }}>
           {!selected ? (
             <EmptyDetail t={t} />
           ) : (
-            <div className="stack stack--lg fade-in">
+            <div className="library-detail stack stack--lg">
               <div className="row gap-3 row--start-top">
                 <div
                   className="apple-stage"
@@ -528,7 +622,7 @@ export function CharacterLibrary({
                   ) : null}
                   <p
                     className="body-sm"
-                    style={{ marginTop: 8, color: "var(--ink-faint)" }}
+                    style={{ marginTop: 8, color: "var(--ink-caption)" }}
                   >
                     {selected.card.meta.disclaimer}
                   </p>
@@ -539,8 +633,8 @@ export function CharacterLibrary({
                 <div
                   className={
                     qualityWarning.severity === "error"
-                      ? "bl-status-strip is-error fade-in"
-                      : "bl-status-strip is-warn fade-in"
+                      ? "bl-status-strip is-error"
+                      : "bl-status-strip is-warn"
                   }
                 >
                   <div className="bl-status-strip__body">
@@ -550,9 +644,9 @@ export function CharacterLibrary({
                 </div>
               ) : null}
 
-              {selected.card.meta.quoteOneLiner ? (
+              {selectedSignature ? (
                 <blockquote className="char-quote">
-                  「{selected.card.meta.quoteOneLiner}」
+                  「{selectedSignature}」
                 </blockquote>
               ) : null}
 
@@ -565,109 +659,167 @@ export function CharacterLibrary({
                     })}
                   </span>
                 </header>
-                <div className="stack stack--sm">
+                <ul className="mental-model-list">
                   {selected.card.mentalModels.map((m) => (
-                    <div key={m.id} style={{ lineHeight: 1.5 }}>
-                      <strong style={{ color: "var(--ink)" }}>{m.name}</strong>
-                      <span className="body-sm" style={{ marginLeft: 8 }}>
-                        —— {m.oneLiner}
-                      </span>
-                    </div>
+                    <li key={m.id} className="mental-model-item">
+                      <span className="mental-model-item__name">{m.name}</span>
+                      <span className="mental-model-item__line">{m.oneLiner}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </section>
 
               {selectedVisualJob && selectedVisualJob.status !== "running" ? (
                 <div
-                  className="body-sm fade-in"
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: `1px solid ${
-                      selectedVisualJob.status === "error"
-                        ? "rgba(220, 38, 38, 0.35)"
-                        : "rgba(22, 163, 74, 0.35)"
-                    }`,
-                    color:
-                      selectedVisualJob.status === "error" ? "var(--danger)" : "var(--ink-soft)"
-                  }}
+                  className={
+                    selectedVisualJob.status === "error"
+                      ? "bl-status-strip is-error"
+                      : "bl-status-strip is-ok"
+                  }
                 >
-                  {selectedVisualJob.status === "error"
-                    ? t("library.visualJobFailed", {
-                        name: selectedVisualJob.characterName,
-                        error: selectedVisualJob.error ?? t("common.unknownError")
-                      })
-                    : selectedVisualJob.kind === "sprite"
-                      ? t("library.visualJobDoneSprite", {
-                          name: selectedVisualJob.characterName
-                        })
-                      : t("library.visualJobDoneAppearance", {
-                          name: selectedVisualJob.characterName
-                        })}
+                  <div className="bl-status-strip__body">
+                    <div className="bl-status-strip__detail">
+                      {selectedVisualJob.status === "error"
+                        ? t("library.visualJobFailed", {
+                            name: selectedVisualJob.characterName,
+                            error: selectedVisualJob.error ?? t("common.unknownError")
+                          })
+                        : selectedVisualJob.kind === "sprite"
+                          ? t("library.visualJobDoneSprite", {
+                              name: selectedVisualJob.characterName
+                            })
+                          : t("library.visualJobDoneAppearance", {
+                              name: selectedVisualJob.characterName
+                            })}
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
-              <div className="row gap-2 row--wrap">
+              <div className="library-actions">
+                <div className="library-actions__primary">
+                  <button
+                    type="button"
+                    className={isSelectedActive ? "btn btn--ghost" : "btn btn--magenta"}
+                    onClick={() => void activate(selected.card.id)}
+                    disabled={anyBusy}
+                  >
+                    {activating ? (
+                      <>
+                        <Spinner /> {t("library.activating")}
+                      </>
+                    ) : isSelectedActive ? (
+                      t("library.showOnDesktop")
+                    ) : (
+                      t("library.setActive")
+                    )}
+                  </button>
+
+                  <div className="library-actions__menu-wrap">
+                    <button
+                      ref={appearanceMenuTriggerRef}
+                      type="button"
+                      className="btn btn--ghost"
+                      aria-haspopup="menu"
+                      aria-expanded={appearanceMenuOpen}
+                      disabled={activating}
+                      onClick={() => {
+                        if (selectedRegenerating) return;
+                        setAppearanceMenuOpen((open) => !open);
+                      }}
+                    >
+                      {selectedRegenerating ? (
+                        <>
+                          <Spinner /> {t("library.processing")}
+                        </>
+                      ) : (
+                        <>
+                          {t("library.appearanceMenu")}
+                          <Icon
+                            name="chevron-down"
+                            size={14}
+                            className="library-actions__chevron"
+                          />
+                        </>
+                      )}
+                    </button>
+                    {appearanceMenuOpen ? (
+                      <div
+                        ref={appearanceMenuRef}
+                        className="library-actions__menu fade-in"
+                        role="menu"
+                        aria-label={t("library.appearanceMenu")}
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="library-actions__menu-item"
+                          disabled={anyBusy}
+                          data-hint={
+                            selected.card.meta.appearance
+                              ? t("library.regenerateSpriteHintWithAppearance")
+                              : t("library.regenerateSpriteHintSkeleton")
+                          }
+                          onClick={() => {
+                            setAppearanceMenuOpen(false);
+                            void runSpriteRegeneration(
+                              selected.card.id,
+                              selected.card.meta.name
+                            );
+                          }}
+                        >
+                          <span className="library-actions__menu-label">
+                            {t("library.regenerateSprite")}
+                          </span>
+                          <span className="library-actions__menu-caption">
+                            {selected.card.meta.appearance
+                              ? t("library.regenerateSpriteHintWithAppearance")
+                              : t("library.regenerateSpriteHintSkeleton")}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="library-actions__menu-item"
+                          disabled={anyBusy}
+                          data-hint={t("library.newReferenceHint")}
+                          onClick={() => {
+                            setAppearanceMenuOpen(false);
+                            newRefFileInput.current?.click();
+                          }}
+                        >
+                          <span className="library-actions__menu-label">
+                            {t("library.newReference")}
+                          </span>
+                          <span className="library-actions__menu-caption">
+                            {t("library.newReferenceHint")}
+                          </span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <input
+                    ref={newRefFileInput}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f && selected) {
+                        void runAppearanceRegeneration(
+                          selected.card.id,
+                          selected.card.meta.name,
+                          f
+                        );
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+
                 <button
-                  className="btn btn--magenta"
-                  onClick={() => void activate(selected.card.id)}
-                  disabled={isSelectedActive || anyBusy}
-                  data-hint={isSelectedActive ? t("library.alreadyActiveHint") : ""}
-                >
-                  {activating ? <><Spinner /> {t("library.activating")}</> : t("library.setActive")}
-                </button>
-                <button
-                  className="btn btn--ghost"
-                  onClick={() =>
-                    void runSpriteRegeneration(selected.card.id, selected.card.meta.name)
-                  }
-                  disabled={anyBusy}
-                  data-hint={
-                    selected.card.meta.appearance
-                      ? t("library.regenerateSpriteHintWithAppearance")
-                      : t("library.regenerateSpriteHintSkeleton")
-                  }
-                >
-                  {selectedRegenerating && selectedVisualJob?.kind === "sprite" ? (
-                    <>
-                      <Spinner /> {t("library.processing")}
-                    </>
-                  ) : (
-                    t("library.regenerateSprite")
-                  )}
-                </button>
-                <button
-                  className="btn btn--ghost"
-                  onClick={() => newRefFileInput.current?.click()}
-                  disabled={anyBusy}
-                  data-hint={t("library.newReferenceHint")}
-                >
-                  {selectedRegenerating && selectedVisualJob?.kind === "appearance" ? (
-                    <>
-                      <Spinner /> {t("library.processing")}
-                    </>
-                  ) : (
-                    t("library.newReference")
-                  )}
-                </button>
-                <input
-                  ref={newRefFileInput}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f && selected) {
-                      void runAppearanceRegeneration(
-                        selected.card.id,
-                        selected.card.meta.name,
-                        f
-                      );
-                    }
-                    e.target.value = "";
-                  }}
-                />
-                <button
+                  type="button"
                   className="btn btn--danger"
                   onClick={() => void remove(selected.card.id, selected.card.meta.name)}
                   disabled={anyBusy}
@@ -676,192 +828,19 @@ export function CharacterLibrary({
                 </button>
               </div>
 
-              {/* —————— 调研档案（默认收起） —————— */}
+              {/* —————— 调研档案（默认收起 · 扁平卷宗列表） —————— */}
               {researchDocs.length > 0 ? (
-                <details style={{ marginTop: 4 }}>
-                  <summary
-                    style={{
-                      cursor: "pointer",
-                      userSelect: "none",
-                      fontFamily: "var(--font-body)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--ink-soft)",
-                      padding: "8px 0"
-                    }}
-                  >
-                    {t("library.researchArchive", { count: researchDocs.length })}
-                    <span
-                      className="body-sm"
-                      style={{ marginLeft: 8, fontWeight: 400 }}
-                    >
-                      {t("library.researchArchiveHint")}
-                    </span>
-                  </summary>
-                  <div className="stack" style={{ marginTop: 8 }}>
-                    {researchDocs.map((d) => (
-                      <div
-                        key={d.agentId}
-                        style={{
-                          padding: 14,
-                          background: "var(--paper)",
-                          borderRadius: 10,
-                          border: "1px solid var(--grid-strong)"
-                        }}
-                      >
-                        <div className="row row--between">
-                          <strong style={{ fontSize: 13, color: "var(--ink)" }}>
-                            {d.agentName}
-                          </strong>
-                          <span
-                            className="body-sm"
-                            style={{
-                              color:
-                                d.status === "ok"
-                                  ? "var(--emerald)"
-                                  : "var(--magenta)"
-                            }}
-                          >
-                            {d.status === "ok" ? t("library.researchDone") : t("library.researchFailed")} · {t("library.researchSources", { count: d.sources.length })}
-                          </span>
-                        </div>
-                        <div
-                          className="row gap-2"
-                          style={{ marginTop: 8, flexWrap: "wrap" }}
-                        >
-                          <button
-                            className="btn btn--ghost btn--sm"
-                            onClick={() =>
-                              setOpenedAgentId(
-                                openedAgentId === d.agentId ? null : d.agentId
-                              )
-                            }
-                          >
-                            {openedAgentId === d.agentId ? t("library.collapse") : t("library.viewMarkdown")}
-                          </button>
-                          <CopyButton small text={d.markdown} label={t("library.copyFull")} />
-                        </div>
-                        {openedAgentId === d.agentId ? (
-                          <pre
-                            className="fade-in"
-                            style={{
-                              marginTop: 8,
-                              padding: 10,
-                              maxHeight: 360,
-                              overflow: "auto",
-                              fontSize: 12,
-                              lineHeight: 1.55,
-                              background: "var(--paper-deep)",
-                              borderRadius: 8,
-                              whiteSpace: "pre-wrap",
-                              wordBreak: "break-word",
-                              fontFamily: "var(--font-mono)"
-                            }}
-                          >
-                            {d.markdown}
-                          </pre>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </details>
+                <ResearchArchiveSection
+                  docs={researchDocs}
+                  openedAgentId={openedAgentId}
+                  onToggle={(agentId) =>
+                    setOpenedAgentId(openedAgentId === agentId ? null : agentId)
+                  }
+                />
               ) : null}
 
-              {/* —————— 蒸馏过程指标（debug，默认深藏） —————— */}
-              {qualityReport ? (
-                <details style={{ marginTop: 4, color: "var(--ink-faint)" }}>
-                  <summary
-                    style={{
-                      cursor: "pointer",
-                      userSelect: "none",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11,
-                      letterSpacing: "0.18em",
-                      textTransform: "uppercase",
-                      color: "var(--ink-faint)",
-                      padding: "6px 0"
-                    }}
-                  >
-                    {t("library.debugMetrics")}
-                  </summary>
-                  <p
-                    className="body-sm"
-                    style={{ margin: "6px 0", color: "var(--ink-faint)" }}
-                  >
-                    {t("library.debugMetricsHint")}
-                  </p>
-                  <div
-                    className="row gap-2"
-                    style={{ marginBottom: 8, fontSize: 12, color: "var(--ink-soft)" }}
-                  >
-                    <span
-                      style={{
-                        color: verdictColor(qualityReport.verdict),
-                        fontWeight: 600
-                      }}
-                    >
-                      {qualityReport.verdict.toUpperCase()}
-                    </span>
-                    <span>
-                      {t("library.debugScore", {
-                        score: (qualityReport.overallScore * 100).toFixed(0)
-                      })}
-                    </span>
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <tbody>
-                      {qualityReport.items.map((it) => (
-                        <tr key={it.id}>
-                          <td
-                            style={{
-                              padding: "3px 8px 3px 0",
-                              color: it.pass ? "var(--emerald)" : "var(--magenta)",
-                              width: 18
-                            }}
-                          >
-                            {it.pass ? "✓" : "✗"}
-                          </td>
-                          <td style={{ padding: "3px 8px", fontSize: 12 }}>{it.label}</td>
-                          <td
-                            className="body-sm"
-                            style={{ padding: "3px 0", color: "var(--ink-faint)" }}
-                          >
-                            {it.reason}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {qualityReport.voiceTest ? (
-                    <div style={{ marginTop: 10 }}>
-                      <div
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 11,
-                          letterSpacing: "0.18em",
-                          textTransform: "uppercase",
-                          color: "var(--ink-faint)",
-                          marginBottom: 4
-                        }}
-                      >
-                        {t("library.voiceTestSample", { score: qualityReport.voiceTest.score })}
-                      </div>
-                      <blockquote
-                        className="body-sm"
-                        style={{
-                          margin: "6px 0",
-                          padding: "10px 12px",
-                          background: "var(--paper-deep)",
-                          border: "1px solid var(--grid)",
-                          borderRadius: "var(--radius-sm)"
-                        }}
-                      >
-                        {qualityReport.voiceTest.sample}
-                      </blockquote>
-                    </div>
-                  ) : null}
-                </details>
-              ) : null}
+              {/* —————— 蒸馏过程指标（与调研档案同壳） —————— */}
+              {qualityReport ? <QualityMetricsSection report={qualityReport} /> : null}
             </div>
           )}
         </div>
@@ -889,6 +868,225 @@ function SearchIcon({ size = 16 }: { size?: number }): JSX.Element {
   );
 }
 
+function researchExcerpt(markdown: string): string {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  for (const raw of lines) {
+    const line = raw
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/^[-*•]\s+/, "")
+      .replace(/^\d+[.)]\s+/, "")
+      .trim();
+    if (line.length < 8) continue;
+    if (line.startsWith("```") || line.startsWith("|") || line.startsWith("---")) continue;
+    return line;
+  }
+  return markdown.replace(/\s+/g, " ").trim().slice(0, 96);
+}
+
+function ResearchArchiveSection({
+  docs,
+  openedAgentId,
+  onToggle
+}: {
+  docs: ReadonlyArray<ResearchDoc>;
+  openedAgentId: number | null;
+  onToggle: (agentId: number) => void;
+}): JSX.Element {
+  const t = useT();
+  const sorted = useMemo(
+    () => [...docs].sort((a, b) => a.agentId - b.agentId),
+    [docs]
+  );
+
+  return (
+    <details className="research-archive">
+      <summary className="research-archive__summary">
+        {t("library.researchArchive", { count: docs.length })}
+      </summary>
+      <p className="research-archive__hint body-sm">{t("library.researchArchiveHint")}</p>
+      <ul className="research-archive__list">
+        {sorted.map((d) => {
+          const open = openedAgentId === d.agentId;
+          const ok = d.status === "ok";
+          const excerpt = researchExcerpt(d.markdown);
+          const indexLabel = String(d.agentId).padStart(2, "0");
+          return (
+            <li
+              key={d.agentId}
+              className={`research-archive__item${open ? " is-open" : ""}`}
+            >
+              <div
+                className="research-archive__row"
+                role="button"
+                tabIndex={0}
+                aria-expanded={open}
+                onClick={() => onToggle(d.agentId)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onToggle(d.agentId);
+                  }
+                }}
+              >
+                <span className="research-archive__index" aria-hidden="true">
+                  {indexLabel}
+                </span>
+                <div className="research-archive__main">
+                  <div className="research-archive__title-row">
+                    <span className="research-archive__title">{d.agentName}</span>
+                    <span
+                      className="research-archive__meta"
+                      data-status={ok ? "ok" : "fail"}
+                    >
+                      {ok ? t("library.researchDone") : t("library.researchFailed")}
+                      {" · "}
+                      {t("library.researchSources", { count: d.sources.length })}
+                    </span>
+                  </div>
+                  {excerpt ? (
+                    <p className="research-archive__excerpt">{excerpt}</p>
+                  ) : null}
+                </div>
+                <div
+                  className="research-archive__actions"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <CopyButton small text={d.markdown} label={t("library.copyFull")} />
+                </div>
+              </div>
+              {open ? (
+                <div className="research-archive__body">
+                  <div className="research-archive__markdown">
+                    <ChatMarkdown text={d.markdown} />
+                  </div>
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
+const QUALITY_GROUP_EXPRESSION = new Set(["dna-signature"]);
+const QUALITY_GROUP_TESTS = new Set(["sanity-test", "edge-test", "voice-test"]);
+
+type QualityGroupId = "structure" | "expression" | "tests";
+
+function qualityGroupForItem(id: string): QualityGroupId {
+  if (QUALITY_GROUP_EXPRESSION.has(id)) return "expression";
+  if (QUALITY_GROUP_TESTS.has(id)) return "tests";
+  return "structure";
+}
+
+const QUALITY_GROUP_ORDER: QualityGroupId[] = ["structure", "expression", "tests"];
+
+const QUALITY_GROUP_TITLE_KEY: Record<
+  QualityGroupId,
+  "library.qualityGroupStructure" | "library.qualityGroupExpression" | "library.qualityGroupTests"
+> = {
+  structure: "library.qualityGroupStructure",
+  expression: "library.qualityGroupExpression",
+  tests: "library.qualityGroupTests"
+};
+
+function QualityMetricsSection({ report }: { report: QualityReport }): JSX.Element {
+  const t = useT();
+  const groups = useMemo(() => {
+    const buckets: Record<QualityGroupId, QualityCheckItem[]> = {
+      structure: [],
+      expression: [],
+      tests: []
+    };
+    for (const item of report.items) {
+      buckets[qualityGroupForItem(item.id)].push(item);
+    }
+    return QUALITY_GROUP_ORDER.map((id) => ({
+      id,
+      titleKey: QUALITY_GROUP_TITLE_KEY[id],
+      items: buckets[id]
+    })).filter((g) => g.items.length > 0);
+  }, [report.items]);
+
+  const scorePct = Math.round(report.overallScore * 100);
+
+  return (
+    <details className="research-archive quality-metrics">
+      <summary className="research-archive__summary">{t("library.debugMetrics")}</summary>
+      <p className="research-archive__hint body-sm">{t("library.debugMetricsHint")}</p>
+
+      <div className="quality-metrics__verdict">
+        <span
+          className="quality-metrics__verdict-label"
+          data-verdict={report.verdict}
+        >
+          {report.verdict.toUpperCase()}
+        </span>
+        <span className="quality-metrics__verdict-score">
+          {t("library.debugScore", { score: scorePct })}
+        </span>
+      </div>
+
+      {groups.map((group) => (
+        <section key={group.id} className="quality-metrics__group" aria-labelledby={`qm-${group.id}`}>
+          <h4 className="quality-metrics__group-title" id={`qm-${group.id}`}>
+            {t(group.titleKey)}
+          </h4>
+          <ul className="quality-metrics__list">
+            {group.items.map((it) => (
+              <li
+                key={it.id}
+                className="quality-metrics__item"
+                data-pass={it.pass ? "true" : "false"}
+              >
+                <div className="quality-metrics__row">
+                  <span
+                    className="quality-metrics__mark"
+                    data-pass={it.pass ? "true" : "false"}
+                    aria-label={
+                      it.pass ? t("library.qualityItemPass") : t("library.qualityItemFail")
+                    }
+                  >
+                    <span aria-hidden="true">{it.pass ? "✓" : "✗"}</span>
+                  </span>
+                  <span className="quality-metrics__label">{it.label}</span>
+                  <p className="quality-metrics__reason" title={it.reason}>
+                    {it.reason}
+                  </p>
+                  {!it.pass ? (
+                    <div className="quality-metrics__bar" aria-hidden="true">
+                      <span
+                        className="quality-metrics__bar-fill"
+                        style={{ width: `${Math.round(it.score * 100)}%` }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      {report.voiceTest ? (
+        <div className="quality-metrics__voice">
+          <div className="quality-metrics__voice-title">
+            {t("library.voiceTestSample", { score: report.voiceTest.score })}
+          </div>
+          <blockquote className="quality-metrics__voice-quote">
+            {report.voiceTest.sample}
+          </blockquote>
+          {report.voiceTest.critique.trim() ? (
+            <p className="quality-metrics__voice-critique">{report.voiceTest.critique}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
 function EmptyLibrary({
   onNew,
   t
@@ -897,12 +1095,12 @@ function EmptyLibrary({
   t: (key: string, params?: Record<string, string | number>) => string;
 }): JSX.Element {
   return (
-    <div className="bl-card fade-in-up" style={{ padding: 22 }}>
+    <div className="library-detail" style={{ padding: "22px 4px" }}>
       <div className="empty">
         <div className="empty__title">{t("library.emptyTitle")}</div>
         <p className="empty__body">{t("library.emptyBody")}</p>
         <div className="row gap-2" style={{ marginTop: 6 }}>
-          <button className="btn btn--magenta btn--sm" onClick={onNew}>
+          <button type="button" className="btn btn--magenta btn--sm" onClick={onNew}>
             {t("library.emptyCta")}
           </button>
         </div>
@@ -922,12 +1120,6 @@ function EmptyDetail({
       <p className="empty__body">{t("library.detailEmptyBody")}</p>
     </div>
   );
-}
-
-function verdictColor(v: QualityReport["verdict"]): string {
-  if (v === "pass") return "var(--emerald)";
-  if (v === "warn") return "var(--amber)";
-  return "var(--magenta)";
 }
 
 /**

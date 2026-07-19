@@ -368,15 +368,30 @@ function isChromaResiduePixel(
   return false;
 }
 
+function isInteriorChromaResiduePixel(
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  key: { r: number; g: number; b: number },
+  thresholdSq: number,
+  greenSpill: boolean
+): boolean {
+  if (isTransparentAlpha(a)) return false;
+  if (isNearChroma(r, g, b, key, thresholdSq)) return true;
+  return greenSpill && g > 110 && isGreenDominantPixel(r, g, b, key);
+}
+
 function touchesTransparentNeighbor(
   data: Buffer,
   width: number,
   height: number,
   x: number,
-  y: number
+  y: number,
+  radius = 1
 ): boolean {
-  for (let dy = -1; dy <= 1; dy += 1) {
-    for (let dx = -1; dx <= 1; dx += 1) {
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
       if (dx === 0 && dy === 0) continue;
       const nx = x + dx;
       const ny = y + dy;
@@ -419,20 +434,18 @@ export function polishChromaMatte(
       const b = data[i + 2] ?? 0;
       const a = data[i + 3] ?? 0;
       if (isTransparentAlpha(a)) continue;
-      let touchesTrans = false;
-      for (const [nx, ny] of [
-        [x + 1, y],
-        [x - 1, y],
-        [x, y + 1],
-        [x, y - 1]
-      ] as const) {
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-        if (isTransparentAlpha(data[(ny * width + nx) * 4 + 3] ?? 0)) {
-          touchesTrans = true;
-          break;
+      // 斜向抗锯齿同样属于轮廓；只看四邻域会在头发边缘留下绿色锯齿点。
+      // 预留 3px 去溢色带，避免后续缩放把第二/三层暗绿色再次混到透明轮廓。
+      if (!touchesTransparentNeighbor(data, width, height, x, y, 3)) continue;
+      if (greenSpill && g > Math.max(r, b) + 12) {
+        // 仅处理贴着透明区的绿幕混色，避免误伤角色内部的绿色服饰/饰品。
+        if (g > 110 && g - r > 45 && g - b > 45) {
+          clearPixel(data, i);
+        } else {
+          data[i + 1] = Math.max(r, b);
         }
+        continue;
       }
-      if (!touchesTrans) continue;
 
       const distSq = colorDistSq(r, g, b, key);
       if (distSq <= edgeSq) {
@@ -483,7 +496,7 @@ export function polishChromaMatte(
       const sb = data[si + 2] ?? 0;
       if (
         isTransparentAlpha(sa) ||
-        !isChromaResiduePixel(sr, sg, sb, sa, key, islandSq, greenSpill)
+        !isInteriorChromaResiduePixel(sr, sg, sb, sa, key, islandSq, greenSpill)
       ) {
         continue;
       }
@@ -518,7 +531,7 @@ export function polishChromaMatte(
           const nb = data[ni + 2] ?? 0;
           if (
             isTransparentAlpha(na) ||
-            !isChromaResiduePixel(nr, ng, nb, na, key, islandSq, greenSpill)
+            !isInteriorChromaResiduePixel(nr, ng, nb, na, key, islandSq, greenSpill)
           ) {
             continue;
           }
