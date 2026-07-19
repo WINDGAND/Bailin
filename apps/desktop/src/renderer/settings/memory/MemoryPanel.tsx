@@ -19,6 +19,7 @@ import { useDirtyTracker } from "../app/dirty-context.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
 import { formatChatTime } from "../../shared/format-chat-time.js";
 import { Icon } from "../../shared/icon.js";
+import { BlSwitch } from "../../shared/bl-switch.js";
 
 const MAX_NAME = 24;
 const UNDO_WINDOW_MS = 10 * 60 * 1000;
@@ -68,7 +69,7 @@ export function MemoryPanel(): JSX.Element {
   const [clearing, setClearing] = useState(false);
   const [pendingAutoBanner, setPendingAutoBanner] = useState(false);
   const [undoing, setUndoing] = useState(false);
-  const autoLearnToggleId = useId();
+  const autoLearnLabelId = useId();
 
   const groupedFacts = useMemo(() => groupFactsByCategory(profile.facts), [profile.facts]);
   const hasAnyFacts = profile.facts.length > 0;
@@ -200,11 +201,12 @@ export function MemoryPanel(): JSX.Element {
     }
   }
 
+  const latestChangeRecord = recentChanges[0];
+
   const canUndo = useMemo(() => {
-    const latest = recentChanges[0];
-    if (!latest) return false;
-    return Date.now() - latest.appliedAt <= UNDO_WINDOW_MS;
-  }, [recentChanges]);
+    if (!latestChangeRecord) return false;
+    return Date.now() - latestChangeRecord.appliedAt <= UNDO_WINDOW_MS;
+  }, [latestChangeRecord]);
 
   async function clearProfile(): Promise<void> {
     const ok = await confirm({
@@ -241,68 +243,20 @@ export function MemoryPanel(): JSX.Element {
     }
   }
 
-  async function clearAll(): Promise<void> {
-    const ok = await confirm({
-      title: t("memory.clearAllTitle"),
-      body: (
-        <span>
-          {t("memory.clearAllIntro")}
-          <ul style={{ margin: "6px 0 0 18px", padding: 0, color: "var(--ink-soft)" }}>
-            <li>{t("memory.clearAllItemCharacters")}</li>
-            <li>{t("memory.clearAllItemMemory")}</li>
-            <li>{t("memory.clearAllItemSettings")}</li>
-          </ul>
-          <p style={{ marginTop: 8 }}>{t("memory.clearAllIrreversible")}</p>
-        </span>
-      ),
-      confirmLabel: t("memory.clearAllConfirm"),
-      cancelLabel: t("common.thinkAgain"),
-      danger: true,
-      requireText: "DELETE"
-    });
-    if (!ok) return;
-    setClearing(true);
-    try {
-      await bailin.memory.clearAll();
-      setProfile(emptyProfile());
-      setInitial(emptyProfile());
-      setRecentChanges([]);
-      showToast({ kind: "info", text: t("memory.toastAllCleared") });
-    } catch (e) {
-      showToast({
-        kind: "error",
-        text: t("memory.toastClearFailed", {
-          error: e instanceof Error ? e.message : t("common.unknownError")
-        })
-      });
-    } finally {
-      setClearing(false);
-    }
-  }
-
   return (
     <div style={{ maxWidth: 760, margin: "0 auto" }}>
-      <div style={{ marginBottom: 26 }}>
+      <div style={{ marginBottom: 24 }}>
         <div className="eyebrow">{t("memory.eyebrow")}</div>
         <div className="display display--page">{t("memory.title")}</div>
         <p className="apple-page-subtitle">{t("memory.subtitle")}</p>
+        <p className="bl-field-hint" style={{ marginTop: 10, maxWidth: 480 }}>
+          {t("memory.introHint")}
+        </p>
       </div>
 
       <div>
         {pendingAutoBanner ? (
-          <div
-            role="status"
-            aria-live="polite"
-            style={{
-              marginBottom: 16,
-              display: "flex",
-              gap: 12,
-              alignItems: "center",
-              padding: "10px 14px",
-              borderRadius: 10,
-              background: "var(--surface-muted, rgba(0,0,0,0.04))"
-            }}
-          >
+          <div role="status" aria-live="polite" className="memory-pending-banner" style={{ marginBottom: 20 }}>
             <span className="body-sm" style={{ flex: 1 }}>
               {t("memory.pendingAutoBanner")}
             </span>
@@ -312,143 +266,127 @@ export function MemoryPanel(): JSX.Element {
           </div>
         ) : null}
 
-        <div
-          className="apple-list-row"
-          style={{ marginBottom: 24, paddingBottom: 20, borderBottom: "1px solid var(--grid)" }}
-        >
-          <div className="row row--between gap-3" style={{ alignItems: "flex-start" }}>
-            <div>
-              <div className="bl-field-label">{t("memory.autoLearnTitle")}</div>
-              <p className="bl-field-hint" style={{ marginTop: 4, marginBottom: 0 }}>
-                {t("memory.autoLearnHint")}
-              </p>
-              <p className="bl-field-hint" style={{ marginTop: 6, marginBottom: 0 }}>
-                {t("memory.autoLearnInterval", { n: settings.extractEveryNTurns })}
-              </p>
+        <div className="bl-switch-row memory-switch-row" style={{ marginBottom: 28 }}>
+          <div>
+            <div id={autoLearnLabelId} className="bl-field-label">
+              {t("memory.autoLearnTitle")}
             </div>
-            <label htmlFor={autoLearnToggleId} className="row gap-2" style={{ alignItems: "center", cursor: "pointer" }}>
-              <input
-                id={autoLearnToggleId}
-                type="checkbox"
-                checked={settings.autoLearnEnabled}
-                onChange={(e) => void toggleAutoLearn(e.target.checked)}
-              />
-              <span className="body-sm">{t("memory.autoLearnToggle")}</span>
-            </label>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 26 }}>
-          <p className="body-md" style={{ margin: "0 0 24px", maxWidth: 520 }}>
-            {t("memory.introHint")}
-          </p>
-
-          <div style={{ marginBottom: 28 }}>
-            <label htmlFor="memory-name" className="bl-field-label bl-field-label--with-hint">
-              {t("memory.nameLabel")}
-              {profile.preferredName?.source === "auto" ? (
-                <span
-                  className="bl-tag"
-                  style={{ marginLeft: 8, fontSize: 10.5, padding: "2px 7px" }}
-                >
-                  {t("memory.sourceAuto")}
-                </span>
-              ) : null}
-            </label>
-            <p className="bl-field-hint" style={{ marginTop: 0, marginBottom: 8 }}>
-              {t("memory.nameHint")}
+            <p className="bl-field-hint" style={{ marginTop: 4, marginBottom: 0 }}>
+              {t("memory.autoLearnHint")}
             </p>
-            <input
-              id="memory-name"
-              className="forge-field-name__input"
-              value={profile.preferredName?.text ?? ""}
-              onChange={(e) =>
-                setProfile({
-                  ...profile,
-                  preferredName: e.target.value.trim()
-                    ? {
-                        text: e.target.value,
-                        updatedAt: Date.now(),
-                        source: "manual"
-                      }
-                    : undefined
-                })
-              }
-              placeholder={t("memory.namePlaceholder")}
-              maxLength={MAX_NAME + 10}
-              style={{ fontSize: "clamp(22px, 2.4vw, 28px)" }}
+            <p className="bl-field-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+              {t("memory.autoLearnInterval", { n: settings.extractEveryNTurns })}
+            </p>
+          </div>
+          <div className="bl-switch-row__control memory-switch-row__control">
+            <span className="body-sm" style={{ color: "var(--ink-soft)" }}>
+              {settings.autoLearnEnabled ? t("memory.autoLearnOn") : t("memory.autoLearnOff")}
+            </span>
+            <BlSwitch
+              checked={settings.autoLearnEnabled}
+              onCheckedChange={(enabled) => void toggleAutoLearn(enabled)}
+              labelledBy={autoLearnLabelId}
             />
           </div>
-
-          <div className="apple-list-group">
-            <div className="apple-list-row">
-              <div className="bl-field-label">{t("memory.factsSectionTitle")}</div>
-              <p className="bl-field-hint" style={{ marginTop: 0 }}>
-                {t("memory.factsSectionHint")}
-              </p>
-
-              {!hasAnyFacts ? (
-                <p className="bl-field-hint" style={{ margin: "12px 0 0" }}>
-                  {t("memory.factsEmpty")}
-                </p>
-              ) : (
-                <div className="stack" style={{ marginTop: 12, gap: 20 }}>
-                  {PROFILE_FACT_CATEGORY_ORDER.map((category) => {
-                    const items = groupedFacts.get(category) ?? [];
-                    if (items.length === 0) return null;
-                    return (
-                      <FactGroup
-                        key={category}
-                        category={category}
-                        facts={items}
-                        allFacts={profile.facts}
-                        onChange={updateFacts}
-                        locale={locale}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="row gap-2 row--wrap" style={{ marginTop: 14 }}>
-                <AddFactButton onAdd={addFact} />
-              </div>
-            </div>
-          </div>
-
-          {recentChanges.length > 0 ? (
-            <div style={{ marginTop: 28 }}>
-              <div className="row row--between" style={{ marginBottom: 10 }}>
-                <div className="bl-field-label">{t("memory.recentLearned")}</div>
-                {canUndo ? (
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    disabled={undoing}
-                    onClick={() => void undoLast()}
-                  >
-                    {t("memory.undoLast")}
-                  </button>
-                ) : null}
-              </div>
-              <ul className="stack" style={{ gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
-                {recentChanges
-                  .flatMap((rec) =>
-                    rec.changes.slice(0, 3).map((c, i) => (
-                      <li
-                        key={`${rec.id}-${i}`}
-                        className="body-sm"
-                        style={{ color: "var(--ink-soft)" }}
-                      >
-                        {formatChangeLine(c, t)} · {formatChatTime(c.at, locale)}
-                      </li>
-                    ))
-                  )
-                  .slice(0, 5)}
-              </ul>
-            </div>
-          ) : null}
         </div>
+
+        <div style={{ marginBottom: 28 }}>
+          <label htmlFor="memory-name" className="bl-field-label bl-field-label--with-hint">
+            {t("memory.nameLabel")}
+            {profile.preferredName?.source === "auto" ? (
+              <span
+                className="bl-tag"
+                style={{ marginLeft: 8, fontSize: 10.5, padding: "2px 7px" }}
+              >
+                {t("memory.sourceAuto")}
+              </span>
+            ) : null}
+          </label>
+          <p className="bl-field-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+            {t("memory.nameHint")}
+          </p>
+          <input
+            id="memory-name"
+            className="forge-field-name__input"
+            value={profile.preferredName?.text ?? ""}
+            onChange={(e) =>
+              setProfile({
+                ...profile,
+                preferredName: e.target.value.trim()
+                  ? {
+                      text: e.target.value,
+                      updatedAt: Date.now(),
+                      source: "manual"
+                    }
+                  : undefined
+              })
+            }
+            placeholder={t("memory.namePlaceholder")}
+            maxLength={MAX_NAME + 10}
+            style={{ fontSize: "clamp(22px, 2.4vw, 28px)" }}
+          />
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <div className="bl-field-label">{t("memory.factsSectionTitle")}</div>
+          <p className="bl-field-hint" style={{ marginTop: 0 }}>
+            {t("memory.factsSectionHint")}
+          </p>
+
+          {!hasAnyFacts ? (
+            <p className="bl-field-hint" style={{ margin: "12px 0 0" }}>
+              {t("memory.factsEmpty")}
+            </p>
+          ) : (
+            <div className="stack" style={{ marginTop: 14, gap: 22 }}>
+              {PROFILE_FACT_CATEGORY_ORDER.map((category, index) => {
+                const items = groupedFacts.get(category) ?? [];
+                if (items.length === 0) return null;
+                return (
+                  <FactGroup
+                    key={category}
+                    index={index}
+                    category={category}
+                    facts={items}
+                    allFacts={profile.facts}
+                    onChange={updateFacts}
+                    locale={locale}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ marginTop: 16 }}>
+            <AddFactButton onAdd={addFact} />
+          </div>
+        </div>
+
+        {latestChangeRecord ? (
+          <div className="memory-activity" style={{ marginBottom: 24 }}>
+            <span className="memory-activity__icon">
+              <Icon name="sparkle" size={13} />
+            </span>
+            <span className="memory-activity__text">
+              <strong>{t("memory.recentLearned")}</strong>
+              {"："}
+              {summarizeLatestChanges(latestChangeRecord.changes, t)}
+            </span>
+            <span className="memory-activity__time">
+              {formatChatTime(latestChangeRecord.appliedAt, locale)}
+            </span>
+            {canUndo ? (
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                disabled={undoing}
+                onClick={() => void undoLast()}
+              >
+                {t("memory.undoLast")}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="bl-action-bar">
           <div className="bl-action-bar__left">
@@ -459,14 +397,6 @@ export function MemoryPanel(): JSX.Element {
               disabled={clearing}
             >
               {t("memory.clearProfile")}
-            </button>
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={() => void clearAll()}
-              disabled={clearing}
-            >
-              {t("memory.clearAllData")}
             </button>
           </div>
           <div className="bl-action-bar__right">
@@ -502,16 +432,18 @@ export function MemoryPanel(): JSX.Element {
   );
 }
 
-function formatChangeLine(
-  change: ProfileChange,
+/** 活动条只承担审计 / 撤回，不复述完整台账——最多展示最近一批的 2 条变更。 */
+function summarizeLatestChanges(
+  changes: ProfileChange[],
   t: (key: string, params?: Record<string, string | number>) => string
 ): string {
-  const prefix = change.kind.startsWith("remove") ? "−" : "+";
-  if (change.kind === "add_name") {
-    return `${prefix} ${t("memory.changeName")}：${change.text}`;
-  }
-  const catKey = change.category ? `memory.category.${change.category}` : "memory.category.other";
-  return `${prefix} ${t(catKey)}：${change.text}`;
+  const shown = changes.slice(0, 2).map((c) => {
+    const prefix = c.kind === "remove_fact" ? "−" : "+";
+    return `${prefix} ${c.text}`;
+  });
+  const extra = changes.length - shown.length;
+  const summary = shown.join("、");
+  return extra > 0 ? `${summary} ${t("memory.justLearnedMore", { n: extra })}` : summary;
 }
 
 function FactGroup({
@@ -519,19 +451,21 @@ function FactGroup({
   facts,
   allFacts,
   onChange,
-  locale
+  locale,
+  index
 }: {
   category: ProfileFactCategory;
   facts: ProfileFact[];
   allFacts: ProfileFact[];
   onChange: (facts: ProfileFact[]) => void;
   locale: "zh" | "en";
+  index: number;
 }) {
   const t = useT();
   const isBoundary = category === "boundary";
 
   return (
-    <div>
+    <div className="fade-in-up" style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}>
       <div className="bl-field-label bl-field-label--with-hint" style={{ marginBottom: 8 }}>
         {t(`memory.category.${category}`)}
         {isBoundary ? (
@@ -543,7 +477,7 @@ function FactGroup({
           </span>
         ) : null}
       </div>
-      <div className="stack" style={{ gap: 6 }}>
+      <ul className="memory-ledger">
         {facts.map((entry) => (
           <FactRow
             key={entry.id}
@@ -564,7 +498,7 @@ function FactGroup({
             }}
           />
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
@@ -575,7 +509,7 @@ function AddFactButton({ onAdd }: { onAdd: (category: ProfileFactCategory) => vo
   const groupId = useId();
 
   return (
-    <div className="row gap-2 row--wrap" style={{ position: "relative" }}>
+    <div>
       <button
         type="button"
         className="btn btn--ghost btn--sm"
@@ -588,16 +522,16 @@ function AddFactButton({ onAdd }: { onAdd: (category: ProfileFactCategory) => vo
       {open ? (
         <div
           id={groupId}
-          className="row gap-2 row--wrap"
+          className="forge-chips"
           role="group"
           aria-label={t("memory.addFact")}
-          style={{ marginTop: 4 }}
+          style={{ marginTop: 10 }}
         >
           {PROFILE_FACT_CATEGORY_ORDER.map((cat) => (
             <button
               key={cat}
               type="button"
-              className="btn btn--ghost btn--sm"
+              className="forge-chip"
               onClick={() => {
                 onAdd(cat);
                 setOpen(false);
@@ -626,46 +560,32 @@ function FactRow({
   locale: "zh" | "en";
 }) {
   const t = useT();
-  const [hover, setHover] = useState(false);
   return (
-    <div
-      className="stack"
-      style={{ gap: 4 }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      <div className="row gap-2">
-        <input
-          className="input"
-          value={entry.text}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder ?? "..."}
-          style={{ flex: 1 }}
-        />
-        <button
-          type="button"
-          className="btn btn--icon"
-          onClick={onRemove}
-          aria-label={t("memory.removeRow")}
-          data-hint={t("memory.removeHint")}
-          style={{
-            opacity: hover ? 1 : 0.45,
-            transition: "opacity var(--motion-fast) var(--ease-out)"
-          }}
-        >
-          <Icon name="close" size={14} strokeWidth={2} />
-        </button>
-      </div>
-      <div className="row gap-2" style={{ paddingLeft: 2 }}>
+    <li className="memory-ledger-row">
+      <input
+        className="memory-ledger-row__input"
+        value={entry.text}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? "…"}
+        aria-label={t(`memory.category.${entry.category}`)}
+      />
+      <div className="memory-ledger-row__meta">
         {entry.source === "auto" ? (
           <span className="bl-tag" style={{ fontSize: 10.5, padding: "2px 7px" }}>
             {t("memory.sourceAuto")}
           </span>
         ) : null}
-        <span className="body-sm" style={{ color: "var(--ink-faint)" }}>
-          {formatChatTime(entry.updatedAt, locale)}
-        </span>
+        <span className="memory-ledger-row__time">{formatChatTime(entry.updatedAt, locale)}</span>
+        <button
+          type="button"
+          className="memory-ledger-row__remove"
+          onClick={onRemove}
+          aria-label={t("memory.removeRow")}
+          data-hint={t("memory.removeHint")}
+        >
+          <Icon name="close" size={13} strokeWidth={1.8} />
+        </button>
       </div>
-    </div>
+    </li>
   );
 }
