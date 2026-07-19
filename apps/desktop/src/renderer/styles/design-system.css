@@ -6422,6 +6422,23 @@ body {
   color: var(--magenta-deep);
 }
 
+.changelog__stale {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--grid);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.changelog__stale .btn {
+  flex-shrink: 0;
+}
+
 .changelog__timeline {
   display: flex;
   flex-direction: column;

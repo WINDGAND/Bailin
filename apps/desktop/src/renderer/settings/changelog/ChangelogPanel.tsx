@@ -27,19 +27,22 @@ export function ChangelogPanel(): JSX.Element {
   const t = useT();
   const { locale } = useI18n();
   const bailin = useBailin();
-  const { currentVersion, updateInfo, dismiss } = useUpdateInfo();
+  const { currentVersion, updateInfo, dismiss, syncFromServer } = useUpdateInfo();
   const [state, setState] = useState<LoadState>("loading");
   const [releases, setReleases] = useState<ReleaseSummary[]>([]);
   const [error, setError] = useState("");
+  const [staleReason, setStaleReason] = useState("");
 
   const load = useCallback(
     async (forceRefresh = false) => {
       setState("loading");
       setError("");
+      setStaleReason("");
       try {
         const result = await bailin.app.listReleases({ forceRefresh });
         if (result.ok) {
           setReleases(result.releases);
+          setStaleReason(result.staleReason?.trim() ?? "");
           setState("ready");
         } else {
           setError(result.error);
@@ -53,9 +56,12 @@ export function ChangelogPanel(): JSX.Element {
     [bailin]
   );
 
+  // 打开本页时强制刷新：否则 6 小时磁盘缓存会挡住刚发布的 Release，
+  // 用户看不到新版本条目；同时静默同步更新检查，点亮侧栏/高亮 CTA。
   useEffect(() => {
-    void load(false);
-  }, [load]);
+    void load(true);
+    void syncFromServer();
+  }, [load, syncFromServer]);
 
   const dayGroups = useMemo(() => groupReleasesByDay(releases, locale), [releases, locale]);
 
@@ -68,6 +74,17 @@ export function ChangelogPanel(): JSX.Element {
         <div className="display display--page">{t("update.changelogTitle")}</div>
         <p className="apple-page-subtitle">{t("update.changelogSubtitle")}</p>
       </header>
+
+      {state === "ready" && staleReason ? (
+        <div className="changelog__stale" role="status">
+          <span>
+            {t("update.changelogStale", { reason: staleReason })}
+          </span>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void load(true)}>
+            {t("update.changelogRetry")}
+          </button>
+        </div>
+      ) : null}
 
       {state === "loading" ? (
         <div className="changelog__state" role="status" aria-live="polite">

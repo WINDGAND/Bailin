@@ -92,6 +92,7 @@ export const en: TranslationTree = {
     changelogLoading: "Loading…",
     changelogEmpty: "No releases yet",
     changelogError: "Couldn't load releases. Check your network and try again.",
+    changelogStale: "Couldn't refresh from GitHub ({{reason}}). Showing cached releases.",
     changelogRetry: "Retry",
     changelogStatusUpdate: "Update",
     changelogViewRelease: "View release"

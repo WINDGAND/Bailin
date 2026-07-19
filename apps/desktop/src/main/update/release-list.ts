@@ -13,7 +13,13 @@ export interface ReleaseSummary {
 }
 
 export type ListReleasesResult =
-  | { ok: true; releases: ReleaseSummary[]; fromCache?: boolean }
+  | {
+      ok: true;
+      releases: ReleaseSummary[];
+      fromCache?: boolean;
+      /** 网络失败回退缓存时的可读原因（例如 GitHub API 限流）。 */
+      staleReason?: string;
+    }
   | { ok: false; error: string };
 
 export interface PersistedReleaseCache {
@@ -96,13 +102,45 @@ async function githubGet(
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
   if (!res.ok) {
-    return { ok: false, error: `GitHub API 返回 HTTP ${res.status}` };
+    let detail = "";
+    try {
+      const body = (await res.json()) as { message?: string };
+      if (typeof body?.message === "string" && body.message.trim()) {
+        detail = body.message.trim();
+      }
+    } catch {
+      // ignore body parse failures
+    }
+    if (res.status === 403 && /rate limit/i.test(detail)) {
+      return {
+        ok: false,
+        error: "GitHub API 请求过于频繁（未认证限流），请稍后再试"
+      };
+    }
+    return {
+      ok: false,
+      error: detail
+        ? `GitHub API 返回 HTTP ${res.status}：${detail}`
+        : `GitHub API 返回 HTTP ${res.status}`
+    };
   }
   try {
     return { ok: true, json: await res.json() };
   } catch {
     return { ok: false, error: "GitHub 返回内容无法解析" };
   }
+}
+
+function cacheFallback(
+  disk: PersistedReleaseCache,
+  staleReason: string
+): ListReleasesResult {
+  return {
+    ok: true,
+    releases: disk.releases,
+    fromCache: true,
+    staleReason
+  };
 }
 
 /**
@@ -139,7 +177,7 @@ export async function fetchReleaseSummaries(options?: {
 
   if (!latestRes.ok) {
     if (disk) {
-      return { ok: true, releases: disk.releases, fromCache: true };
+      return cacheFallback(disk, latestRes.error);
     }
     return { ok: false, error: latestRes.error };
   }
@@ -148,7 +186,7 @@ export async function fetchReleaseSummaries(options?: {
   const latestTag = latestJson.tag_name;
   if (!latestTag) {
     if (disk) {
-      return { ok: true, releases: disk.releases, fromCache: true };
+      return cacheFallback(disk, "GitHub 响应缺少 tag_name");
     }
     return { ok: false, error: "GitHub 响应缺少 tag_name" };
   }
@@ -162,7 +200,7 @@ export async function fetchReleaseSummaries(options?: {
   const listRes = await githubGet(listUrl, fetchImpl);
   if (!listRes.ok) {
     if (disk) {
-      return { ok: true, releases: disk.releases, fromCache: true };
+      return cacheFallback(disk, listRes.error);
     }
     return { ok: false, error: listRes.error };
   }
@@ -170,7 +208,7 @@ export async function fetchReleaseSummaries(options?: {
   const releases = mapReleaseItems(listRes.json);
   if (!releases) {
     if (disk) {
-      return { ok: true, releases: disk.releases, fromCache: true };
+      return cacheFallback(disk, "GitHub 响应格式无效");
     }
     return { ok: false, error: "GitHub 响应格式无效" };
   }

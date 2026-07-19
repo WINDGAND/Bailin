@@ -90,6 +90,7 @@ export const zh = {
     changelogLoading: "加载中…",
     changelogEmpty: "暂无发布记录",
     changelogError: "加载发布记录失败，请检查网络后重试",
+    changelogStale: "未能从 GitHub 刷新列表（{{reason}}），正在显示本地缓存。",
     changelogRetry: "重试",
     changelogStatusUpdate: "更新",
     changelogViewRelease: "查看 Release"
