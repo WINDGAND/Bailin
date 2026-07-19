@@ -26,7 +26,13 @@ export interface ReleaseSummary {
 }
 
 export type ListReleasesResult =
-  | { ok: true; releases: ReleaseSummary[]; fromCache?: boolean }
+  | {
+      ok: true;
+      releases: ReleaseSummary[];
+      fromCache?: boolean;
+      /** 强制刷新失败后回退缓存时带上原因，供 UI 提示（如 GitHub 限流）。 */
+      staleReason?: string;
+    }
   | { ok: false; error: string };
 
 export interface ListReleasesOptions {

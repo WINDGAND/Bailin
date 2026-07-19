@@ -231,6 +231,7 @@ describe("fetchReleaseSummaries", () => {
     if (!result.ok) return;
     assert.equal(result.releases[0]?.title, "stale ok");
     assert.equal(result.fromCache, true);
+    assert.match(result.staleReason ?? "", /限流|HTTP 403|rate limit/i);
   });
 
   it("returns ok:false on HTTP error with empty store", async () => {
