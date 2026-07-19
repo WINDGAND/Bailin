@@ -19,6 +19,7 @@ import type {
 } from "@bailin/character-protocol";
 import { useT } from "../../shared/i18n/index.js";
 import { ChatMarkdown } from "../../shared/chat-markdown.js";
+import { Icon } from "../../shared/icon.js";
 import { useVisualJobs } from "../app/visual-job-context.js";
 import { runDetailTransition } from "./detail-transition.js";
 
@@ -83,6 +84,7 @@ export function CharacterLibrary({
   const [researchDocs, setResearchDocs] = useState<ResearchDoc[]>([]);
   const [qualityReport, setQualityReport] = useState<QualityReport | undefined>(undefined);
   const [openedAgentId, setOpenedAgentId] = useState<number | null>(null);
+  const [appearanceMenuOpen, setAppearanceMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [listPage, setListPage] = useState(1);
   const [pageMotion, setPageMotion] = useState<{ nonce: number; direction: PageDirection }>({
@@ -90,11 +92,15 @@ export function CharacterLibrary({
     direction: "forward"
   });
   const pickRequestRef = useRef(0);
+  const newRefFileInput = useRef<HTMLInputElement | null>(null);
+  const appearanceMenuRef = useRef<HTMLDivElement | null>(null);
+  const appearanceMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   async function pick(id: string): Promise<void> {
     const requestId = ++pickRequestRef.current;
     setSelectedId(id);
     setOpenedAgentId(null);
+    setAppearanceMenuOpen(false);
 
     try {
       const [b, extra] = await Promise.all([
@@ -262,8 +268,6 @@ export function CharacterLibrary({
     }
   }
 
-  const newRefFileInput = useRef<HTMLInputElement | null>(null);
-
   const qualityWarning = useMemo<{ severity: "warn" | "error"; text: string } | null>(
     () => deriveQualityWarning(qualityReport, selected?.researchDocs, t),
     [qualityReport, selected, t]
@@ -311,6 +315,32 @@ export function CharacterLibrary({
   useEffect(() => {
     if (listPage > totalPages) setListPage(totalPages);
   }, [listPage, totalPages]);
+
+  useEffect(() => {
+    if (!appearanceMenuOpen) return;
+    function onPointerDown(e: MouseEvent): void {
+      const target = e.target as Node;
+      if (appearanceMenuRef.current?.contains(target)) return;
+      if (appearanceMenuTriggerRef.current?.contains(target)) return;
+      setAppearanceMenuOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        setAppearanceMenuOpen(false);
+        appearanceMenuTriggerRef.current?.focus();
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [appearanceMenuOpen]);
+
+  useEffect(() => {
+    if (selectedRegenerating) setAppearanceMenuOpen(false);
+  }, [selectedRegenerating]);
 
   function changeListPage(nextPage: number): void {
     if (nextPage < 1 || nextPage > totalPages || nextPage === currentPage) return;
@@ -617,16 +647,14 @@ export function CharacterLibrary({
                     })}
                   </span>
                 </header>
-                <div className="stack stack--sm">
+                <ul className="mental-model-list">
                   {selected.card.mentalModels.map((m) => (
-                    <div key={m.id} style={{ lineHeight: 1.5 }}>
-                      <strong style={{ color: "var(--ink)" }}>{m.name}</strong>
-                      <span className="body-sm" style={{ marginLeft: 8 }}>
-                        —— {m.oneLiner}
-                      </span>
-                    </div>
+                    <li key={m.id} className="mental-model-item">
+                      <span className="mental-model-item__name">{m.name}</span>
+                      <span className="mental-model-item__line">{m.oneLiner}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </section>
 
               {selectedVisualJob && selectedVisualJob.status !== "running" ? (
@@ -656,73 +684,130 @@ export function CharacterLibrary({
                 </div>
               ) : null}
 
-              <div className="row gap-2 row--wrap">
-                <button
-                  type="button"
-                  className="btn btn--magenta"
-                  onClick={() => void activate(selected.card.id)}
-                  disabled={isSelectedActive || anyBusy}
-                  data-hint={isSelectedActive ? t("library.alreadyActiveHint") : ""}
-                >
-                  {activating ? <><Spinner /> {t("library.activating")}</> : t("library.setActive")}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() =>
-                    void runSpriteRegeneration(selected.card.id, selected.card.meta.name)
-                  }
-                  disabled={anyBusy}
-                  data-hint={
-                    selected.card.meta.appearance
-                      ? t("library.regenerateSpriteHintWithAppearance")
-                      : t("library.regenerateSpriteHintSkeleton")
-                  }
-                >
-                  {selectedRegenerating && selectedVisualJob?.kind === "sprite" ? (
-                    <>
-                      <Spinner /> {t("library.processing")}
-                    </>
-                  ) : (
-                    t("library.regenerateSprite")
-                  )}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => newRefFileInput.current?.click()}
-                  disabled={anyBusy}
-                  data-hint={t("library.newReferenceHint")}
-                >
-                  {selectedRegenerating && selectedVisualJob?.kind === "appearance" ? (
-                    <>
-                      <Spinner /> {t("library.processing")}
-                    </>
-                  ) : (
-                    t("library.newReference")
-                  )}
-                </button>
-                <input
-                  ref={newRefFileInput}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f && selected) {
-                      void runAppearanceRegeneration(
-                        selected.card.id,
-                        selected.card.meta.name,
-                        f
-                      );
-                    }
-                    e.target.value = "";
-                  }}
-                />
+              <div className="library-actions">
+                <div className="library-actions__primary">
+                  <button
+                    type="button"
+                    className="btn btn--magenta"
+                    onClick={() => void activate(selected.card.id)}
+                    disabled={isSelectedActive || anyBusy}
+                    data-hint={isSelectedActive ? t("library.alreadyActiveHint") : ""}
+                  >
+                    {activating ? (
+                      <>
+                        <Spinner /> {t("library.activating")}
+                      </>
+                    ) : (
+                      t("library.setActive")
+                    )}
+                  </button>
+
+                  <div className="library-actions__menu-wrap">
+                    <button
+                      ref={appearanceMenuTriggerRef}
+                      type="button"
+                      className="btn btn--ghost"
+                      aria-haspopup="menu"
+                      aria-expanded={appearanceMenuOpen}
+                      disabled={activating}
+                      onClick={() => {
+                        if (selectedRegenerating) return;
+                        setAppearanceMenuOpen((open) => !open);
+                      }}
+                    >
+                      {selectedRegenerating ? (
+                        <>
+                          <Spinner /> {t("library.processing")}
+                        </>
+                      ) : (
+                        <>
+                          {t("library.appearanceMenu")}
+                          <Icon
+                            name="chevron-down"
+                            size={14}
+                            className="library-actions__chevron"
+                          />
+                        </>
+                      )}
+                    </button>
+                    {appearanceMenuOpen ? (
+                      <div
+                        ref={appearanceMenuRef}
+                        className="library-actions__menu fade-in"
+                        role="menu"
+                        aria-label={t("library.appearanceMenu")}
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="library-actions__menu-item"
+                          disabled={anyBusy}
+                          data-hint={
+                            selected.card.meta.appearance
+                              ? t("library.regenerateSpriteHintWithAppearance")
+                              : t("library.regenerateSpriteHintSkeleton")
+                          }
+                          onClick={() => {
+                            setAppearanceMenuOpen(false);
+                            void runSpriteRegeneration(
+                              selected.card.id,
+                              selected.card.meta.name
+                            );
+                          }}
+                        >
+                          <span className="library-actions__menu-label">
+                            {t("library.regenerateSprite")}
+                          </span>
+                          <span className="library-actions__menu-caption">
+                            {selected.card.meta.appearance
+                              ? t("library.regenerateSpriteHintWithAppearance")
+                              : t("library.regenerateSpriteHintSkeleton")}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="library-actions__menu-item"
+                          disabled={anyBusy}
+                          data-hint={t("library.newReferenceHint")}
+                          onClick={() => {
+                            setAppearanceMenuOpen(false);
+                            newRefFileInput.current?.click();
+                          }}
+                        >
+                          <span className="library-actions__menu-label">
+                            {t("library.newReference")}
+                          </span>
+                          <span className="library-actions__menu-caption">
+                            {t("library.newReferenceHint")}
+                          </span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <input
+                    ref={newRefFileInput}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f && selected) {
+                        void runAppearanceRegeneration(
+                          selected.card.id,
+                          selected.card.meta.name,
+                          f
+                        );
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+
                 <button
                   type="button"
                   className="btn btn--danger"
-                  style={{ marginLeft: "auto" }}
                   onClick={() => void remove(selected.card.id, selected.card.meta.name)}
                   disabled={anyBusy}
                 >

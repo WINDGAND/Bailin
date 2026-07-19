@@ -116,6 +116,7 @@ export const zh = {
     setActive: "设为当前桌宠",
     activating: "切换中…",
     alreadyActiveHint: "已是当前桌宠",
+    appearanceMenu: "形象",
     regenerateSprite: "重画形象",
     processing: "处理中…",
     regenerateSpriteHintWithAppearance: "基于现有外貌重画像素形象",

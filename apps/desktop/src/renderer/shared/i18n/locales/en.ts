@@ -118,6 +118,7 @@ export const en: TranslationTree = {
     setActive: "Set as desktop pet",
     activating: "Switching…",
     alreadyActiveHint: "Already the active pet",
+    appearanceMenu: "Appearance",
     regenerateSprite: "Redraw appearance",
     processing: "Working…",
     regenerateSpriteHintWithAppearance: "Redraw pixel sprite from existing appearance research",

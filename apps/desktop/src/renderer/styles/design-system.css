@@ -1683,6 +1683,107 @@ body {
   background: rgba(178, 24, 88, 0.08);
 }
 
+/* —— 角色详情操作条：主操作 + 形象菜单 / 删除疏离右置 —— */
+.library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding-top: 4px;
+}
+
+.library-actions__primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.library-actions__menu-wrap {
+  position: relative;
+}
+
+.library-actions__menu-wrap > .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.library-actions__menu-wrap > .btn[aria-expanded="true"] .library-actions__chevron {
+  transform: rotate(180deg);
+}
+
+.library-actions__chevron {
+  transition: transform var(--motion-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.library-actions__menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  max-width: min(320px, 70vw);
+  margin: 0;
+  padding: 4px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--hairline-strong, var(--grid-strong));
+  background: var(--surface-glass-strong, var(--paper));
+  backdrop-filter: var(--blur-bg, none);
+  box-shadow: var(--shadow-panel, 0 8px 24px rgba(23, 38, 38, 0.08));
+  overscroll-behavior: contain;
+}
+
+.library-actions__menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: calc(var(--radius-md, 10px) - 2px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.library-actions__menu-item:hover:not(:disabled),
+.library-actions__menu-item:focus-visible {
+  background: rgba(31, 58, 58, 0.05);
+  outline: none;
+}
+
+.library-actions__menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.library-actions__menu-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.library-actions__menu-caption {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+[data-theme="dark"] .library-actions__menu-item:hover:not(:disabled),
+[data-theme="dark"] .library-actions__menu-item:focus-visible {
+  background: rgba(255, 248, 240, 0.06);
+}
+
 /* —— 调研档案：扁平卷宗列表（无卡片） —— */
 .research-archive {
   margin-top: 4px;
@@ -3658,6 +3759,43 @@ body {
   font-size: 12px;
   color: var(--ink-caption);
   line-height: 1.4;
+}
+
+/* 心智模型：扁平发丝列表（与调研档案同构，无卡片） */
+.mental-model-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--hairline, var(--grid));
+}
+
+.mental-model-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--hairline, var(--grid));
+  min-width: 0;
+}
+
+.mental-model-item:last-child {
+  border-bottom: none;
+}
+
+.mental-model-item__name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.mental-model-item__line {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Character motto / quote — 角色座右铭（编辑式引语，无额外色块） */
