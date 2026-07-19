@@ -57,6 +57,7 @@ Bailin is a **fully local**, open-source Windows desktop AI character companion.
 | **Perspective-driven chat** | System prompts built from mental models, heuristics, and expression DNA |
 | **Local memory** | User profile auto-learning; editable and clearable |
 | **Proactive companion** | Optional smart screenshot whispers + dedicated bubble window |
+| **Changelog** | Sidebar timeline of GitHub Releases; nav hint when a newer version exists; manual download (no silent auto-install) |
 | **Zero subscription** | Bring your own OpenAI / Anthropic / compatible API key; Windows DPAPI encryption |
 
 **Shortcuts**
@@ -72,7 +73,7 @@ Bailin is a **fully local**, open-source Windows desktop AI character companion.
 ## Quick Start
 
 > [!NOTE]
-> Download **Bailin-Setup-0.0.1.exe** (Windows x64) from [Releases](https://github.com/WINDGAND/Bailin/releases/latest), or build from source below.
+> Download the latest **Bailin-Setup-x.y.z.exe** from [Releases](https://github.com/WINDGAND/Bailin/releases/latest) (currently `0.0.8`, Windows x64), or build from source below.
 
 ### Requirements
 
@@ -125,9 +126,9 @@ Setup wizard or Settings → Create: pick source type (public figure / fictional
 
 > Built-in starters default to empty. Append `CharacterBundle` entries in `apps/desktop/src/shared/starters.ts`.
 
-### 2. Character library
+### 2. Character library and Settings
 
-Search, switch the active pet, inspect mental models, or regenerate appearance / reference images.
+Settings sidebar: Character Library, Create, User Profile, Desktop Companion, Models & Keys, Appearance & Language, Changelog. In the library you can search, switch the active pet, inspect mental models, or regenerate appearance / reference images.
 
 <p align="center">
   <img src="assets/library.png" alt="Character library — list and detail" width="720" />
@@ -292,7 +293,9 @@ bailin/
 ```bash
 pnpm build            # packages + main + preload + renderer
 pnpm typecheck        # monorepo typecheck
+pnpm test             # package / desktop unit tests
 pnpm dev              # development mode
+pnpm package:win      # Windows NSIS installer (use an ASCII worktree if the path has non-ASCII chars; see apps/desktop/scripts/package-win.mjs)
 ```
 
 ### Architecture snapshot
@@ -342,6 +345,8 @@ node scripts/verify/verify-pet-window-bounds.mjs
 node scripts/verify/verify-pet-clamp-stability.mjs
 node scripts/verify/verify-chat-turn-delete.mjs
 node scripts/verify/verify-segment-buffer.mjs
+node scripts/verify/verify-chat-markdown.mjs              # Release / chat Markdown (incl. links)
+node scripts/verify/verify-update-checker.mjs             # GitHub version compare / update check
 node scripts/verify/verify-create-pipeline-fallback.mjs   # steps 1–3 offline; step 4 image API optional (.env.dev)
 ```
 
@@ -371,8 +376,8 @@ node ./scripts/a11y-scan.mjs
 
 | Phase | Theme | Highlights |
 | --- | --- | --- |
-| **v0.x** (now) | MVP loop | Deep create, desktop pet, local memory, Windows, BYO key |
-| **v1.0** | Polish | Deep distillation UX, chat improvements, opt-in auto-update |
+| **v0.x** (now · `0.0.8`) | MVP loop | Deep create, desktop pet, local memory, changelog / update check, Windows, BYO key |
+| **v1.0** | Polish | Deep distillation UX, chat improvements, optional silent installer updates (opt-in) |
 | **v1.1** | Multi-pet | Multiple pets on desktop |
 | **v1.2+** | Relationship | Long-term memory, proactive companion |
 | **v2.0+** | Platform | `.bailin` packs (original / public domain only) |
@@ -382,7 +387,7 @@ node ./scripts/a11y-scan.mjs
 
 ## Contributing
 
-Early **v0.0.1** — contributions welcome:
+Early **v0.0.x** (currently `0.0.8`) — contributions welcome:
 
 - Pixel sprite styles / palettes
 - New perspective skills (**original or public-domain figures only**)
@@ -409,4 +414,4 @@ Follow the [Disclaimer](#disclaimer). **PRs with third-party IP character assets
   <sub>A shapeshifting spirit on your desktop · MIT · zero subscription</sub>
 </p>
 
-<p align="center"><sub>Last reviewed: 2026-06-22</sub></p>
+<p align="center"><sub>Last reviewed: 2026-07-19</sub></p>

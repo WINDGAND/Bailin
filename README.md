@@ -57,6 +57,7 @@
 | **视角型对话** | 心智模型 + 决策启发式 + 表达 DNA 组装 system prompt |
 | **本地记忆** | 用户画像自动学习，可编辑 / 清空 |
 | **主动陪伴** | 可选智能截图 whisper + 独立气泡窗 |
+| **更新日志** | 侧栏时间线拉取 GitHub Releases；有新版本时导航提示，引导手动下载安装包（无静默自动安装） |
 | **零订阅** | 自带 OpenAI / Anthropic / 兼容 API Key；Windows DPAPI 加密 |
 
 **快捷键**
@@ -72,7 +73,7 @@
 ## 快速开始
 
 > [!NOTE]
-> 推荐从 [Releases](https://github.com/WINDGAND/Bailin/releases/latest) 下载 **Bailin-Setup-0.0.1.exe**（Windows x64）。亦可按下方步骤源码构建。
+> 推荐从 [Releases](https://github.com/WINDGAND/Bailin/releases/latest) 下载最新 **Bailin-Setup-x.y.z.exe**（当前为 `0.0.8`，Windows x64）。亦可按下方步骤源码构建。
 
 ### 环境要求
 
@@ -125,9 +126,9 @@ pnpm dev              # Vite + tsc watch + Electron
 
 > 内置 starter 列表默认为空，可在 `apps/desktop/src/shared/starters.ts` 追加 `CharacterBundle`。
 
-### 2. 角色仓库
+### 2. 角色仓库与设置
 
-搜索、切换当前桌宠、查看心智模型摘要，或重画形象 / 换参考图。
+设置侧栏：角色仓库、创建、用户画像、桌宠与陪伴、模型与 Key、外观与语言、更新日志。仓库内可搜索、切换当前桌宠、查看心智模型摘要，或重画形象 / 换参考图。
 
 <p align="center">
   <img src="assets/library.png" alt="角色仓库 · 列表与详情" width="720" />
@@ -292,7 +293,9 @@ bailin/
 ```bash
 pnpm build            # packages + main + preload + renderer
 pnpm typecheck        # 全仓类型检查
+pnpm test             # 各包 / 桌面端单元测试
 pnpm dev              # 开发模式
+pnpm package:win      # Windows NSIS 安装包（路径含中文时请用 ASCII worktree，见 apps/desktop/scripts/package-win.mjs）
 ```
 
 ### 架构概要
@@ -342,6 +345,8 @@ node scripts/verify/verify-pet-window-bounds.mjs
 node scripts/verify/verify-pet-clamp-stability.mjs
 node scripts/verify/verify-chat-turn-delete.mjs
 node scripts/verify/verify-segment-buffer.mjs
+node scripts/verify/verify-chat-markdown.mjs              # Release / 聊天 Markdown（含链接）
+node scripts/verify/verify-update-checker.mjs             # GitHub 版本比较与更新检查
 node scripts/verify/verify-create-pipeline-fallback.mjs   # 1–3 步离线；第 4 步生图需 .env.dev（可跳过）
 ```
 
@@ -371,8 +376,8 @@ node ./scripts/a11y-scan.mjs
 
 | 阶段 | 主题 | 代表能力 |
 | --- | --- | --- |
-| **v0.x**（现在） | MVP 闭环 | 深度造人、桌宠、本地记忆、Windows、自带 Key |
-| **v1.0** | 体验提升 | 深度造人完善、对话 UX、自动更新（opt-in） |
+| **v0.x**（现在 · `0.0.8`） | MVP 闭环 | 深度造人、桌宠、本地记忆、更新日志 / 版本检查、Windows、自带 Key |
+| **v1.0** | 体验提升 | 深度造人完善、对话 UX、可选静默安装更新（opt-in） |
 | **v1.1** | 多角色 | 多只桌宠同时在桌 |
 | **v1.2+** | 养成 / 陪伴 | 关系记忆、主动气泡增强 |
 | **v2.0+** | 平台化 | `.bailin` 角色包（仅原创 / 公域） |
@@ -382,7 +387,7 @@ node ./scripts/a11y-scan.mjs
 
 ## 参与贡献
 
-仓库处于早期 **v0.0.1**，欢迎：
+仓库处于早期 **v0.0.x**（当前 `0.0.8`），欢迎：
 
 - 像素 sprite 风格 / 调色板扩展
 - 新的 perspective skill（**仅原创 / 公共领域人物**）
@@ -409,4 +414,4 @@ node ./scripts/a11y-scan.mjs
   <sub>桌面上的百变魂灵 · MIT 开源 · 不收一分订阅</sub>
 </p>
 
-<p align="center"><sub>文档最后审阅：2026-06-22</sub></p>
+<p align="center"><sub>文档最后审阅：2026-07-19</sub></p>
