@@ -6,11 +6,18 @@ type Block =
   | { kind: "ul"; items: string[] }
   | { kind: "h"; level: 1 | 2 | 3; text: string };
 
+export type InlineToken =
+  | { kind: "text"; text: string }
+  | { kind: "strong"; text: string }
+  | { kind: "link"; label: string; href: string };
+
 const OL_RE = /^\d+[.)]\s+/;
 const UL_RE = /^[-*•]\s+/;
 // GitHub Release 正文几乎总用 "## 标题" 这种写法分节；聊天消息里模型偶尔
 // 也会吐出标题语法，一并支持，不用为更新横幅单独写一套解析器。
 const HEADING_RE = /^(#{1,3})\s+(.+)$/;
+// 链接只匹配 http(s) 前缀，避免 javascript: 等协议，也避免 URL 内括号截断误解析。
+const INLINE_CHUNK_RE = /(\*\*[^*\n]+?\*\*|\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\))/g;
 
 /** 导出仅为了给 scripts/verify/verify-chat-markdown.mjs 做纯函数回归测试。 */
 export function parseBlocks(text: string): Block[] {
@@ -64,13 +71,70 @@ export function parseBlocks(text: string): Block[] {
   return blocks;
 }
 
-function parseInline(text: string): ReactNode[] {
-  const parts = text.split(/(\*\*[^*\n]+?\*\*)/g);
-  return parts.map((part, idx) => {
-    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
-      return <strong key={idx}>{part.slice(2, -2)}</strong>;
+/** 仅允许 http(s)，其它协议退回纯文本，避免 javascript: 等注入。 */
+export function isSafeHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** 导出供验证脚本覆盖链接 / bold 内联解析。 */
+export function tokenizeInline(text: string): InlineToken[] {
+  const tokens: InlineToken[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(INLINE_CHUNK_RE)) {
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      tokens.push({ kind: "text", text: text.slice(lastIndex, index) });
     }
-    return <Fragment key={idx}>{part}</Fragment>;
+
+    const full = match[0];
+    if (full.startsWith("**") && full.endsWith("**") && full.length > 4) {
+      tokens.push({ kind: "strong", text: full.slice(2, -2) });
+    } else {
+      const label = match[2] ?? "";
+      const href = match[3] ?? "";
+      // 正则已限制 http(s)；isSafeHttpUrl 再挡一层畸形 URL。
+      if (label && href && isSafeHttpUrl(href)) {
+        tokens.push({ kind: "link", label, href });
+      } else {
+        tokens.push({ kind: "text", text: full });
+      }
+    }
+
+    lastIndex = index + full.length;
+  }
+
+  if (lastIndex < text.length) {
+    tokens.push({ kind: "text", text: text.slice(lastIndex) });
+  }
+
+  return tokens;
+}
+
+function parseInline(text: string): ReactNode[] {
+  return tokenizeInline(text).map((token, idx) => {
+    if (token.kind === "strong") {
+      return <strong key={idx}>{token.text}</strong>;
+    }
+    if (token.kind === "link") {
+      return (
+        <a
+          key={idx}
+          className="chat-md__a"
+          href={token.href}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {token.label}
+        </a>
+      );
+    }
+    return <Fragment key={idx}>{token.text}</Fragment>;
   });
 }
 

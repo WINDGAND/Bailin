@@ -6,8 +6,15 @@ import { useI18n, useT } from "../../shared/i18n/index.js";
 import { ChatMarkdown } from "../../shared/chat-markdown.js";
 import { useUpdateInfo } from "../app/update-context.js";
 import { groupReleasesByDay } from "./group-releases.js";
+import { stripLeadingDuplicateTitle } from "./strip-leading-duplicate-title.js";
 
 type LoadState = "loading" | "error" | "ready";
+
+function formatVersionChip(version: string): string {
+  const trimmed = version.trim();
+  if (!trimmed) return "";
+  return /^v/i.test(trimmed) ? trimmed : `v${trimmed}`;
+}
 
 /**
  * 侧栏「更新日志」页：按日分组的 Release 时间线。
@@ -135,24 +142,39 @@ function ChangelogItemRow({
   onDismiss: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }): JSX.Element {
+  const notes = stripLeadingDuplicateTitle(item.notesMarkdown, item.title);
+  const versionChip = formatVersionChip(item.version);
+
   return (
     <article
       className={`changelog-item fade-in-up${isHighlighted ? " changelog-item--new" : ""}`}
       style={{ animationDelay: `${Math.min(delayIndex, 10) * 45}ms` }}
     >
       <div className="changelog-item__meta">
-        <span className="changelog-item__node" aria-hidden="true" />
         <span className="changelog-item__time">{item.timeLabel}</span>
         <span className="changelog-item__status">
           <i className="changelog-item__dot" aria-hidden="true" />
           {t("update.changelogStatusUpdate")}
         </span>
       </div>
+      <div className="changelog-item__rail" aria-hidden="true">
+        <span className="changelog-item__node" />
+      </div>
       <div className="changelog-item__body">
-        <div className="changelog-item__title">{item.title}</div>
-        {item.notesMarkdown.trim() ? (
+        <div className="changelog-item__heading">
+          <div className="changelog-item__title" translate="no">
+            {item.title}
+          </div>
+          {versionChip ? (
+            <span className="changelog-item__version" translate="no">
+              {versionChip}
+            </span>
+          ) : null}
+          {isHighlighted ? <span className="changelog-item__new-dot" aria-hidden="true" /> : null}
+        </div>
+        {notes.trim() ? (
           <div className="changelog-item__notes">
-            <ChatMarkdown text={item.notesMarkdown} />
+            <ChatMarkdown text={notes} />
           </div>
         ) : null}
         <div className="row gap-2 changelog-item__actions">
@@ -161,7 +183,11 @@ function ChangelogItemRow({
               {t("update.viewRelease")}
             </button>
           ) : (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={onView}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm changelog-item__cta"
+              onClick={onView}
+            >
               {t("update.changelogViewRelease")}
             </button>
           )}

@@ -53,7 +53,7 @@ function check(label, cond, detail) {
 }
 
 try {
-  const { parseBlocks } = require(tmpPath);
+  const { parseBlocks, tokenizeInline, isSafeHttpUrl } = require(tmpPath);
 
   const h1 = parseBlocks("# 一级标题");
   check("单个 # 识别为 1 级标题", h1.length === 1 && h1[0].kind === "h" && h1[0].level === 1, JSON.stringify(h1));
@@ -95,6 +95,41 @@ try {
     "不回归：普通有序列表解析依然正常",
     stillOl.length === 1 && stillOl[0].kind === "ol" && stillOl[0].items.length === 2
   );
+
+  const boldOnly = tokenizeInline("修了 **ui** 问题");
+  check(
+    "内联 bold 仍解析为 strong",
+    boldOnly.length === 3 &&
+      boldOnly[0].kind === "text" &&
+      boldOnly[1].kind === "strong" &&
+      boldOnly[1].text === "ui" &&
+      boldOnly[2].kind === "text",
+    JSON.stringify(boldOnly)
+  );
+
+  const withLink = tokenizeInline(
+    "安装包 [Bailin-Setup-0.0.7.exe](https://github.com/WINDGAND/Bailin/releases/download/v0.0.7/Bailin-Setup-0.0.7.exe)"
+  );
+  check(
+    "markdown 链接解析为 link token",
+    withLink.some(
+      (t) =>
+        t.kind === "link" &&
+        t.label === "Bailin-Setup-0.0.7.exe" &&
+        t.href.startsWith("https://github.com/")
+    ),
+    JSON.stringify(withLink)
+  );
+
+  const badLink = tokenizeInline("坏链 [x](javascript:alert(1))");
+  check(
+    "非 http(s) 链接不解析为 link",
+    badLink.every((t) => t.kind !== "link") && badLink.map((t) => t.text).join("").includes("javascript:"),
+    JSON.stringify(badLink)
+  );
+
+  check("isSafeHttpUrl 接受 https", isSafeHttpUrl("https://example.com/a"));
+  check("isSafeHttpUrl 拒绝 javascript:", !isSafeHttpUrl("javascript:alert(1)"));
 } finally {
   rmSync(tmpPath, { force: true });
 }

@@ -6398,7 +6398,11 @@ body {
 }
 
 .changelog__header {
-  margin-bottom: 26px;
+  margin-bottom: 28px;
+}
+
+.changelog__header .display--page {
+  text-wrap: pretty;
 }
 
 .changelog__header .apple-page-subtitle {
@@ -6421,14 +6425,14 @@ body {
 .changelog__timeline {
   display: flex;
   flex-direction: column;
-  gap: 36px;
+  gap: 28px;
 }
 
 .changelog-day__heading {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .changelog-day__title {
@@ -6438,6 +6442,7 @@ body {
   letter-spacing: -0.02em;
   color: var(--ink);
   flex-shrink: 0;
+  text-wrap: pretty;
 }
 
 .changelog-day__weekday {
@@ -6464,27 +6469,16 @@ body {
 
 .changelog-item {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 4px 24px;
-  padding: 18px 0;
+  grid-template-columns: 72px 14px minmax(0, 1fr);
+  gap: 0 14px;
+  padding: 16px 0 20px;
   border-bottom: 1px solid var(--grid);
   background: transparent;
 }
 
 .changelog-item:last-child {
   border-bottom: none;
-}
-
-.changelog-item--new .changelog-item__title::after {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-left: 8px;
-  margin-bottom: 2px;
-  border-radius: 50%;
-  background: var(--magenta);
-  vertical-align: middle;
+  padding-bottom: 4px;
 }
 
 .changelog-item__meta {
@@ -6492,11 +6486,57 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  padding-top: 3px;
+  padding-top: 2px;
+}
+
+.changelog-item__rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 7px;
+}
+
+.changelog-item__rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: -20px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--grid-strong);
+}
+
+.changelog-day__entries > .changelog-item:first-child .changelog-item__rail::before {
+  top: 10px;
+}
+
+.changelog-day__entries > .changelog-item:last-child .changelog-item__rail::before {
+  bottom: auto;
+  height: 10px;
+}
+
+.changelog-day__entries > .changelog-item:only-child .changelog-item__rail::before {
+  display: none;
 }
 
 .changelog-item__node {
-  display: none;
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--ink-faint);
+  box-shadow: 0 0 0 3px var(--paper);
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.changelog-item--new .changelog-item__node {
+  border-color: var(--magenta);
+  background: var(--magenta);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--magenta) 14%, var(--paper));
 }
 
 .changelog-item__time {
@@ -6539,71 +6579,159 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.changelog-item__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
 }
 
 .changelog-item__title {
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   color: var(--ink);
+  line-height: 1.25;
+  text-wrap: pretty;
+  min-width: 0;
+}
+
+.changelog-item__version {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  padding: 2px 7px;
   line-height: 1.3;
+  flex-shrink: 0;
+}
+
+.changelog-item__new-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--magenta);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--magenta) 18%, transparent);
+  flex-shrink: 0;
 }
 
 .changelog-item__notes {
+  font-family: var(--font-body);
   font-size: 13.5px;
-  line-height: 1.65;
+  line-height: 1.6;
   color: var(--ink-soft);
 }
 
+/* 分区标题降级为 field-label 气质，不再与条目标题抢 serif 层级 */
 .changelog-item__notes .chat-md__h {
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--ink);
-  line-height: 1.35;
+  line-height: 1.4;
   margin: 18px 0 8px;
+  text-wrap: pretty;
 }
 
 .changelog-item__notes .chat-md__h:first-child {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .changelog-item__notes .chat-md__h1 {
-  font-size: 17px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
 }
 
-.changelog-item__notes .chat-md__h2 {
-  font-size: 15.5px;
+.changelog-item__notes .chat-md__h2,
+.changelog-item__notes .chat-md__h3 {
+  font-size: 12.5px;
+  padding-top: 4px;
+  border-top: 1px solid var(--grid);
+}
+
+.changelog-item__notes .chat-md__h:first-child.chat-md__h2,
+.changelog-item__notes .chat-md__h:first-child.chat-md__h3 {
+  border-top: none;
+  padding-top: 0;
 }
 
 .changelog-item__notes .chat-md__h3 {
-  font-size: 14.5px;
-  color: var(--ink);
+  color: var(--ink-soft);
 }
 
 .changelog-item__notes .chat-md__p,
 .changelog-item__notes .chat-md__ul,
 .changelog-item__notes .chat-md__ol {
+  font-family: var(--font-body);
   color: var(--ink-soft);
   font-size: 13.5px;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 .changelog-item__notes .chat-md__p {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 
 .changelog-item__notes .chat-md__ul,
 .changelog-item__notes .chat-md__ol {
-  margin: 0 0 10px;
-  padding-left: 1.15em;
+  margin: 0 0 8px;
+  padding-left: 1.2em;
 }
 
+.changelog-item__notes .chat-md__ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.changelog-item__notes .chat-md__ul > li {
+  position: relative;
+  padding-left: 1.05em;
+  margin: 0 0 5px;
+}
+
+.changelog-item__notes .chat-md__ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0.15em;
+  top: 0.55em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink-faint) 80%, var(--magenta) 20%);
+}
+
+.changelog-item__notes .chat-md__ol > li {
+  margin: 0 0 5px;
+  padding-left: 0.15em;
+}
+
+.changelog-item__notes .chat-md__ul > li:last-child,
+.changelog-item__notes .chat-md__ol > li:last-child {
+  margin-bottom: 0;
+}
+
+/* ui / fix / chore 等扫读锚点 */
 .changelog-item__notes strong {
-  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
 }
 
 .changelog-item__notes code {
@@ -6615,8 +6743,56 @@ body {
   border-radius: 4px;
 }
 
+.changelog-item__notes .chat-md__a {
+  color: var(--magenta-deep, var(--magenta));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color var(--motion-fast) var(--ease-out);
+}
+
+.changelog-item__notes .chat-md__a:hover {
+  color: var(--magenta);
+}
+
+.changelog-item__notes .chat-md__a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--magenta) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .changelog-item__actions {
-  margin-top: 4px;
+  margin-top: 2px;
+}
+
+.changelog-item__cta {
+  border-color: var(--grid-strong);
+  color: var(--ink);
+}
+
+.changelog-item__cta:hover {
+  background: var(--paper-warm);
+  border-color: color-mix(in srgb, var(--ink) 18%, var(--grid-strong));
+  color: var(--ink);
+}
+
+[data-theme="dark"] .changelog-item__node {
+  background: var(--paper);
+  box-shadow: 0 0 0 3px var(--paper);
+}
+
+[data-theme="dark"] .changelog-item--new .changelog-item__node {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--magenta) 22%, var(--paper));
+}
+
+[data-theme="dark"] .changelog-item__version,
+[data-theme="dark"] .changelog-item__notes strong,
+[data-theme="dark"] .changelog-item__notes code {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+[data-theme="dark"] .changelog-item__cta:hover {
+  background: color-mix(in srgb, var(--paper-warm) 80%, transparent);
 }
 
 /* =============================================================
@@ -6710,6 +6886,23 @@ body {
 .chat-md__h3 {
   font-size: 12.5px;
   color: var(--ink-soft);
+}
+
+.chat-md__a {
+  color: var(--magenta-deep, var(--magenta));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.chat-md__a:hover {
+  color: var(--magenta);
+}
+
+.chat-md__a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--magenta) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 /* —— Proactive bubble tail：dark 下 paper 是深棕，tail border 用 grid-strong
