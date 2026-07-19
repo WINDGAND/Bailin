@@ -301,8 +301,8 @@ body {
   border-color: var(--magenta);
   box-shadow: var(--shadow-soft);
 }
-.btn:active {
-  transform: none;
+.btn:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.97);
   box-shadow: var(--shadow-pressed);
   transition-duration: var(--motion-instant);
 }
@@ -1556,15 +1556,89 @@ body {
   background: transparent;
   color: inherit;
   font: inherit;
+  transition:
+    background var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    border-left-color var(--motion-fast) ease;
 }
 
 .plain-list__item:hover {
   background: rgba(31, 58, 58, 0.035);
 }
 
+.plain-list__item:active {
+  background: rgba(31, 58, 58, 0.06);
+}
+
 .plain-list__item.is-selected {
   background: rgba(178, 24, 88, 0.055);
   border-left-color: var(--magenta);
+}
+
+.plain-list__item:focus-visible {
+  outline: 2px solid var(--magenta);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* 角色仓库：分页切换才有短 stagger，搜索过滤与点选保持即时 */
+.library-list-item--page-in {
+  animation: library-list-item-in 160ms var(--ease-out) both;
+}
+
+.library-list-item--forward {
+  --library-list-enter-y: 4px;
+}
+
+.library-list-item--backward {
+  --library-list-enter-y: -4px;
+}
+
+@keyframes library-list-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--library-list-enter-y, 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 角色详情：由 View Transitions 对旧/新快照做交叉融合，不先降亮度再替换 */
+.library-detail-surface {
+  view-transition-name: library-detail;
+}
+
+::view-transition-group(library-detail) {
+  animation-duration: 200ms;
+  animation-timing-function: var(--ease-out);
+}
+
+::view-transition-old(library-detail) {
+  animation: library-detail-out 160ms var(--ease-out) both;
+}
+
+::view-transition-new(library-detail) {
+  animation: library-detail-in 200ms var(--ease-out) both;
+}
+
+@keyframes library-detail-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes library-detail-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 角色仓库 · 列表底部分页（窄屏换行时仍居中） */
@@ -3085,7 +3159,7 @@ body {
 
 .bl-section__caption {
   font-size: 12px;
-  color: var(--ink-faint);
+  color: var(--ink-caption);
   line-height: 1.4;
 }
 
@@ -3255,6 +3329,17 @@ body {
   border-radius: 50%;
   background: currentColor;
   flex-shrink: 0;
+}
+
+.bl-tag--sm {
+  padding: 2px 7px;
+  font-size: 10.5px;
+  gap: 4px;
+}
+
+.bl-tag--sm .bl-tag__dot {
+  width: 5px;
+  height: 5px;
 }
 
 /* ---------- Action bar：表单底部主操作条 ---------- */
@@ -3646,10 +3731,18 @@ body {
   background: rgba(255, 255, 255, 0.52);
 }
 
+.plain-list__item:active {
+  background: rgba(255, 255, 255, 0.62);
+}
+
 .plain-list__item.is-selected {
   background: rgba(255, 255, 255, 0.70);
   border-left-color: transparent;
   box-shadow: inset 3px 0 0 rgba(178, 24, 88, 0.55);
+}
+
+.plain-list__item.is-selected:active {
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .apple-stage {
