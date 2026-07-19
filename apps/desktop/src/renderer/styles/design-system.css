@@ -1476,6 +1476,8 @@ body {
   min-width: 0;
   padding: 48px clamp(32px, 6vw, 88px);
   overflow: auto;
+  /* 预留滚动条槽位，避免内容过长时滚动条出现/消失导致整页左右跳动 */
+  scrollbar-gutter: stable;
   background: linear-gradient(180deg, var(--paper) 0%, var(--paper-deep) 100%);
   transition: padding var(--sidebar-drawer-duration) var(--sidebar-drawer-ease);
 }
@@ -3501,6 +3503,7 @@ body {
   min-width: 0;
   padding: 48px clamp(28px, 5vw, 72px);
   overflow: auto;
+  scrollbar-gutter: stable;
   background: transparent;
 }
 
