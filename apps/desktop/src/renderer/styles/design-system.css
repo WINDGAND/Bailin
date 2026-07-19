@@ -51,6 +51,8 @@
  *  [33] Dark theme overrides  (line ~3134)  data-theme="dark"
  *  [34] App-specific          (line ~3562)  pet-empty / bl-select / pet-preview
  *  [35] Distillation stage rail            深度创建页顶部步骤条 + 折叠摘要
+ *  [36] Memory panel（用户画像）           .memory-switch .memory-ledger .memory-activity
+ *  [37] Desktop companion（桌宠与陪伴）    .bl-switch .desktop-scale .desktop-status
  *
  * 维护提示：
  * - 新增样式时请归入对应章节；如果是新业务模块，加新章节 [NN] 并更新本 ToC
@@ -6714,3 +6716,662 @@ body {
    自动跟随，但 tail 本身 background 需要从 hardcoded var(--paper) 适配；
    因为 tail 的 background 是 light/dark 都用 var(--paper)，token 已经
    自动重定义为深棕，所以无需 override。这里仅注释占位。 */
+
+/* ---------- [36] 共享开关 + Memory panel（用户画像） ---------- */
+
+/* role=switch 开关行（用户画像 / 桌宠页共用） */
+.bl-switch-row,
+.memory-switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.bl-switch-row__control,
+.memory-switch-row__control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.bl-switch,
+.memory-switch {
+  position: relative;
+  appearance: none;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-deep);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.bl-switch[aria-checked="true"],
+.memory-switch[aria-checked="true"] {
+  background: var(--magenta);
+  border-color: var(--magenta);
+}
+
+.bl-switch__thumb,
+.memory-switch__thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.bl-switch[aria-checked="true"] .bl-switch__thumb,
+.memory-switch[aria-checked="true"] .memory-switch__thumb {
+  transform: translateX(16px);
+}
+
+.bl-switch:focus-visible,
+.memory-switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--magenta-tint);
+}
+
+.bl-switch:disabled,
+.memory-switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bl-switch,
+  .bl-switch__thumb,
+  .memory-switch,
+  .memory-switch__thumb {
+    transition: none;
+  }
+}
+
+/* 记忆条目：去卡片，发丝分隔编辑行（对齐 .mental-model-list 心智模型） */
+.memory-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.memory-ledger-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hairline);
+  min-width: 0;
+}
+
+.memory-ledger-row:last-child {
+  border-bottom: none;
+}
+
+.memory-ledger-row__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 5px 6px;
+  margin-left: -6px;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.memory-ledger-row__input::placeholder {
+  color: var(--ink-ghost);
+}
+
+.memory-ledger-row__input:hover {
+  background: var(--surface-subtle);
+}
+
+.memory-ledger-row__input:focus-visible,
+.memory-ledger-row__input:focus {
+  outline: none;
+  background: var(--surface-subtle);
+  box-shadow: 0 0 0 2px var(--magenta-tint);
+}
+
+.memory-ledger-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.memory-ledger-row__time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-ghost);
+  white-space: nowrap;
+}
+
+.memory-ledger-row__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-faint);
+  opacity: 0.45;
+  cursor: pointer;
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.memory-ledger-row:hover .memory-ledger-row__remove,
+.memory-ledger-row__remove:hover,
+.memory-ledger-row__remove:focus-visible {
+  opacity: 1;
+}
+
+.memory-ledger-row__remove:hover {
+  background: var(--magenta-tint);
+  color: var(--magenta);
+}
+
+.memory-ledger-row__remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--magenta-tint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-ledger-row__input,
+  .memory-ledger-row__remove {
+    transition: none;
+  }
+}
+
+/* 「最近学到」：去重后的轻量活动条，唯一承担审计 / 撤回 */
+.memory-activity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--magenta-tint);
+  border: 1px solid color-mix(in srgb, var(--magenta) 18%, transparent);
+}
+
+.memory-activity__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--magenta);
+}
+
+.memory-activity__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-activity__text strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.memory-activity__time {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+/* 待处理的后台自动学习提示条（保持与 activity 视觉区分：中性底色） */
+.memory-pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  border: 1px solid var(--hairline);
+}
+
+/* ---------- [37] Desktop companion（桌宠与陪伴）——发丝分区 + 品牌滑块 ---------- */
+
+.desktop-section {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.desktop-section:last-child {
+  border-bottom: none;
+}
+
+.desktop-section__title {
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.desktop-scale {
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.desktop-scale:focus-visible {
+  outline: none;
+}
+
+.desktop-scale:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--magenta-tint);
+}
+
+.desktop-scale::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to right,
+    var(--magenta) 0%,
+    var(--magenta) var(--desktop-scale-fill, 50%),
+    var(--hairline) var(--desktop-scale-fill, 50%),
+    var(--hairline) 100%
+  );
+}
+
+.desktop-scale::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.desktop-scale::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--hairline);
+}
+
+.desktop-scale::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--magenta);
+}
+
+.desktop-scale::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-scale::-webkit-slider-thumb {
+    transition: none;
+  }
+}
+
+.desktop-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+  min-width: 0;
+}
+
+.desktop-toggle-row:last-child {
+  border-bottom: none;
+}
+
+.desktop-advanced {
+  margin-top: 4px;
+}
+
+.desktop-advanced__summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 12px;
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+}
+
+.desktop-advanced__summary::-webkit-details-marker {
+  display: none;
+}
+
+.desktop-advanced__summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--ink-faint);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.desktop-advanced[open] .desktop-advanced__summary::before {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-advanced__summary::before {
+    transition: none;
+  }
+}
+
+.desktop-toggle-list {
+  border-top: 1px solid var(--hairline);
+  margin-top: 4px;
+}
+
+.desktop-quiet-hours {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+
+.desktop-quiet-hours__times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.desktop-status {
+  padding: 16px 0 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.desktop-status__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  border: 1px solid var(--hairline);
+  margin-bottom: 14px;
+}
+
+.desktop-status__summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.desktop-status__meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.desktop-status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.desktop-screenshot-meta {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* ---------- [37] Desktop companion（桌宠与陪伴）——发丝分区 + 品牌滑块 ---------- */
+
+.desktop-section {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.desktop-section:last-child {
+  border-bottom: none;
+}
+
+.desktop-section__title {
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.desktop-scale {
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.desktop-scale:focus-visible {
+  outline: none;
+}
+
+.desktop-scale:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--magenta-tint);
+}
+
+.desktop-scale::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to right,
+    var(--magenta) 0%,
+    var(--magenta) var(--desktop-scale-fill, 50%),
+    var(--hairline) var(--desktop-scale-fill, 50%),
+    var(--hairline) 100%
+  );
+}
+
+.desktop-scale::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.desktop-scale::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--hairline);
+}
+
+.desktop-scale::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--magenta);
+}
+
+.desktop-scale::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-scale::-webkit-slider-thumb {
+    transition: none;
+  }
+}
+
+.desktop-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+  min-width: 0;
+}
+
+.desktop-toggle-row:last-child {
+  border-bottom: none;
+}
+
+.desktop-advanced {
+  margin-top: 4px;
+}
+
+.desktop-advanced__summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 12px;
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+}
+
+.desktop-advanced__summary::-webkit-details-marker {
+  display: none;
+}
+
+.desktop-advanced__summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--ink-faint);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.desktop-advanced[open] .desktop-advanced__summary::before {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-advanced__summary::before {
+    transition: none;
+  }
+}
+
+.desktop-toggle-list {
+  border-top: 1px solid var(--hairline);
+  margin-top: 4px;
+}
+
+.desktop-quiet-hours {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+
+.desktop-quiet-hours__times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.desktop-status {
+  padding: 16px 0 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.desktop-status__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  border: 1px solid var(--hairline);
+  margin-bottom: 14px;
+}
+
+.desktop-status__summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.desktop-status__meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.desktop-status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.desktop-screenshot-meta {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type {
   CompanionFrequency,
   ProactiveSettings,
@@ -21,6 +21,7 @@ import {
 } from "../../../shared/pet-display-scale.js";
 import { useBailin, useActiveCharacter } from "../../shared/use-bailin.js";
 import { useConfirm, useToast } from "../../shared/feedback.js";
+import { BlSwitchRow, BlToggleRow } from "../../shared/bl-switch.js";
 import { BlSelect } from "../../shared/BlSelect.js";
 import { PetPreview } from "../../shared/pet-preview.js";
 import { useI18n } from "../../shared/i18n/index.js";
@@ -61,6 +62,9 @@ const LAST_REASON_KEYS: Record<string, string> = {
   llm: "desktop.lastReasonLlm"
 };
 
+const SCALE_MIN_PERCENT = Math.round(PET_DISPLAY_SCALE_MIN * 100);
+const SCALE_MAX_PERCENT = Math.round(PET_DISPLAY_SCALE_MAX * 100);
+
 export function DesktopBehaviorPanel(): JSX.Element {
   const { t, locale } = useI18n();
   const bailin = useBailin();
@@ -73,10 +77,8 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const [saving, setSaving] = useState(false);
   const [llmTesting, setLlmTesting] = useState(false);
   const [hushDraftMinutes, setHushDraftMinutes] = useState<ProactiveSettings["defaultHushMinutes"]>(30);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(true);
-  const smartScreenshotId = useId();
-  const quietHoursEnabledId = useId();
+  const smartScreenshotLabelId = useId();
+  const quietHoursLabelId = useId();
 
   const refreshStatus = useCallback(async () => {
     setStatus(await bailin.proactive.getStatus());
@@ -174,6 +176,8 @@ export function DesktopBehaviorPanel(): JSX.Element {
   }
 
   const timeLocale = locale === "zh" ? "zh-CN" : "en-US";
+  const switchOn = t("desktop.switchOn");
+  const switchOff = t("desktop.switchOff");
 
   const previewSize = useMemo(() => {
     const scale = settings.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT;
@@ -190,16 +194,22 @@ export function DesktopBehaviorPanel(): JSX.Element {
   }, [bundle?.sprite, settings.petDisplayScale]);
 
   const scalePercent = Math.round((settings.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT) * 100);
+  const scaleFillPercent =
+    ((scalePercent - SCALE_MIN_PERCENT) / (SCALE_MAX_PERCENT - SCALE_MIN_PERCENT)) * 100;
+
   const frequency = settings.companionFrequency;
   const screenshotsOn = settings.screenAwareness === "screenshots";
 
-  const frequencyHint = t(FREQUENCY_HINT_KEYS[frequency] as "desktop.frequencyHint_off");
-  const trackHint =
-    bundle?.card.meta.track === "companion"
-      ? t("desktop.trackHintCompanion")
-      : bundle?.card.meta.track === "utility"
-        ? t("desktop.trackHintUtility")
-        : null;
+  const frequencyHint = useMemo(() => {
+    const base = t(FREQUENCY_HINT_KEYS[frequency] as "desktop.frequencyHint_off");
+    const trackHint =
+      bundle?.card.meta.track === "companion"
+        ? t("desktop.trackHintCompanion")
+        : bundle?.card.meta.track === "utility"
+          ? t("desktop.trackHintUtility")
+          : null;
+    return trackHint ? `${base} ${trackHint}` : base;
+  }, [frequency, bundle?.card.meta.track, t]);
 
   const statusSummary = useMemo(() => {
     const count = status?.utterancesThisHour ?? 0;
@@ -218,6 +228,13 @@ export function DesktopBehaviorPanel(): JSX.Element {
     }
     return t("desktop.statusSummaryReady", { count, max });
   }, [status, settings.maxPerHour, t, timeLocale]);
+
+  const lastTriggerLine = status?.lastAt
+    ? t("desktop.statusLastTrigger", {
+        reason: lastReasonLabel(status.lastReason),
+        time: new Date(status.lastAt).toLocaleTimeString(timeLocale)
+      })
+    : t("desktop.statusNoLastTrigger");
 
   const screenshotStatusLine = useMemo(() => {
     if (!screenshotsOn) return null;
@@ -238,17 +255,14 @@ export function DesktopBehaviorPanel(): JSX.Element {
   }, [screenshotsOn, status?.lastScreenshotAt, frequency, visionAvailable, t, timeLocale]);
 
   return (
-    // 与其他 panel 一致的两层结构：root（maxWidth 760 + margin auto）→ header
-    // (marginBottom 26) + body wrapper (flex column + gap 28)。
     <div style={{ maxWidth: 760, margin: "0 auto" }}>
-      <div style={{ marginBottom: 26 }}>
+      <div style={{ marginBottom: 24 }}>
         <div className="eyebrow">{t("desktop.eyebrow")}</div>
         <div className="display display--page">{t("desktop.title")}</div>
         <p className="apple-page-subtitle">{t("desktop.subtitle")}</p>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-      <section className="card" style={{ padding: 18 }}>
+      <section className="desktop-section">
         <div className="row gap-3 row--start-top" style={{ alignItems: "flex-start" }}>
           <div
             className="apple-stage"
@@ -274,24 +288,27 @@ export function DesktopBehaviorPanel(): JSX.Element {
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
-              {t("desktop.petSizeTitle")}
-            </h2>
-            <label className="stack" style={{ gap: 8, marginTop: 14 }}>
+            <h2 className="desktop-section__title">{t("desktop.petSizeTitle")}</h2>
+            <label className="stack" style={{ gap: 8 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <span className="body-sm">{t("desktop.petSizeLabel")}</span>
-                <span className="body-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
+                <span className="bl-field-label">{t("desktop.petSizeLabel")}</span>
+                <span
+                  className="body-sm"
+                  style={{ fontVariantNumeric: "tabular-nums", color: "var(--ink-soft)" }}
+                >
                   {t("desktop.petSizePercent", { percent: scalePercent })}
                 </span>
               </div>
               <input
                 type="range"
-                min={Math.round(PET_DISPLAY_SCALE_MIN * 100)}
-                max={Math.round(PET_DISPLAY_SCALE_MAX * 100)}
+                className="desktop-scale"
+                min={SCALE_MIN_PERCENT}
+                max={SCALE_MAX_PERCENT}
                 step={Math.round(PET_DISPLAY_SCALE_STEP * 100)}
                 value={scalePercent}
                 aria-label={t("desktop.petSizeLabel")}
                 aria-valuetext={t("desktop.petSizePercent", { percent: scalePercent })}
+                style={{ "--desktop-scale-fill": `${scaleFillPercent}%` } as React.CSSProperties}
                 onChange={(e) => {
                   const nextScale = clampPetDisplayScale(Number(e.currentTarget.value) / 100);
                   void save({ ...settings, petDisplayScale: nextScale }, { silent: true });
@@ -299,14 +316,13 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 onPointerUp={() => {
                   showToast({ kind: "success", text: t("desktop.toastSaved") });
                 }}
-                style={{ width: "100%" }}
               />
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <span className="body-sm">
-                  {t("desktop.petSizePercent", { percent: Math.round(PET_DISPLAY_SCALE_MIN * 100) })}
+                <span className="body-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {t("desktop.petSizePercent", { percent: SCALE_MIN_PERCENT })}
                 </span>
-                <span className="body-sm">
-                  {t("desktop.petSizePercent", { percent: Math.round(PET_DISPLAY_SCALE_MAX * 100) })}
+                <span className="body-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {t("desktop.petSizePercent", { percent: SCALE_MAX_PERCENT })}
                 </span>
               </div>
             </label>
@@ -314,13 +330,12 @@ export function DesktopBehaviorPanel(): JSX.Element {
         </div>
       </section>
 
-      <section className="card" style={{ padding: 18 }}>
-        <h2 className="display display--section" style={{ fontSize: 20, margin: 0 }}>
-          {t("desktop.proactiveTitle")}
-        </h2>
+      <section className="desktop-section">
+        <h2 className="desktop-section__title">{t("desktop.proactiveTitle")}</h2>
 
-        <Field label={t("desktop.frequencyLabel")} style={{ marginTop: 16 }}>
-          <p className="bl-field-hint" style={{ margin: "0 0 8px" }}>
+        <div className="stack" style={{ gap: 8 }}>
+          <span className="bl-field-label">{t("desktop.frequencyLabel")}</span>
+          <p className="bl-field-hint" style={{ margin: 0 }}>
             {t("desktop.frequencyQuotaNote")}
           </p>
           <BlSelect
@@ -331,42 +346,33 @@ export function DesktopBehaviorPanel(): JSX.Element {
               label: t(`desktop.frequency_${f}` as "desktop.frequency_off")
             }))}
           />
-          <p className="bl-field-hint" style={{ margin: "6px 0 0" }}>
+          <p className="bl-field-hint" style={{ margin: 0 }}>
             {frequencyHint}
-            {trackHint ? ` ${trackHint}` : null}
           </p>
-        </Field>
+        </div>
 
         {frequencySupportsSmartScreenshot(frequency) ? (
-          <div
-            className="stack"
-            style={{
-              marginTop: 14,
-              padding: "12px 14px",
-              borderRadius: 12,
-              background: "var(--bl-surface-muted, rgba(0, 0, 0, 0.03))"
-            }}
-          >
-            <label htmlFor={smartScreenshotId} className="row gap-2" style={{ cursor: "pointer" }}>
-              <input
-                id={smartScreenshotId}
-                type="checkbox"
-                checked={screenshotsOn}
-                onChange={(e) => void setSmartScreenshot(e.currentTarget.checked)}
-              />
-              <span className="body-sm">{t("desktop.smartScreenshotEnable")}</span>
-            </label>
+          <>
+            <BlSwitchRow
+              labelId={smartScreenshotLabelId}
+              label={t("desktop.smartScreenshotEnable")}
+              checked={screenshotsOn}
+              onCheckedChange={(enabled) => void setSmartScreenshot(enabled)}
+              statusOn={switchOn}
+              statusOff={switchOff}
+              disabled={saving}
+              style={{ marginTop: 8, paddingBottom: screenshotsOn ? 0 : 20 }}
+            />
             {screenshotsOn ? (
-              <>
+              <div className="desktop-screenshot-meta">
                 {screenshotStatusLine ? (
-                  <p className="bl-field-hint" style={{ margin: 0 }}>
+                  <p className="bl-field-hint" style={{ margin: "0 0 10px" }}>
                     {screenshotStatusLine}
                   </p>
                 ) : null}
                 <button
                   type="button"
-                  className="btn btn--magenta"
-                  style={{ alignSelf: "flex-start" }}
+                  className="btn btn--ghost btn--sm"
                   disabled={llmTesting || saving}
                   onClick={async () => {
                     setLlmTesting(true);
@@ -388,58 +394,50 @@ export function DesktopBehaviorPanel(): JSX.Element {
                 >
                   {llmTesting ? t("common.loading") : t("desktop.smartScreenshotTryButton")}
                 </button>
-              </>
+              </div>
             ) : null}
-          </div>
+          </>
         ) : null}
 
-        <details
-          style={{ marginTop: 18 }}
-          open={advancedOpen}
-          onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}
-        >
-          <summary className="body-sm" style={{ cursor: "pointer", userSelect: "none" }}>
-            {t("desktop.advancedTitle")}
-          </summary>
-          <div className="stack stack--lg" style={{ marginTop: 14 }}>
-            <div className="stack" style={{ gap: 10 }}>
-              <span className="bl-field-label" style={{ fontSize: "var(--text-caption)", fontWeight: 500 }}>
-                {t("desktop.scenariosTitle")}
-              </span>
-              <ScenarioToggle
+        <details className="desktop-advanced">
+          <summary className="desktop-advanced__summary">{t("desktop.advancedTitle")}</summary>
+          <div style={{ marginTop: 4 }}>
+            <span className="bl-field-label">{t("desktop.scenariosTitle")}</span>
+            <div className="desktop-toggle-list">
+              <BlToggleRow
                 label={t("desktop.scenarioLongActive")}
                 checked={settings.scenarioToggles.longActive}
-                onChange={(longActive) =>
+                onCheckedChange={(longActive) =>
                   void save({
                     ...settings,
                     scenarioToggles: { ...settings.scenarioToggles, longActive }
                   })
                 }
               />
-              <ScenarioToggle
+              <BlToggleRow
                 label={t("desktop.scenarioIdle")}
                 checked={settings.scenarioToggles.idle}
-                onChange={(idle) =>
+                onCheckedChange={(idle) =>
                   void save({
                     ...settings,
                     scenarioToggles: { ...settings.scenarioToggles, idle }
                   })
                 }
               />
-              <ScenarioToggle
+              <BlToggleRow
                 label={t("desktop.scenarioReturn")}
                 checked={settings.scenarioToggles.returnActive}
-                onChange={(returnActive) =>
+                onCheckedChange={(returnActive) =>
                   void save({
                     ...settings,
                     scenarioToggles: { ...settings.scenarioToggles, returnActive }
                   })
                 }
               />
-              <ScenarioToggle
+              <BlToggleRow
                 label={t("desktop.scenarioUnlock")}
                 checked={settings.scenarioToggles.unlock}
-                onChange={(unlock) =>
+                onCheckedChange={(unlock) =>
                   void save({
                     ...settings,
                     scenarioToggles: { ...settings.scenarioToggles, unlock }
@@ -448,87 +446,58 @@ export function DesktopBehaviorPanel(): JSX.Element {
               />
             </div>
 
-            <Field label={t("desktop.quietHoursTitle")}>
-              <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-                <label htmlFor={quietHoursEnabledId} className="row gap-2" style={{ cursor: "pointer" }}>
-                  <input
-                    id={quietHoursEnabledId}
-                    type="checkbox"
-                    checked={settings.quietHoursEnabled}
-                    onChange={(e) =>
-                      void save({ ...settings, quietHoursEnabled: e.currentTarget.checked })
-                    }
-                  />
-                  <span className="body-sm">{t("desktop.quietHoursEnable")}</span>
-                </label>
-                <label className="row gap-1" style={{ alignItems: "center" }}>
-                  <span className="body-sm" style={{ whiteSpace: "nowrap" }}>
-                    {t("desktop.quietHoursFrom")}
-                  </span>
+            <div className="desktop-quiet-hours">
+              <BlSwitchRow
+                labelId={quietHoursLabelId}
+                label={t("desktop.quietHoursTitle")}
+                checked={settings.quietHoursEnabled}
+                onCheckedChange={(quietHoursEnabled) =>
+                  void save({ ...settings, quietHoursEnabled })
+                }
+                statusOn={switchOn}
+                statusOff={switchOff}
+                style={{ paddingTop: 0, borderBottom: "none" }}
+              />
+              {settings.quietHoursEnabled ? (
+                <div className="desktop-quiet-hours__times">
+                  <span className="body-sm">{t("desktop.quietHoursFrom")}</span>
                   <input
                     className="input"
                     type="time"
                     value={settings.quietHoursStart}
-                    onChange={(e) => void save({ ...settings, quietHoursStart: e.currentTarget.value })}
+                    aria-label={t("desktop.quietHoursStartAria")}
+                    onChange={(e) => void save({ ...settings, quietHoursStart: e.target.value })}
                     style={{ maxWidth: 140 }}
-                    disabled={!settings.quietHoursEnabled}
                   />
-                </label>
-                <span className="body-sm">{t("desktop.quietHoursTo")}</span>
-                <label className="row gap-1" style={{ alignItems: "center" }}>
-                  <span className="body-sm" style={{ whiteSpace: "nowrap" }}>
-                    {t("desktop.quietHoursUntil")}
-                  </span>
+                  <span className="body-sm">{t("desktop.quietHoursTo")}</span>
                   <input
                     className="input"
                     type="time"
                     value={settings.quietHoursEnd}
-                    onChange={(e) => void save({ ...settings, quietHoursEnd: e.currentTarget.value })}
+                    aria-label={t("desktop.quietHoursEndAria")}
+                    onChange={(e) => void save({ ...settings, quietHoursEnd: e.target.value })}
                     style={{ maxWidth: 140 }}
-                    disabled={!settings.quietHoursEnabled}
                   />
-                </label>
-              </div>
-            </Field>
+                </div>
+              ) : null}
+            </div>
           </div>
         </details>
       </section>
 
-      <details
-        className="card"
-        style={{ padding: 18 }}
-        open={statusOpen}
-        onToggle={(e) => setStatusOpen((e.target as HTMLDetailsElement).open)}
-      >
-        <summary
-          className="body-sm"
-          style={{ cursor: "pointer", userSelect: "none" }}
-        >
-          <span className="display display--section" style={{ fontSize: 20 }}>
-            {t("desktop.statusAdvancedTitle")}
-          </span>
-          <span className="bl-field-hint" style={{ display: "block", marginTop: 6 }}>
-            {statusSummary}
-          </span>
-        </summary>
+      <section className="desktop-section desktop-status">
+        <h2 className="desktop-section__title">{t("desktop.statusAdvancedTitle")}</h2>
 
-        <div className="body-sm" style={{ marginTop: 14 }}>
-          {status?.lastAt
-            ? t("desktop.statusLastTrigger", {
-                reason: lastReasonLabel(status.lastReason),
-                time: new Date(status.lastAt).toLocaleTimeString(timeLocale)
-              })
-            : t("desktop.statusNoLastTrigger")}
+        <div className="desktop-status__bar">
+          <span className="desktop-status__summary">{statusSummary}</span>
+          <span className="desktop-status__meta">{lastTriggerLine}</span>
         </div>
 
-        <p className="bl-field-hint" style={{ margin: "12px 0 0" }}>
+        <p className="bl-field-hint" style={{ margin: "0 0 12px" }}>
           {t("desktop.quickActionsHint")}
         </p>
 
-        <div
-          className="row gap-2"
-          style={{ marginTop: 12, flexWrap: "wrap", alignItems: "center" }}
-        >
+        <div className="desktop-status__actions">
           <span className="body-sm">{t("desktop.hushActionLabel")}</span>
           <div style={{ width: 112, flexShrink: 0 }}>
             <BlSelect
@@ -543,15 +512,12 @@ export function DesktopBehaviorPanel(): JSX.Element {
               aria-label={t("desktop.hushDurationAria")}
             />
           </div>
-          <button type="button" className="btn btn--magenta" onClick={() => void confirmHush()}>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void confirmHush()}>
             {t("desktop.hushConfirm")}
           </button>
-          <button type="button" className="btn btn--ghost" onClick={cancelHushDraft}>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={cancelHushDraft}>
             {t("desktop.hushCancel")}
           </button>
-        </div>
-
-        <div className="row gap-2" style={{ marginTop: 14, flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn btn--magenta"
@@ -572,51 +538,7 @@ export function DesktopBehaviorPanel(): JSX.Element {
             {t("desktop.triggerButton")}
           </button>
         </div>
-      </details>
-      </div>
+      </section>
     </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-  style
-}: {
-  label: string;
-  children: ReactNode;
-  style?: React.CSSProperties;
-}): JSX.Element {
-  return (
-    <div className="stack" style={{ gap: 8, ...style }}>
-      <span className="body-sm">{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function ScenarioToggle({
-  label,
-  checked,
-  onChange
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}): JSX.Element {
-  const id = useId();
-  // 用 htmlFor + id 显式关联，比依赖嵌套 <label><input> 在 Windows NVDA / Narrator
-  // 部分版本上更稳。span 上的 cursor: pointer 也有意义了 ——
-  // 点 label 文字也能切换 checkbox。
-  return (
-    <label htmlFor={id} className="row gap-2" style={{ cursor: "pointer" }}>
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.currentTarget.checked)}
-      />
-      <span className="body-sm">{label}</span>
-    </label>
   );
 }
