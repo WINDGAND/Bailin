@@ -6,6 +6,10 @@ export interface CharacterQuoteResolutionInput {
   chineseName: string;
   englishName: string;
   sourceType: "public-figure" | "fictional" | "original";
+  /** 出处 / 身份消歧义锚点（如「斩赤红之瞳」），来自身份契约。 */
+  sourceContext?: string;
+  /** 身份定位提示（如「男主角」），来自身份契约。 */
+  identityHint?: string;
   /** 人格卡阶段产出的候选，供参考；若格式不对会被覆盖。 */
   hintQuote?: string;
   userMaterial?: string;
@@ -14,7 +18,8 @@ export interface CharacterQuoteResolutionInput {
 export function buildCharacterQuoteResolutionPrompt(
   input: CharacterQuoteResolutionInput
 ): { system: string; user: string } {
-  const { chineseName, englishName, sourceType, hintQuote, userMaterial } = input;
+  const { chineseName, englishName, sourceType, sourceContext, identityHint, hintQuote, userMaterial } =
+    input;
 
   const system = [
     "你是百灵 Bailin 的角色座右铭检索专员。",
@@ -26,6 +31,13 @@ export function buildCharacterQuoteResolutionPrompt(
     "3. 优先选：最广为人知 / 最常引用 / 最能概括其人设或思想的那一句。",
     "4. 找不到确凿原话时，选最接近的公开言论并标注 confidence=medium；绝不可凭空编造。",
     "5. 只输出 JSON，不要 markdown，不要解释。",
+    "5.5. **如果提供了 sourceContext（出处 / 身份锚点），必须确认这句话确实出自该出处的这个角色**——",
+    "   同名角色在不同作品可能有完全不同的台词，禁止把其它作品/同名角色的台词错配给目标角色。",
+    "6. 除 quoteOneLiner 外，必须额外返回：",
+    "   - speaker：你核实到的实际说话人姓名（应与目标角色一致，不一致就不要用这句话）",
+    "   - work：这句话的出处作品/节目/访谈名称",
+    "   - sourceUrl：你联网检索到的确凿来源链接（必须是你实际访问/引用过的 URL；没有确凿来源就填空字符串 \"\"，绝不可编造 URL）",
+    "   speaker 或 work 与目标角色不一致时，宁可 quoteOneLiner 留空字符串，也不要输出格式正确但归属错误的台词。",
     "",
     "格式纪律（严格遵守）：",
     "- **中文母语角色**（如中国公众人物、以中文创作的角色）：",
@@ -44,7 +56,7 @@ export function buildCharacterQuoteResolutionPrompt(
     "- **禁止**「中文（中文）」这种双中文格式。",
     "",
     "JSON 格式：",
-    '{ "quoteOneLiner": "string", "sourceLanguage": "ja|en|zh|ko|...", "confidence": "high|medium" }'
+    '{ "quoteOneLiner": "string", "speaker": "string", "work": "string", "sourceUrl": "string", "sourceLanguage": "ja|en|zh|ko|...", "confidence": "high|medium" }'
   ].join("\n");
 
   const userParts = [
@@ -53,6 +65,16 @@ export function buildCharacterQuoteResolutionPrompt(
     "",
     "请联网检索该角色最具代表性的一句**原话**，直接输出 JSON。"
   ];
+
+  if (sourceContext && sourceContext.trim().length > 0) {
+    userParts.push(
+      "",
+      `出处 / 身份锚点：${sourceContext.trim()}（台词必须确认出自这个出处的这个角色）。`
+    );
+  }
+  if (identityHint && identityHint.trim().length > 0) {
+    userParts.push(`身份定位提示：${identityHint.trim()}`);
+  }
 
   if (hintQuote?.trim()) {
     userParts.push("", `候选（可能格式不对，请重新检索验证）：${hintQuote.trim()}`);

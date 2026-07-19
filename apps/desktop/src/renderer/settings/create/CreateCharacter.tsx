@@ -253,16 +253,19 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             <span
               className={`char-count ${name.length > MAX_NAME ? "char-count--danger" : ""}`}
             >
-              {name.length} / {MAX_NAME}
+              {name.length}&nbsp;/&nbsp;{MAX_NAME}
             </span>
           </div>
           <input
             id="forge-name"
+            name="character-name"
             className="forge-field-name__input"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t("forge.namePlaceholder")}
             autoFocus
+            autoComplete="off"
+            spellCheck={false}
             maxLength={MAX_NAME + 20}
           />
           <div className="forge-field-name__hint">{t("forge.nameHint")}</div>
@@ -370,7 +373,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
               ? ` · ${t("forge.extraMaterialFilled", { count: extrasFilledCount })}`
               : ""}
           </summary>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="forge-disclosure__body">
             <fieldset
               className="forge-section"
               style={{ border: "none", margin: 0, padding: 0 }}
@@ -413,10 +416,13 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                   />
                   <input
                     className="input"
+                    name="reference-image-url"
                     aria-label={t("forge.urlPlaceholder")}
                     placeholder={t("forge.urlPlaceholder")}
                     value={urlDraft}
                     onChange={(e) => setUrlDraft(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -665,14 +671,16 @@ function CountedField({
             overflow ? "char-count--danger" : ""
           }`}
         >
-          {value.length} / {max}
+          {value.length}&nbsp;/&nbsp;{max}
         </span>
       </div>
       <input
         className={`input ${overflow ? "input--invalid" : ""}`}
+        name="forge-field"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        autoComplete="off"
         maxLength={max + 80}
       />
       {hint ? (
@@ -822,7 +830,7 @@ function CountedTextarea({
             overflow ? "char-count--danger" : ""
           }`}
         >
-          {value.length} / {max}
+          {value.length}&nbsp;/&nbsp;{max}
         </span>
       </div>
       <textarea

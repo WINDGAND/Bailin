@@ -164,6 +164,8 @@ export function buildHatchPetRowPrompt(input: HatchPetRowInput): string {
   const action = ROW_DESCRIPTIONS[input.rowState];
   const lines = [
     rowIdentityClause(input),
+    "The first attached image is the canonical identity reference — match it exactly (face, hair, outfit, colors, proportions).",
+    `The second attached image is a layout guide showing ${input.frameCount} equal empty slots with a center cross-hair per slot — it only indicates composition/scale, do not copy its gray boxes or colors; draw the character occupying roughly the same slot size and centering as shown.`,
     `Strip canvas: ${stripWidth} × ${input.cell.height} px; cleanly divisible into ${input.frameCount} equal-width frames.`,
     `Frame-by-frame action: ${action}.`,
     "Cadence must visibly alternate across the loop — do not repeat one nearly-static frame.",

@@ -1,48 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   HatchPetRowState,
-  QualityCheckItem,
-  QualityReport,
-  ResearchAgentId,
-  ResearchDoc
+  QualityReport
 } from "@bailin/character-protocol";
 import { HATCH_PET_ROW_STATES } from "@bailin/character-protocol";
 import type {
-  DistillationProgressEvent,
-  HatchProgressEventDTO,
-  SynthesisSummaryPayload,
-  ResearchSummaryPayload
+  ResearchSummaryPayload,
+  SynthesisSummaryPayload
 } from "../../../shared/ipc-contract.js";
-import { useBailin } from "../../shared/use-bailin.js";
 import { CopyButton, Spinner } from "../../shared/feedback.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
-import type { Locale } from "../../shared/i18n/types.js";
 import { agentNameKey, translatePhaseMessage } from "./distillation-phase-i18n.js";
 import { DistillationStageRail } from "./DistillationStageRail.js";
 import { useDistillationJobs } from "../app/distillation-job-context.js";
+import type {
+  AgentCardState,
+  HatchJobState,
+  HatchJobStatus,
+  HatchPanelState
+} from "./progress-content-model.js";
 
 type TFn = (key: string, params?: Record<string, string | number>) => string;
-
-interface AgentCardState {
-  agentId: ResearchAgentId;
-  agentName: string;
-  status: "pending" | "running" | "ok" | "timeout" | "error" | "skipped";
-  durationMs?: number;
-  webSearchUsed?: boolean;
-  confidence?: "high" | "medium" | "low";
-  sourcesCount?: number;
-  errorMessage?: string;
-  excerpt?: string;
-}
-
-const INITIAL_AGENTS: AgentCardState[] = [
-  { agentId: 1, agentName: "", status: "pending" },
-  { agentId: 2, agentName: "", status: "pending" },
-  { agentId: 3, agentName: "", status: "pending" },
-  { agentId: 4, agentName: "", status: "pending" },
-  { agentId: 5, agentName: "", status: "pending" },
-  { agentId: 6, agentName: "", status: "pending" }
-];
 
 const ACTIVITY_HINT_KEYS = [
   "distill.hint0",
@@ -69,106 +47,39 @@ export function DistillationProgress({
 }: Props): JSX.Element {
   const t = useT();
   const { locale } = useI18n();
-  const bailin = useBailin();
-  // 阶段展示状态从 DistillationJobProvider 读取而不是自己再维护一份 reducer——
-  // 那个 context 挂在设置页 tab 切换不会卸载的地方，这样从别的 tab 切回来时
-  // 阶段条能直接拿到已经走到的进度，不会先闪回「步骤 1/6」再等下一条事件才跳回来。
-  const { stageDisplay } = useDistillationJobs();
-  const [agents, setAgents] = useState<AgentCardState[]>(INITIAL_AGENTS);
-  const [phaseLabel, setPhaseLabel] = useState("启动中…");
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [researchSummary, setResearchSummary] = useState<ResearchSummaryPayload | null>(null);
-  const [synthSummary, setSynthSummary] = useState<SynthesisSummaryPayload | null>(null);
-  const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
-  const [appearanceReady, setAppearanceReady] = useState(false);
-  const [hatchState, setHatchState] = useState<HatchPanelState>({
-    started: false,
-    jobs: {},
-    totalCostUsd: 0,
-    estimatedCostUsd: 0
-  });
+  // 阶段条 + 内容区都从 DistillationJobProvider 读：设置页 key={tab} 会卸载本组件，
+  // 但 Provider 不卸，切回来时步骤 4/5（外貌 / 绘制形象）等已发生事件不会丢。
+  const {
+    stageDisplay,
+    progressContent,
+    phaseLabel,
+    bannerStatus,
+    failureReason,
+    isSkeleton,
+    researchSummary
+  } = useDistillationJobs();
+  const {
+    agents,
+    warnings,
+    synthSummary,
+    qualityReport,
+    appearanceReady,
+    hatchState
+  } = progressContent;
   const [hintIndex, setHintIndex] = useState(0);
-  const [finalState, setFinalState] = useState<
-    | null
-    | { kind: "done"; characterId: string; isSkeleton: boolean }
-    | { kind: "failed"; reason: string }
-    | { kind: "cancelled" }
-  >(null);
 
-  useEffect(() => {
-    const off = bailin.on.distillationProgress((evt: DistillationProgressEvent) => {
-      if (evt.jobId !== jobId) return;
-      switch (evt.kind) {
-        case "started":
-          setPhaseLabel("已启动");
-          break;
-        case "phase":
-          setPhaseLabel(evt.message);
-          break;
-        case "agent_start":
-          setAgents((prev) =>
-            prev.map((a) =>
-              a.agentId === evt.agentId
-                ? { ...a, status: "running", agentName: evt.agentName }
-                : a
-            )
-          );
-          break;
-        case "agent_done":
-          setAgents((prev) =>
-            prev.map((a) =>
-              a.agentId === evt.doc.agentId
-                ? {
-                    agentId: a.agentId,
-                    agentName: evt.doc.agentName,
-                    status: evt.doc.status === "ok" ? "ok" : evt.doc.status,
-                    durationMs: evt.doc.durationMs,
-                    webSearchUsed: evt.doc.webSearchUsed,
-                    confidence: evt.doc.confidence,
-                    sourcesCount: evt.doc.sources.length,
-                    errorMessage: evt.doc.errorMessage,
-                    excerpt: evt.doc.markdown?.slice?.(0, 240)
-                  }
-                : a
-            )
-          );
-          break;
-        case "research_complete":
-          setResearchSummary(evt.summary);
-          break;
-        case "synthesis_summary":
-          setSynthSummary(evt.summary);
-          break;
-        case "appearance_ready":
-          setAppearanceReady(true);
-          break;
-        case "quality_report":
-          setQualityReport(evt.report);
-          break;
-        case "hatch_progress":
-          setHatchState((prev) => reduceHatch(prev, evt.event));
-          break;
-        case "warning":
-          setWarnings((p) => [...p, evt.message]);
-          break;
-        case "done":
-          setPhaseLabel("完成");
-          setFinalState({
-            kind: "done",
-            characterId: evt.characterId,
-            isSkeleton: evt.isSkeleton
-          });
-          break;
-        case "failed":
-          setFinalState({ kind: "failed", reason: evt.reason });
-          break;
-        case "cancelled":
-          setFinalState({ kind: "cancelled" });
-          break;
-      }
-    });
-    return off;
-  }, [bailin, jobId]);
+  const finalState = useMemo(() => {
+    if (bannerStatus === "done") {
+      return { kind: "done" as const, isSkeleton: Boolean(isSkeleton) };
+    }
+    if (bannerStatus === "failed") {
+      return { kind: "failed" as const, reason: failureReason ?? "" };
+    }
+    if (bannerStatus === "cancelled") {
+      return { kind: "cancelled" as const };
+    }
+    return null;
+  }, [bannerStatus, failureReason, isSkeleton]);
 
   const running = finalState == null;
 
@@ -192,23 +103,12 @@ export function DistillationProgress({
         {displayPhase}
       </p>
 
-      {running ? (
-        <div className="bl-status-strip is-running" style={{ marginBottom: 16 }}>
-          <div className="bl-status-strip__body">
-            <div className="bl-status-strip__title">{t("distill.workingTitle")}</div>
-            <div className="bl-status-strip__detail">{t(ACTIVITY_HINT_KEYS[hintIndex]!)}</div>
-          </div>
-          <div className="bl-status-strip__action">
-            <Spinner magenta />
-          </div>
-        </div>
-      ) : null}
-
       <DistillationStageRail
         activeIndex={stageDisplay.activeIndex}
         isResynthesizing={stageDisplay.isResynthesizing}
         resynthesisRound={stageDisplay.resynthesisRound}
         forceAllDone={finalState?.kind === "done"}
+        activityHint={running ? t(ACTIVITY_HINT_KEYS[hintIndex]!) : null}
       />
 
       <ResearchAgentsSection agents={agents} researchSummary={researchSummary} />
@@ -226,21 +126,25 @@ export function DistillationProgress({
       ) : null}
 
       {stageDisplay.activeIndex > 2 ? (
-        <div className="card fade-in" style={{ padding: 10, marginBottom: 16 }}>
-          <div className="eyebrow" style={{ marginBottom: 4 }}>
-            {t("distill.stepTitle", { n: 3, label: t("distill.stageBuildingCard") })}
-          </div>
-          <span className="body-sm">{t("distill.buildingCardDone")}</span>
-        </div>
+        <section className="distill-step fade-in">
+          <header className="distill-step__head">
+            <span className="distill-step__title">
+              {t("distill.stepTitle", { n: 3, label: t("distill.stageBuildingCard") })}
+            </span>
+          </header>
+          <p className="distill-step__body">{t("distill.buildingCardDone")}</p>
+        </section>
       ) : null}
 
       {appearanceReady ? (
-        <div className="card fade-in" style={{ padding: 10, marginBottom: 16 }}>
-          <div className="eyebrow" style={{ marginBottom: 4 }}>
-            {t("distill.stepTitle", { n: 4, label: t("distill.stageResearchingAppearance") })}
-          </div>
-          <span className="body-sm">{t("distill.appearanceReady")}</span>
-        </div>
+        <section className="distill-step fade-in">
+          <header className="distill-step__head">
+            <span className="distill-step__title">
+              {t("distill.stepTitle", { n: 4, label: t("distill.stageResearchingAppearance") })}
+            </span>
+          </header>
+          <p className="distill-step__body">{t("distill.appearanceReady")}</p>
+        </section>
       ) : null}
 
       {hatchState.started ? <HatchPanel state={hatchState} /> : null}
@@ -366,9 +270,8 @@ function buildErrorReport(
 }
 
 /**
- * 阶段一的调研网格 —— 默认折叠成一行摘要，点「查看详情」才展开 6 张 agent 卡片。
- * 这是用户反馈"信息太多、太乱"里最大的一块：6 张卡片的完整调用详情，多数人
- * 只关心"调研做完了没有、成功几路"，不需要一直摊开在页面上。
+ * 阶段一调研列表 —— 默认展开为扁平发丝行（与角色仓库「调研档案」同构），
+ * 可手动收起成一行摘要。不再用 2×3 卡片墙。
  */
 function ResearchAgentsSection({
   agents,
@@ -378,8 +281,6 @@ function ResearchAgentsSection({
   researchSummary: ResearchSummaryPayload | null;
 }): JSX.Element {
   const t = useT();
-  // 默认展开——用户反馈调研阶段正在跑的时候想直接看到 6 路 agent 的实时进展，
-  // 不想先点一下才能看；折叠只用于用户自己手动收起之后。
   const [open, setOpen] = useState(true);
   const doneCount = agents.filter((a) => a.status !== "pending" && a.status !== "running").length;
 
@@ -402,98 +303,95 @@ function ResearchAgentsSection({
       <summary className="distill-collapse__summary">
         <span className="distill-collapse__summary-text">
           <strong>{t("distill.stepTitle", { n: 1, label: t("distill.stageResearching") })}</strong>
-          <span style={{ color: "var(--ink-faint)" }}>{summaryText}</span>
+          <span className="distill-collapse__summary-meta">{summaryText}</span>
         </span>
         <span className="distill-collapse__toggle">
           {open ? t("distill.hideDetails") : t("distill.viewDetails")}
         </span>
       </summary>
       <div className="distill-collapse__body">
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: 10,
-            marginTop: 12
-          }}
-        >
+        <ul className="distill-agent-list">
           {agents.map((a) => (
-            <AgentCard key={a.agentId} state={a} />
+            <AgentRow key={a.agentId} state={a} />
           ))}
-        </div>
+        </ul>
       </div>
     </details>
   );
 }
 
-function AgentCard({ state }: { state: AgentCardState }): JSX.Element {
+function AgentRow({ state }: { state: AgentCardState }): JSX.Element {
   const t = useT();
   const displayName = t(agentNameKey(state.agentId)) || state.agentName;
-  const color = useMemo(() => {
-    switch (state.status) {
-      case "pending":
-        return "var(--ink-faint)";
-      case "running":
-        return "var(--amber)";
-      case "ok":
-        return "var(--emerald)";
-      case "skipped":
-        return "var(--ink-faint)";
-      default:
-        return "var(--magenta)";
-    }
-  }, [state.status]);
+  const indexLabel = String(state.agentId).padStart(2, "0");
+
+  let detail: string | null = null;
+  let detailTone: "ok" | "error" | "muted" = "muted";
+
+  if (state.status === "running") {
+    detail = t("distill.agentCallingLlm");
+  } else if (state.status === "pending") {
+    detail = t("distill.agentPending");
+  } else if (state.status === "cancelled") {
+    detail = t("distill.agentCancelled");
+  } else if (
+    state.status === "ok" ||
+    state.status === "timeout" ||
+    state.status === "error"
+  ) {
+    detail = [
+      t("distill.agentDuration", {
+        seconds: Math.round((state.durationMs ?? 0) / 1000)
+      }),
+      state.webSearchUsed ? t("distill.agentSourcesOk") : t("distill.agentSourcesPending"),
+      state.confidence ? `· ${state.confidence}` : "",
+      state.sourcesCount != null
+        ? t("distill.agentSourcesCount", { count: state.sourcesCount })
+        : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+    detailTone = state.status === "ok" ? "ok" : "error";
+  }
+
+  const errorText = state.errorMessage
+    ? userFacingProcessMessage(state.errorMessage, t)
+    : null;
 
   return (
-    <div
-      className="card"
-      style={{
-        padding: 12,
-        border: `1px solid ${
-          state.status === "running" ? "var(--amber)" : "var(--grid-strong)"
-        }`,
-        background:
-          state.status === "running" ? "rgba(217,154,58,0.08)" : "var(--paper)",
-        transition: "border-color 200ms var(--ease-out), background 200ms var(--ease-out)"
-      }}
-    >
-      <div className="row row--between" style={{ marginBottom: 6 }}>
-        <strong style={{ color, fontSize: 13 }}>
-          #{state.agentId} {displayName}
-        </strong>
-        <span className="row gap-2" style={{ color, fontSize: 12 }}>
-          {state.status === "running" ? <Spinner /> : null}
-          {labelOf(state.status, t)}
+    <li className="distill-agent-item" data-status={state.status}>
+      <div className="distill-agent-row">
+        <span className="distill-agent-index" aria-hidden="true">
+          {indexLabel}
         </span>
+        <div className="distill-agent-main">
+          <div className="distill-agent-title-row">
+            <span className="distill-agent-title">{displayName}</span>
+            <span
+              className="distill-agent-status"
+              data-status={state.status}
+              aria-label={labelOf(state.status, t)}
+            >
+              {state.status === "running" ? <Spinner /> : null}
+              {labelOf(state.status, t)}
+            </span>
+          </div>
+          {detail ? (
+            <p className="distill-agent-detail" data-tone={detailTone}>
+              {detail}
+            </p>
+          ) : null}
+          {errorText ? (
+            <p
+              className="distill-agent-detail"
+              data-tone={state.status === "ok" ? "ok" : "error"}
+            >
+              {errorText}
+            </p>
+          ) : null}
+        </div>
       </div>
-      <div className="body-sm" style={{ color: "var(--ink-faint)", minHeight: 18 }}>
-        {state.status === "running" ? t("distill.agentCallingLlm") : null}
-        {state.status === "ok" || state.status === "timeout" || state.status === "error" ? (
-          <>
-            {t("distill.agentDuration", {
-              seconds: Math.round((state.durationMs ?? 0) / 1000)
-            })}
-            {state.webSearchUsed ? t("distill.agentSourcesOk") : t("distill.agentSourcesPending")}
-            {state.confidence ? ` · ${state.confidence}` : ""}
-            {state.sourcesCount != null
-              ? t("distill.agentSourcesCount", { count: state.sourcesCount })
-              : ""}
-          </>
-        ) : null}
-        {state.status === "pending" ? t("distill.agentPending") : null}
-      </div>
-      {state.errorMessage ? (
-        <p
-          className="body-sm"
-          style={{
-            marginTop: 6,
-            color: state.status === "ok" ? "var(--ink-faint)" : "var(--magenta)"
-          }}
-        >
-          {userFacingProcessMessage(state.errorMessage, t)}
-        </p>
-      ) : null}
-    </div>
+    </li>
   );
 }
 
@@ -562,6 +460,8 @@ function labelOf(s: AgentCardState["status"], t: TFn): string {
       return t("distill.statusError");
     case "skipped":
       return t("distill.statusSkipped");
+    case "cancelled":
+      return t("distill.statusCancelled");
   }
 }
 
@@ -628,9 +528,7 @@ function SummaryRow({
 }
 
 /**
- * 质量自检卡片 —— verdict/总分永远直接可见（这是用户最关心的一句话结论），
- * 完整的逐项检查表格 + 风格/Sanity/Edge 三个测试样本默认折叠，点「查看详情」
- * 才展开。这是用户反馈"图二这里一堆文字，很混乱"里最典型的那块内容。
+ * 质量自检 —— verdict/总分永远可见；明细为扁平发丝列表（与仓库质量指标同构）。
  */
 function QualityReportCard({
   report,
@@ -642,26 +540,26 @@ function QualityReportCard({
   const t = useT();
   const [open, setOpen] = useState(false);
   const companion = track === "companion";
-  const verdictColor =
-    report.verdict === "pass"
-      ? "var(--emerald)"
-      : report.verdict === "warn"
-        ? "var(--amber)"
-        : "var(--magenta)";
+  const scorePct = Math.round(report.overallScore * 100);
+
   return (
     <details
-      className="distill-collapse fade-in"
+      className="distill-collapse distill-quality fade-in"
       open={open}
       onToggle={(e) => setOpen(e.currentTarget.open)}
     >
       <summary className="distill-collapse__summary">
         <span className="distill-collapse__summary-text">
-          <strong>{t("distill.stepTitle", { n: 6, label: t("distill.stageQualityCheck") })}</strong>
-          <span style={{ color: verdictColor, fontWeight: 600 }}>
-            {t("distill.qualityCollapsedSummary", {
-              verdict: report.verdict.toUpperCase(),
-              score: (report.overallScore * 100).toFixed(0)
-            })}
+          <strong>
+            {t("distill.stepTitle", { n: 6, label: t("distill.stageQualityCheck") })}
+          </strong>
+          <span
+            className="distill-quality__verdict"
+            data-verdict={report.verdict}
+          >
+            {report.verdict.toUpperCase()}
+            {" · "}
+            {t("library.debugScore", { score: scorePct })}
             {report.synthesisRounds && report.synthesisRounds > 1
               ? t("distill.phase4SynthesisRounds", { rounds: report.synthesisRounds })
               : ""}
@@ -671,129 +569,116 @@ function QualityReportCard({
           {open ? t("distill.hideDetails") : t("distill.viewDetails")}
         </span>
       </summary>
+
       <div className="distill-collapse__body">
-        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 12 }}>
-          <tbody>
-            {report.items.map((it) => (
-              <CheckItemRow key={it.id} item={it} />
-            ))}
-          </tbody>
-        </table>
+        <ul className="quality-metrics__list distill-quality__list">
+          {report.items.map((it) => (
+            <li
+              key={it.id}
+              className="quality-metrics__item"
+              data-pass={it.pass ? "true" : "false"}
+            >
+              <div className="quality-metrics__row">
+                <span
+                  className="quality-metrics__mark"
+                  data-pass={it.pass ? "true" : "false"}
+                  aria-label={it.pass ? t("library.qualityItemPass") : t("library.qualityItemFail")}
+                >
+                  <span aria-hidden="true">{it.pass ? "✓" : "✗"}</span>
+                </span>
+                <span className="quality-metrics__label">{it.label}</span>
+                <p className="quality-metrics__reason" title={it.reason}>
+                  {it.reason}
+                </p>
+                {!it.pass ? (
+                  <div className="quality-metrics__bar" aria-hidden="true">
+                    <span
+                      className="quality-metrics__bar-fill"
+                      style={{ width: `${Math.round(it.score * 100)}%` }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+
         {report.voiceTest ? (
-          <details style={{ marginTop: 10 }}>
-            <summary className="eyebrow" style={{ cursor: "pointer" }}>
+          <details className="distill-quality__nested">
+            <summary className="distill-quality__nested-summary">
               {t("distill.voiceTestSummary", { score: report.voiceTest.score })}
             </summary>
-            <blockquote
-              className="body-sm"
-              style={{
-                margin: "8px 0",
-                padding: "10px 12px",
-                background: "var(--paper-deep)",
-                border: "1px solid var(--grid)",
-                borderRadius: "var(--radius-sm)"
-              }}
-            >
+            <blockquote className="quality-metrics__voice-quote">
               {report.voiceTest.sample}
             </blockquote>
-            <p className="body-sm" style={{ color: "var(--ink-soft)" }}>
-              {t("distill.voiceCritique", { text: report.voiceTest.critique })}
-            </p>
+            {report.voiceTest.critique.trim() ? (
+              <p className="quality-metrics__voice-critique">
+                {t("distill.voiceCritique", { text: report.voiceTest.critique })}
+              </p>
+            ) : null}
           </details>
         ) : null}
+
         {report.sanityTest ? (
-          <details style={{ marginTop: 10 }} open={!companion ? undefined : false}>
-            <summary className="eyebrow" style={{ cursor: "pointer" }}>
+          <details
+            className="distill-quality__nested"
+            open={!companion ? undefined : false}
+          >
+            <summary className="distill-quality__nested-summary">
               {companion
-                ? t("distill.sanityTestSummaryCompanion", { score: report.sanityTest.averageScore })
-                : t("distill.sanityTestSummary", { score: report.sanityTest.averageScore })}
+                ? t("distill.sanityTestSummaryCompanion", {
+                    score: report.sanityTest.averageScore
+                  })
+                : t("distill.sanityTestSummary", {
+                    score: report.sanityTest.averageScore
+                  })}
             </summary>
-            {report.sanityTest.questions.map((q, i) => (
-              <div key={i} className="body-sm" style={{ marginTop: 8 }}>
-                <div style={{ color: q.pass ? "var(--emerald)" : "var(--magenta)" }}>
-                  {t("distill.sanityQuestionLine", { n: i + 1, question: q.question })}
-                  {" · "}
-                  {q.score}/10
-                </div>
-                <div style={{ color: "var(--ink-faint)", marginTop: 2 }}>
-                  {t("distill.sanityAnswerLine", { answer: q.answer.slice(0, 200) })}
-                </div>
-              </div>
-            ))}
+            <ul className="distill-quality__qa-list">
+              {report.sanityTest.questions.map((q, i) => (
+                <li key={i} className="distill-quality__qa-item" data-pass={q.pass ? "true" : "false"}>
+                  <div className="distill-quality__qa-q">
+                    {t("distill.sanityQuestionLine", { n: i + 1, question: q.question })}
+                    {" · "}
+                    {q.score}/10
+                  </div>
+                  <div className="distill-quality__qa-a">
+                    {t("distill.sanityAnswerLine", { answer: q.answer.slice(0, 200) })}
+                  </div>
+                </li>
+              ))}
+            </ul>
           </details>
         ) : null}
+
         {report.edgeTest ? (
-          <details style={{ marginTop: 10 }} open={!companion ? undefined : false}>
-            <summary className="eyebrow" style={{ cursor: "pointer" }}>
+          <details
+            className="distill-quality__nested"
+            open={!companion ? undefined : false}
+          >
+            <summary className="distill-quality__nested-summary">
               {t("distill.edgeTestSummary", { score: report.edgeTest.score })}
             </summary>
-            <p className="body-sm" style={{ marginTop: 6 }}>
+            <p className="distill-quality__qa-q">
               {t("distill.edgeQuestionLine", { question: report.edgeTest.question })}
             </p>
-            <p className="body-sm" style={{ whiteSpace: "pre-wrap" }}>
+            <p className="distill-quality__qa-a" style={{ whiteSpace: "pre-wrap" }}>
               {report.edgeTest.answer}
             </p>
-            <p className="body-sm" style={{ color: "var(--ink-faint)" }}>
-              {report.edgeTest.critique}
-            </p>
+            {report.edgeTest.critique.trim() ? (
+              <p className="quality-metrics__voice-critique">{report.edgeTest.critique}</p>
+            ) : null}
           </details>
         ) : null}
+
         {report.synthesisRounds && report.synthesisRounds > 1 ? (
-          <p className="body-sm" style={{ marginTop: 10, color: "var(--ink-soft)" }}>
-            {t("distill.phase4ResynthesisNote")}
-          </p>
+          <p className="distill-quality__note">{t("distill.phase4ResynthesisNote")}</p>
         ) : null}
       </div>
     </details>
   );
 }
 
-function CheckItemRow({ item }: { item: QualityCheckItem }): JSX.Element {
-  return (
-    <tr>
-      <td
-        style={{
-          padding: "4px 8px 4px 0",
-          color: item.pass ? "var(--emerald)" : "var(--magenta)",
-          width: 18
-        }}
-      >
-        {item.pass ? "✓" : "✗"}
-      </td>
-      <td style={{ padding: "4px 8px", fontSize: 13 }}>{item.label}</td>
-      <td className="body-sm" style={{ padding: "4px 0", color: "var(--ink-faint)" }}>
-        {item.reason}
-      </td>
-    </tr>
-  );
-}
-
 // ===== Hatch-pet QA 面板 =====
-
-type HatchJobStatus = "pending" | "running" | "done" | "mirrored" | "failed";
-
-interface HatchJobState {
-  jobId: string;
-  rowState: HatchPetRowState | "base";
-  status: HatchJobStatus;
-  durationMs?: number;
-  costUsd?: number;
-  reason?: string;
-  mirroredFrom?: string;
-}
-
-interface HatchPanelState {
-  started: boolean;
-  jobsCount?: number;
-  estimatedCostUsd: number;
-  totalCostUsd: number;
-  atlasOk?: boolean;
-  atlasIssues?: string[];
-  contactSheetPath?: string;
-  previewPath?: string;
-  atlasPath?: string;
-  jobs: Record<string, HatchJobState>;
-}
 
 const HATCH_LABEL_KEYS: Record<HatchPetRowState | "base", string> = {
   base: "distill.hatchBase",
@@ -807,101 +692,6 @@ const HATCH_LABEL_KEYS: Record<HatchPetRowState | "base", string> = {
   running: "distill.hatchRunningAnim",
   review: "distill.hatchReview"
 };
-
-function reduceHatch(
-  state: HatchPanelState,
-  evt: HatchProgressEventDTO
-): HatchPanelState {
-  switch (evt.kind) {
-    case "start": {
-      const initialJobs: Record<string, HatchJobState> = {
-        base: { jobId: "base", rowState: "base", status: "pending" }
-      };
-      for (const row of HATCH_PET_ROW_STATES) {
-        initialJobs[`row-${row}`] = {
-          jobId: `row-${row}`,
-          rowState: row,
-          status: "pending"
-        };
-      }
-      return {
-        ...state,
-        started: true,
-        jobsCount: evt.jobsCount,
-        estimatedCostUsd: evt.estimatedCostUsd,
-        jobs: initialJobs
-      };
-    }
-    case "job_start":
-      return {
-        ...state,
-        jobs: {
-          ...state.jobs,
-          [evt.jobId]: {
-            jobId: evt.jobId,
-            rowState: evt.rowState as HatchPetRowState | "base",
-            status: "running"
-          }
-        }
-      };
-    case "job_done":
-      return {
-        ...state,
-        totalCostUsd: state.totalCostUsd + (evt.costUsd ?? 0),
-        jobs: {
-          ...state.jobs,
-          [evt.jobId]: {
-            jobId: evt.jobId,
-            rowState: evt.rowState as HatchPetRowState | "base",
-            status: "done",
-            durationMs: evt.durationMs,
-            costUsd: evt.costUsd
-          }
-        }
-      };
-    case "job_failed":
-      return {
-        ...state,
-        jobs: {
-          ...state.jobs,
-          [evt.jobId]: {
-            jobId: evt.jobId,
-            rowState: evt.rowState as HatchPetRowState | "base",
-            status: "failed",
-            reason: evt.reason
-          }
-        }
-      };
-    case "job_mirrored":
-      return {
-        ...state,
-        jobs: {
-          ...state.jobs,
-          [evt.jobId]: {
-            jobId: evt.jobId,
-            rowState: (evt.jobId.replace(/^row-/, "") as HatchPetRowState) ?? "base",
-            status: "mirrored",
-            mirroredFrom: evt.from
-          }
-        }
-      };
-    case "atlas_composed":
-      return {
-        ...state,
-        atlasOk: evt.ok,
-        atlasIssues: evt.issuesPreview
-      };
-    case "qa_ready":
-      return {
-        ...state,
-        contactSheetPath: evt.contactSheetPath,
-        previewPath: evt.previewPath,
-        atlasPath: evt.atlasPath
-      };
-    default:
-      return state;
-  }
-}
 
 function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
   const t = useT();
@@ -925,124 +715,125 @@ function HatchPanel({ state }: { state: HatchPanelState }): JSX.Element {
   ];
 
   return (
-    <div className="card fade-in" style={{ padding: 16, marginBottom: 16 }}>
-      <div className="row row--between" style={{ marginBottom: 10 }}>
-        <div className="eyebrow">
+    <section className="distill-step distill-hatch fade-in">
+      <header className="distill-step__head">
+        <span className="distill-step__title">
           {t("distill.stepTitle", { n: 5, label: t("distill.stageBuildingSprite") })}
-        </div>
-        <div className="body-sm" style={{ color: "var(--ink-faint)" }}>
+        </span>
+        <span className="distill-step__meta">
           {t("distill.hatchProgress", {
             done,
             total,
             failed: failed > 0 ? t("distill.hatchFailed", { count: failed }) : "",
             remaining: remaining > 0 ? t("distill.hatchRemaining", { count: remaining }) : ""
           })}
-        </div>
-      </div>
-      <div
-        className="body-sm"
-        style={{ color: "var(--ink-faint)", marginBottom: 10 }}
-      >
+        </span>
+      </header>
+      <p className="distill-step__body">
         {t("distill.hatchCost", {
           estimated: state.estimatedCostUsd.toFixed(2),
           total: state.totalCostUsd.toFixed(3)
         })}
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 8
-        }}
-      >
-        {orderedJobs.map((job) => (
-          <HatchJobCard key={job.jobId} job={job} />
+      </p>
+
+      <ul className="distill-agent-list distill-hatch__list">
+        {orderedJobs.map((job, index) => (
+          <HatchJobRow key={job.jobId} job={job} index={index + 1} />
         ))}
-      </div>
-      {state.atlasOk != null ? (
-        <div
-          className="body-sm"
-          style={{
-            marginTop: 10,
-            color: state.atlasOk ? "var(--emerald)" : "var(--amber)"
-          }}
+      </ul>
+
+      {state.atlasOk != null || (state.atlasIssues && state.atlasIssues.length > 0) ? (
+        <section
+          className={`distill-hatch__signals${state.atlasOk ? " is-ok" : " is-warn"}`}
         >
-          {state.atlasOk
-            ? t("distill.hatchAtlasOk")
-            : t("distill.hatchAtlasWarn", { count: state.atlasIssues?.length ?? 0 })}
+          {state.atlasOk != null ? (
+            <h4 className="distill-hatch__signals-title">
+              {state.atlasOk
+                ? t("distill.hatchAtlasOk")
+                : t("distill.hatchAtlasWarn", { count: state.atlasIssues?.length ?? 0 })}
+            </h4>
+          ) : null}
           {state.atlasIssues && state.atlasIssues.length > 0 ? (
-            <ul style={{ marginTop: 4, fontFamily: "var(--font-mono)" }}>
+            <ul className="distill-hatch__issues">
               {state.atlasIssues.slice(0, 4).map((issue, i) => (
                 <li key={i}>{issue}</li>
               ))}
             </ul>
           ) : null}
-        </div>
+        </section>
       ) : null}
       {state.contactSheetPath ? (
-        <div className="body-sm" style={{ marginTop: 10 }}>
-          {t("distill.hatchQaSaved")}
-          <code style={{ fontSize: 11 }}>{state.atlasPath}</code>
-        </div>
+        <p className="distill-hatch__qa">
+          {t("distill.hatchQaSaved")}{" "}
+          <code className="distill-hatch__path">{state.atlasPath}</code>
+        </p>
       ) : null}
-    </div>
+    </section>
   );
 }
 
-function HatchJobCard({ job }: { job: HatchJobState }): JSX.Element {
+function HatchJobRow({
+  job,
+  index
+}: {
+  job: HatchJobState;
+  index: number;
+}): JSX.Element {
   const t = useT();
-  const color = (() => {
-    switch (job.status) {
-      case "pending":
-        return "var(--ink-faint)";
-      case "running":
-        return "var(--amber)";
-      case "done":
-        return "var(--emerald)";
-      case "mirrored":
-        return "var(--emerald)";
-      case "failed":
-        return "var(--magenta)";
-    }
-  })();
+  const indexLabel = String(index).padStart(2, "0");
+  const statusKey =
+    job.status === "done" || job.status === "mirrored"
+      ? "ok"
+      : job.status === "failed" || job.status === "cancelled"
+        ? "error"
+        : job.status;
+
+  let detail: string;
+  if (job.status === "running") {
+    detail = t("distill.hatchGenerating");
+  } else if (job.status === "done") {
+    detail = `${((job.durationMs ?? 0) / 1000).toFixed(1)}s${
+      job.costUsd != null ? ` · $${job.costUsd.toFixed(3)}` : ""
+    }`;
+  } else if (job.status === "mirrored") {
+    detail = t("distill.hatchMirroredFrom", { from: job.mirroredFrom ?? "—" });
+  } else if (job.status === "failed") {
+    detail = job.reason ?? t("distill.hatchFailedStatus");
+  } else if (job.status === "cancelled") {
+    detail = t("distill.hatchCancelled");
+  } else {
+    detail = t("distill.hatchQueued");
+  }
+
   return (
-    <div
-      className="card"
-      style={{
-        padding: 10,
-        border: `1px solid ${
-          job.status === "running" ? "var(--amber)" : "var(--grid-strong)"
-        }`,
-        background:
-          job.status === "running" ? "rgba(217,154,58,0.08)" : "var(--paper)"
-      }}
-    >
-      <div className="row row--between" style={{ marginBottom: 4 }}>
-        <strong style={{ color, fontSize: 12 }}>
-          {t(HATCH_LABEL_KEYS[job.rowState] ?? job.jobId)}
-        </strong>
-        <span style={{ color, fontSize: 11 }} className="row gap-2">
-          {job.status === "running" ? <Spinner /> : null}
-          {labelForHatchStatus(job.status, t)}
+    <li className="distill-agent-item" data-status={statusKey}>
+      <div className="distill-agent-row">
+        <span className="distill-agent-index" aria-hidden="true">
+          {indexLabel}
         </span>
+        <div className="distill-agent-main">
+          <div className="distill-agent-title-row">
+            <span className="distill-agent-title">
+              {t(HATCH_LABEL_KEYS[job.rowState] ?? job.jobId)}
+            </span>
+            <span
+              className="distill-agent-status"
+              data-status={statusKey}
+              aria-label={labelForHatchStatus(job.status, t)}
+            >
+              {job.status === "running" ? <Spinner /> : null}
+              {labelForHatchStatus(job.status, t)}
+            </span>
+          </div>
+          <p
+            className="distill-agent-detail"
+            data-tone={job.status === "failed" ? "error" : "muted"}
+          >
+            {detail}
+          </p>
+        </div>
       </div>
-      <div
-        className="body-sm"
-        style={{ color: "var(--ink-faint)", minHeight: 14, fontSize: 11 }}
-      >
-        {job.status === "running"
-          ? t("distill.hatchGenerating")
-          : job.status === "done"
-            ? `${((job.durationMs ?? 0) / 1000).toFixed(1)}s${
-                job.costUsd != null ? ` · $${job.costUsd.toFixed(3)}` : ""
-              }`
-            : job.status === "mirrored"
-              ? t("distill.hatchMirroredFrom", { from: job.mirroredFrom ?? "—" })
-              : job.status === "failed"
-                ? job.reason ?? t("distill.hatchFailedStatus")
-                : t("distill.hatchQueued")}
-      </div>
-    </div>
+    </li>
   );
 }
 
@@ -1058,8 +849,7 @@ function labelForHatchStatus(s: HatchJobStatus, t: TFn): string {
       return t("distill.hatchMirrored");
     case "failed":
       return t("distill.hatchFailedStatus");
+    case "cancelled":
+      return t("distill.statusCancelled");
   }
 }
-
-// 兼容旧导出
-export type _UseResearchDoc = ResearchDoc;

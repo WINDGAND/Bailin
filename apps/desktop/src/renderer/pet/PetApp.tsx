@@ -36,7 +36,7 @@ const HATCH_SS_KEY_PREFIX = "bailin.hatched.";
 /** 判定为「拖动」的最小位移（px）；略大于 0，避免手抖误触。 */
 const DRAG_START_PX = 3;
 
-export function PetApp(): JSX.Element {
+export function PetApp(): JSX.Element | null {
   const t = useT();
   const { resyncLocale } = useI18n();
   const { bundle } = useActiveCharacter();

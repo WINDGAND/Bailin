@@ -44,7 +44,10 @@ import {
 } from "@bailin/prompts";
 import type { LLMAdapter, ChatContentPart } from "../adapters/llm-adapter.js";
 import { runResearchAgents, agentIdsToSlugs, type AgentResearchPlan } from "./research-pipeline.js";
-import { resolveSourceContextPriority } from "./resolve-source-context.js";
+import {
+  buildCanonicalIdentityFromInput,
+  resolveSourceContextPriority
+} from "./resolve-source-context.js";
 import {
   anyAgentNeedsWebSearch,
   buildAgentPlansFromCoverage,
@@ -62,6 +65,7 @@ import {
   buildAppearancePhaseMessage
 } from "../../shared/appearance-phase-message.js";
 import { runQualityCheck } from "./quality-check.js";
+import { checkQuoteEvidence } from "./quote-evidence.js";
 import {
   annotateQualityWeaknesses,
   applyResynthesisPatch,
@@ -245,6 +249,27 @@ export class BailinOrchestrator {
     };
 
     yield { kind: "started", jobId };
+
+    // ===== 身份契约：调研前解析一次，后续名称 / 调研 / 台词 / 搜图 / 外貌全部只消费这一个对象 =====
+    // 关键修复（Tatsumi bad case）：以前 config.characterName 里像
+    // "斩赤红之瞳 男主角 塔兹米" 这种复合输入会被原样传给调研 / 命名 / 台词 / 搜图，
+    // 各步骤各自猜测消歧义，经常猜错成同名其它角色。现在先拆分一次，
+    // 干净角色名 + sourceContext + identityHint 贯穿后续所有步骤。
+    const identity = buildCanonicalIdentityFromInput({
+      characterName: config.characterName,
+      sourceContext: config.sourceContext,
+      sourceType: config.sourceType
+    });
+    config.characterName = identity.characterName;
+    if (identity.sourceContext) config.sourceContext = identity.sourceContext;
+    const identityHint = identity.identityHint;
+    if (identity.rawInput !== identity.characterName) {
+      yield yieldWarn(
+        `[identity·split] 已从输入「${identity.rawInput}」拆出角色名「${identity.characterName}」` +
+          (identity.sourceContext ? `，出处锚点「${identity.sourceContext}」` : "") +
+          (identityHint ? `，身份提示「${identityHint}」` : "")
+      );
+    }
 
     // ===== Phase 1: 6 Agent 并行调研 =====
     const effectiveMaterialMode = resolveEffectiveMaterialMode(config);
@@ -449,7 +474,9 @@ export class BailinOrchestrator {
       config.sourceType,
       this.metadataWebSearchEnabled(config.sourceType),
       warnings,
-      config.researchModel
+      config.researchModel,
+      sourceContext ?? config.sourceContext,
+      identityHint
     );
 
     await this.finalizeCharacterQuote(
@@ -458,7 +485,9 @@ export class BailinOrchestrator {
       this.metadataWebSearchEnabled(config.sourceType),
       warnings,
       config.researchModel,
-      config.userMaterial
+      config.userMaterial,
+      sourceContext ?? config.sourceContext,
+      identityHint
     );
 
     // ===== Phase 3b: 深度外貌（vision-first 流程） =====
@@ -490,7 +519,7 @@ export class BailinOrchestrator {
         visionAvailable: visCap.vision
       })
     );
-    const appearance = await this.runAppearanceDeep(
+    const appearance = await this.resolveAppearanceWithEvidenceGate(
       {
         characterName: config.characterName,
         sourceName: card.meta.sourceName,
@@ -499,12 +528,14 @@ export class BailinOrchestrator {
         userHint: config.userHint,
         userMaterial: config.userMaterial,
         sourceContext: sourceContext ?? config.sourceContext,
+        identityHint,
         referenceImages: appearanceRefs,
         onStatusMessage: emitAppearanceStatus
       },
       config.enableWebSearch,
       warnings,
-      config.researchModel
+      config.researchModel,
+      config.sourceType
     );
     if (appearance) {
       card.meta.appearance = appearance;
@@ -538,8 +569,13 @@ export class BailinOrchestrator {
           jobId,
           event: toHatchDTO(evt)
         });
-      }
+      },
+      input.signal
     );
+    if (aborted()) {
+      yield { kind: "cancelled", jobId };
+      return;
+    }
     let finalSprite: SpriteProgram = visualResult.sprite ?? skeleton.sprite;
 
     while (visualResult.failedRows.length > 0) {
@@ -622,6 +658,11 @@ export class BailinOrchestrator {
 
     finalSprite.schemaVersion = SCHEMA_VERSION;
 
+    if (aborted()) {
+      yield { kind: "cancelled", jobId };
+      return;
+    }
+
     // ===== Phase 4: 质量自检（含定向重提炼闭环，最多 MAX_SYNTHESIS_ROUNDS 轮）=====
     let qualityReport: QualityReport | undefined;
 
@@ -638,6 +679,11 @@ export class BailinOrchestrator {
       yield yieldWarn(
         `[phase4·quality] 自检失败：${e instanceof Error ? e.message : String(e)}`
       );
+    }
+
+    if (aborted()) {
+      yield { kind: "cancelled", jobId };
+      return;
     }
 
     while (
@@ -708,6 +754,11 @@ export class BailinOrchestrator {
     const isSkeleton =
       synthCard == null && appearance == null && finalSprite == null;
 
+    if (aborted()) {
+      yield { kind: "cancelled", jobId };
+      return;
+    }
+
     const bundle: CharacterBundle = {
       card,
       sprite: finalSprite,
@@ -748,6 +799,7 @@ export class BailinOrchestrator {
       researchModel: config.researchModel,
       onlyAgents,
       agentPlans,
+      signal: input.signal,
       onAgentStart: (slug, agentName) => {
         const id = AGENT_SLUG_TO_ID[slug];
         if (id == null) return;
@@ -822,7 +874,9 @@ export class BailinOrchestrator {
     sourceType: CharacterCard["meta"]["sourceType"],
     webSearchEnabled: boolean,
     warnings: string[],
-    researchModel?: string
+    researchModel?: string,
+    sourceContext?: string,
+    identityHint?: string
   ): Promise<void> {
     let names = normalizeCharacterNames({
       inputName: inputCharacterName,
@@ -844,7 +898,9 @@ export class BailinOrchestrator {
         },
         webSearchEnabled,
         warnings,
-        researchModel
+        researchModel,
+        sourceContext,
+        identityHint
       );
       if (resolved) {
         const normalizedChinese = normalizeChineseNameDots(resolved.chineseName);
@@ -949,11 +1005,15 @@ export class BailinOrchestrator {
     },
     webSearchEnabled: boolean,
     warnings: string[],
-    researchModel?: string
+    researchModel?: string,
+    sourceContext?: string,
+    identityHint?: string
   ): Promise<CharacterNamePair | null> {
     const { system, user } = buildCharacterNameResolutionPrompt({
       characterName,
       sourceType,
+      sourceContext,
+      identityHint,
       hints
     });
     const r = await this.llm.chatWithTools({
@@ -984,6 +1044,12 @@ export class BailinOrchestrator {
       warnings.push("[name·lookup] JSON 缺少 chineseName 或 englishName");
       return null;
     }
+    const confidence = typeof json.confidence === "string" ? json.confidence : "";
+    if (sourceContext && confidence === "low") {
+      warnings.push(
+        `[name·lookup] 模型未能确认「${characterName}」在出处「${sourceContext}」内的身份（confidence=low），结果可能仍有歧义`
+      );
+    }
     return { chineseName, englishName };
   }
 
@@ -994,7 +1060,9 @@ export class BailinOrchestrator {
     webSearchEnabled: boolean,
     warnings: string[],
     researchModel?: string,
-    userMaterial?: string
+    userMaterial?: string,
+    sourceContext?: string,
+    identityHint?: string
   ): Promise<void> {
     const chineseName = card.meta.chineseName ?? card.meta.name;
     const englishName = card.meta.englishName ?? card.meta.sourceName ?? "";
@@ -1015,6 +1083,8 @@ export class BailinOrchestrator {
           chineseName,
           englishName,
           sourceType,
+          sourceContext,
+          identityHint,
           hintQuote: quote,
           userMaterial
         },
@@ -1022,7 +1092,18 @@ export class BailinOrchestrator {
         warnings,
         researchModel
       );
-      if (resolved) quote = resolved;
+      if (resolved.ok) {
+        quote = resolved.quote;
+      } else {
+        // 关键修复（Tatsumi bad case）：证据闸门拒绝后不能回退到旧 hintQuote——
+        // hintQuote 本身就可能是提炼阶段张冠李戴产出的、格式正确但归属错误的台词。
+        // 这里显式清空，宁可没有座右铭，也不展示错误归属的台词。
+        warnings.push(
+          `[quote·evidence] 未能核实台词归属（重试后仍不合格：${resolved.reasons.join("；")}），已清空未验证台词`
+        );
+        card.meta.quoteOneLiner = undefined;
+        return;
+      }
     }
 
     if (needsQuoteTranslation(quote, quoteOpts)) {
@@ -1046,59 +1127,116 @@ export class BailinOrchestrator {
     card.meta.quoteOneLiner = normalizeQuoteOneLiner(quote);
   }
 
+  /**
+   * 台词证据闸门：结构化检索一次，用 checkQuoteEvidence 校验说话人 / 出处 / 来源链接。
+   * 不合格时按「成本优先」策略再重试一次（把上次失败原因喂回去，逼模型重新检索）；
+   * 仍不合格则返回 ok=false，调用方必须清空台词而不是接受错误归属。
+   */
   private async runQuoteResolutionStep(
     input: {
       chineseName: string;
       englishName: string;
       sourceType: CharacterCard["meta"]["sourceType"];
+      sourceContext?: string;
+      identityHint?: string;
       hintQuote?: string;
       userMaterial?: string;
     },
     webSearchEnabled: boolean,
     warnings: string[],
     researchModel?: string
-  ): Promise<string | null> {
-    const { system, user } = buildCharacterQuoteResolutionPrompt(input);
-    let r = await this.llm.chatWithTools({
-      systemPrompt: system,
-      messages: [{ role: "user", content: user }],
-      temperature: 0.2,
-      maxTokens: 400,
-      stream: false,
-      enableWebSearch: webSearchEnabled,
-      maxToolCalls: 4,
-      searchContextSize: "medium",
-      modelOverride: webSearchEnabled ? researchModel : undefined
-    });
-    if (r.kind === "error" && webSearchEnabled) {
-      warnings.push(
-        `[quote·lookup] 联网检索失败（${r.message}），回退到模型内置知识。`
-      );
-      r = await this.llm.chatWithTools({
+  ): Promise<{ ok: true; quote: string } | { ok: false; reasons: string[] }> {
+    const attempt = async (
+      extraNote?: string
+    ): Promise<{
+      quoteOneLiner: string;
+      speaker: string;
+      work: string;
+      sourceUrl: string;
+      citations: string[];
+    } | null> => {
+      const { system, user } = buildCharacterQuoteResolutionPrompt(input);
+      const userWithNote = extraNote ? `${user}\n\n${extraNote}` : user;
+      let r = await this.llm.chatWithTools({
         systemPrompt: system,
-        messages: [{ role: "user", content: user }],
+        messages: [{ role: "user", content: userWithNote }],
         temperature: 0.2,
         maxTokens: 400,
         stream: false,
-        enableWebSearch: false
+        enableWebSearch: webSearchEnabled,
+        maxToolCalls: 4,
+        searchContextSize: "medium",
+        modelOverride: webSearchEnabled ? researchModel : undefined
       });
+      if (r.kind === "error" && webSearchEnabled) {
+        warnings.push(
+          `[quote·lookup] 联网检索失败（${r.message}），回退到模型内置知识。`
+        );
+        r = await this.llm.chatWithTools({
+          systemPrompt: system,
+          messages: [{ role: "user", content: userWithNote }],
+          temperature: 0.2,
+          maxTokens: 400,
+          stream: false,
+          enableWebSearch: false
+        });
+      }
+      if (r.kind === "error") {
+        warnings.push(`[quote·lookup] LLM 调用失败：${r.message}`);
+        return null;
+      }
+      const json = extractJSON(r.text) as Record<string, unknown> | null;
+      if (!json) {
+        warnings.push("[quote·lookup] LLM 未返回合法 JSON");
+        return null;
+      }
+      const quoteOneLiner =
+        typeof json.quoteOneLiner === "string" ? json.quoteOneLiner.trim() : "";
+      if (!quoteOneLiner) {
+        warnings.push("[quote·lookup] JSON 缺少 quoteOneLiner");
+        return null;
+      }
+      return {
+        quoteOneLiner,
+        speaker: typeof json.speaker === "string" ? json.speaker.trim() : "",
+        work: typeof json.work === "string" ? json.work.trim() : "",
+        sourceUrl: typeof json.sourceUrl === "string" ? json.sourceUrl.trim() : "",
+        citations: r.citations
+      };
+    };
+
+    const evaluate = (
+      candidate: NonNullable<Awaited<ReturnType<typeof attempt>>>
+    ) =>
+      checkQuoteEvidence({
+        candidate,
+        chineseName: input.chineseName,
+        englishName: input.englishName,
+        sourceContext: input.sourceContext,
+        citations: candidate.citations,
+        sourceType: input.sourceType
+      });
+
+    const first = await attempt();
+    if (!first) return { ok: false, reasons: ["LLM 未产出可用结果"] };
+    const firstCheck = evaluate(first);
+    if (firstCheck.ok) {
+      return { ok: true, quote: normalizeQuoteOneLiner(first.quoteOneLiner) };
     }
-    if (r.kind === "error") {
-      warnings.push(`[quote·lookup] LLM 调用失败：${r.message}`);
-      return null;
+
+    warnings.push(
+      `[quote·evidence] 首次检索台词未通过证据核验（${firstCheck.reasons.join("；")}），正在重试一次`
+    );
+    const retry = await attempt(
+      `上一次的结果把台词归属为 speaker="${first.speaker}" / work="${first.work}"，但核验失败：${firstCheck.reasons.join("；")}。` +
+        "请重新联网检索，确保台词的确切说话人和出处与目标角色完全一致；如果确实找不到，quoteOneLiner 请返回空字符串。"
+    );
+    if (!retry) return { ok: false, reasons: firstCheck.reasons };
+    const retryCheck = evaluate(retry);
+    if (retryCheck.ok) {
+      return { ok: true, quote: normalizeQuoteOneLiner(retry.quoteOneLiner) };
     }
-    const json = extractJSON(r.text) as Record<string, unknown> | null;
-    if (!json) {
-      warnings.push("[quote·lookup] LLM 未返回合法 JSON");
-      return null;
-    }
-    const quoteOneLiner =
-      typeof json.quoteOneLiner === "string" ? json.quoteOneLiner.trim() : "";
-    if (!quoteOneLiner) {
-      warnings.push("[quote·lookup] JSON 缺少 quoteOneLiner");
-      return null;
-    }
-    return normalizeQuoteOneLiner(quoteOneLiner);
+    return { ok: false, reasons: retryCheck.reasons };
   }
 
   /** 为缺少中文译文的外文座右铭补译。 */
@@ -1132,6 +1270,71 @@ export class BailinOrchestrator {
     return normalizeQuoteOneLiner(quoteOneLiner);
   }
 
+  /** 非原创角色的外貌是否可信度不足：通用模板兜底 / 性别未知都算「关键失败」。 */
+  private isAppearanceLowConfidence(
+    spec: AppearanceSpec | null,
+    sourceType: "public-figure" | "fictional" | "original"
+  ): boolean {
+    if (!spec) return true;
+    if (sourceType === "original") return false;
+    if (spec.sourceConfidence === "low") return true;
+    if (spec.gender === "unknown") return true;
+    return false;
+  }
+
+  /**
+   * 外貌可信度闸门：非原创角色若首次结果是 low confidence / gender=unknown，
+   * 按「成本优先」策略自动重试一次（把「可信度不足」原因喂回 userHint）；
+   * 重试仍不达标时不再静默交付通用模板——显式在 citationNotes 标注，
+   * 提示用户上传参考图或重新生成形象，而不是假装成功。
+   */
+  private async resolveAppearanceWithEvidenceGate(
+    input: Parameters<BailinOrchestrator["runAppearanceDeep"]>[0],
+    webSearchEnabled: boolean,
+    warnings: string[],
+    researchModel: string | undefined,
+    sourceType: "public-figure" | "fictional" | "original"
+  ): Promise<AppearanceSpec | null> {
+    const first = await this.runAppearanceDeep(input, webSearchEnabled, warnings, researchModel);
+    if (!this.isAppearanceLowConfidence(first, sourceType)) {
+      return first;
+    }
+
+    warnings.push(
+      `[phase3b·evidence] 外貌可信度不足（${
+        first ? `sourceConfidence=${first.sourceConfidence}, gender=${first.gender}` : "生成失败"
+      }），正在自动重试一次`
+    );
+    const retryHint = [
+      input.userHint,
+      "上一次结果外貌可信度不足（可能套了通用模板或性别未知），请更仔细核实官方形象细节，给出具体的发型/瞳色/服装/标志性配饰。"
+    ]
+      .filter((s): s is string => !!s && s.trim().length > 0)
+      .join("\n");
+    const retried = await this.runAppearanceDeep(
+      { ...input, userHint: retryHint },
+      webSearchEnabled,
+      warnings,
+      researchModel
+    );
+    if (!this.isAppearanceLowConfidence(retried, sourceType)) {
+      return retried;
+    }
+
+    const finalSpec = retried ?? first;
+    if (!finalSpec) return null;
+    warnings.push(
+      "[phase3b·evidence] 自动重试后外貌可信度仍不足，已交付但已标注；建议上传参考图后点「重新生成形象」以修正。"
+    );
+    return {
+      ...finalSpec,
+      citationNotes: [
+        ...(finalSpec.citationNotes ?? []),
+        "⚠ 外貌可信度低：调研未能确认官方细节，建议补充参考图后重新生成形象"
+      ]
+    };
+  }
+
   /**
    * 深度外貌 vision-first 流程：
    *   Step 0: 收集参考图（用户上传优先 → 否则联网搜图 URL）
@@ -1149,6 +1352,7 @@ export class BailinOrchestrator {
       userHint?: string;
       userMaterial?: string;
       sourceContext?: string;
+      identityHint?: string;
       referenceImages: ReferenceImageInput[];
       onStatusMessage?: (message: string) => void;
     },
@@ -1221,6 +1425,8 @@ export class BailinOrchestrator {
       characterName: string;
       sourceName?: string;
       sourceType: "public-figure" | "fictional" | "original";
+      sourceContext?: string;
+      identityHint?: string;
     },
     researchModel: string | undefined,
     warnings: string[]
@@ -1232,9 +1438,21 @@ export class BailinOrchestrator {
       "2. 优先 wikipedia / fandom / 官方网站 / 官方推特 / 工作室官网。",
       "3. 返回严格 JSON，仅 JSON：{ \"images\": [\"https://...\", \"https://...\"] }",
       "4. URL 必须是直接的图片地址（.jpg/.png/.webp）。",
-      "5. 最多 3 个；若一个都没找到，返回 { \"images\": [] }。"
+      "5. 最多 3 个；若一个都没找到，返回 { \"images\": [] }。",
+      "6. 若给出了出处 / 身份锚点，搜图关键词必须带上它，确保搜到的是同一出处内的角色，不是同名其它角色/其它作品。"
     ].join("\n");
-    const user = `角色：「${input.characterName}」${input.sourceName ? `（${input.sourceName}）` : ""}\n类型：${input.sourceType}\n搜图，输出 JSON。`;
+    const userParts = [
+      `角色：「${input.characterName}」${input.sourceName ? `（${input.sourceName}）` : ""}`,
+      `类型：${input.sourceType}`
+    ];
+    if (input.sourceContext) {
+      userParts.push(`出处 / 身份锚点：${input.sourceContext}（搜图必须锁定此出处内的角色）`);
+    }
+    if (input.identityHint) {
+      userParts.push(`身份定位提示：${input.identityHint}`);
+    }
+    userParts.push("搜图，输出 JSON。");
+    const user = userParts.join("\n");
 
     const r = await this.llm.chatWithTools({
       systemPrompt: sys,
@@ -1621,7 +1839,8 @@ export class BailinOrchestrator {
     appearance: AppearanceSpec,
     referenceImages: ReferenceImageInput[],
     warnings: string[],
-    onHatchProgress?: (evt: HatchProgressEvent) => void
+    onHatchProgress?: (evt: HatchProgressEvent) => void,
+    signal?: AbortSignal
   ): Promise<{
     sprite: SpriteProgram | null;
     failedRows: HatchPetRowState[];
@@ -1634,6 +1853,9 @@ export class BailinOrchestrator {
       totalCostUsd: 0,
       failedRowReasons: {} as Partial<Record<HatchPetRowState, string>>
     };
+    if (signal?.aborted) {
+      return emptyVisual;
+    }
     if (this.hatchPipeline) {
       try {
         const result = await this.hatchPipeline.run({
@@ -1641,8 +1863,12 @@ export class BailinOrchestrator {
           characterName,
           appearance,
           userReferences: referenceImages,
-          onProgress: onHatchProgress
+          onProgress: onHatchProgress,
+          signal
         });
+        if (signal?.aborted) {
+          return emptyVisual;
+        }
         for (const w of result.warnings) warnings.push(`[step3·hatch] ${w}`);
         if (result.program) {
           const parsed = parseSprite(result.program);
@@ -1664,12 +1890,18 @@ export class BailinOrchestrator {
           warnings.push(`[step3·hatch] 失败：${result.errors.join(" | ")}`);
         }
       } catch (e) {
+        if (signal?.aborted) {
+          return emptyVisual;
+        }
         warnings.push(
           `[step3·hatch] 异常：${e instanceof Error ? e.message : String(e)}`
         );
       }
     } else {
       warnings.push("[step3·hatch] 生图 pipeline 未初始化：缺少 ImageGenerationAdapter 或 Vault");
+    }
+    if (signal?.aborted) {
+      return emptyVisual;
     }
     try {
       const fallback = buildSpriteFromAppearance(appearance);

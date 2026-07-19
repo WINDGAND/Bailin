@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveSourceContextPriority } from "./resolve-source-context.js";
+import {
+  buildCanonicalIdentityFromInput,
+  resolveSourceContextPriority,
+  splitCompoundCharacterInput
+} from "./resolve-source-context.js";
 
 describe("resolveSourceContextPriority", () => {
   it("prefers explicit sourceContext over hint and LLM", () => {
@@ -56,5 +60,94 @@ describe("resolveSourceContextPriority", () => {
     });
     assert.equal(r.kind, "explicit");
     if (r.kind === "explicit") assert.equal(r.sourceContext.length, 40);
+  });
+});
+
+describe("splitCompoundCharacterInput", () => {
+  it("splits '作品 身份 姓名' space-separated compound input (Tatsumi bad case)", () => {
+    const r = splitCompoundCharacterInput("斩赤红之瞳 男主角 塔兹米");
+    assert.equal(r.changed, true);
+    assert.equal(r.characterName, "塔兹米");
+    assert.equal(r.sourceContext, "斩赤红之瞳");
+    assert.equal(r.identityHint, "男主角");
+  });
+
+  it("splits 《作品》里面的身份，姓名 with book-title bracket", () => {
+    const r = splitCompoundCharacterInput("《进击的巨人》里面的男主角，艾伦");
+    assert.equal(r.changed, true);
+    assert.equal(r.characterName, "艾伦");
+    assert.equal(r.sourceContext, "进击的巨人");
+    assert.equal(r.identityHint, "男主角");
+  });
+
+  it("leaves a plain single name untouched", () => {
+    const r = splitCompoundCharacterInput("塔兹米");
+    assert.equal(r.changed, false);
+    assert.equal(r.characterName, "塔兹米");
+    assert.equal(r.sourceContext, undefined);
+  });
+
+  it("leaves a real hyphenated / dotted name untouched", () => {
+    const r = splitCompoundCharacterInput("薇尔莉特·伊芙加登");
+    assert.equal(r.changed, false);
+    assert.equal(r.characterName, "薇尔莉特·伊芙加登");
+  });
+
+  it("handles work + name without explicit role word", () => {
+    const r = splitCompoundCharacterInput("三体 罗辑");
+    assert.equal(r.changed, true);
+    assert.equal(r.characterName, "罗辑");
+    assert.equal(r.sourceContext, "三体");
+  });
+
+  it("trims whitespace-only input without throwing", () => {
+    const r = splitCompoundCharacterInput("   ");
+    assert.equal(r.changed, false);
+    assert.equal(r.characterName, "");
+  });
+});
+
+describe("buildCanonicalIdentityFromInput", () => {
+  it("resolves compound input into a clean name + hint-confidence sourceContext (Tatsumi bad case)", () => {
+    const identity = buildCanonicalIdentityFromInput({
+      characterName: "斩赤红之瞳 男主角 塔兹米",
+      sourceType: "fictional"
+    });
+    assert.equal(identity.characterName, "塔兹米");
+    assert.equal(identity.sourceContext, "斩赤红之瞳");
+    assert.equal(identity.identityHint, "男主角");
+    assert.equal(identity.sourceContextConfidence, "hint");
+    assert.equal(identity.rawInput, "斩赤红之瞳 男主角 塔兹米");
+  });
+
+  it("prefers explicit form sourceContext over a parsed hint", () => {
+    const identity = buildCanonicalIdentityFromInput({
+      characterName: "斩赤红之瞳 男主角 塔兹米",
+      sourceContext: "Akame ga Kill",
+      sourceType: "fictional"
+    });
+    assert.equal(identity.characterName, "塔兹米");
+    assert.equal(identity.sourceContext, "Akame ga Kill");
+    assert.equal(identity.sourceContextConfidence, "explicit");
+  });
+
+  it("marks sourceContext unresolved for a plain single name with no anchors", () => {
+    const identity = buildCanonicalIdentityFromInput({
+      characterName: "塔兹米",
+      sourceType: "fictional"
+    });
+    assert.equal(identity.characterName, "塔兹米");
+    assert.equal(identity.sourceContext, undefined);
+    assert.equal(identity.sourceContextConfidence, "unresolved");
+  });
+
+  it("does not require sourceContext resolution for original characters", () => {
+    const identity = buildCanonicalIdentityFromInput({
+      characterName: "小灵",
+      sourceType: "original"
+    });
+    assert.equal(identity.characterName, "小灵");
+    assert.equal(identity.sourceContext, undefined);
+    assert.equal(identity.sourceContextConfidence, "unresolved");
   });
 });

@@ -21,6 +21,7 @@ import { useT } from "../../shared/i18n/index.js";
 import { ChatMarkdown } from "../../shared/chat-markdown.js";
 import { Icon } from "../../shared/icon.js";
 import { useVisualJobs } from "../app/visual-job-context.js";
+import { resolveCharacterSignature } from "./character-signature.js";
 import { runDetailTransition } from "./detail-transition.js";
 
 interface LibraryItem {
@@ -278,6 +279,17 @@ export function CharacterLibrary({
       selected
         ? getCharacterDisplayNames(selected.card.meta)
         : null,
+    [selected]
+  );
+  const selectedSignature = useMemo(
+    () =>
+      selected
+        ? resolveCharacterSignature({
+            quoteOneLiner: selected.card.meta.quoteOneLiner,
+            signatureVocabulary: selected.card.expressionDNA.vocabulary.signature,
+            selfIntro: selected.card.identity.selfIntro
+          })
+        : "",
     [selected]
   );
 
@@ -632,9 +644,9 @@ export function CharacterLibrary({
                 </div>
               ) : null}
 
-              {selected.card.meta.quoteOneLiner ? (
+              {selectedSignature ? (
                 <blockquote className="char-quote">
-                  「{selected.card.meta.quoteOneLiner}」
+                  「{selectedSignature}」
                 </blockquote>
               ) : null}
 
@@ -688,15 +700,16 @@ export function CharacterLibrary({
                 <div className="library-actions__primary">
                   <button
                     type="button"
-                    className="btn btn--magenta"
+                    className={isSelectedActive ? "btn btn--ghost" : "btn btn--magenta"}
                     onClick={() => void activate(selected.card.id)}
-                    disabled={isSelectedActive || anyBusy}
-                    data-hint={isSelectedActive ? t("library.alreadyActiveHint") : ""}
+                    disabled={anyBusy}
                   >
                     {activating ? (
                       <>
                         <Spinner /> {t("library.activating")}
                       </>
+                    ) : isSelectedActive ? (
+                      t("library.showOnDesktop")
                     ) : (
                       t("library.setActive")
                     )}

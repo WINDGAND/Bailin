@@ -19,19 +19,25 @@ import {
 } from "@bailin/prompts";
 import {
   composeAtlas,
+  computeCanonicalRowScales,
+  computeRowBodyReference,
   decodePng,
-  extractStripFrames,
+  finalizeAlignedFrames,
   makeCanonicalBase,
   makeContactSheet,
+  makeLayoutGuide,
   makePreviewStrip,
   mirrorStripHorizontally,
   prepareHatchPetRun,
+  resolveRowAlignMode,
   resolveStripChromaStrategy,
+  selectStripRawFrames,
   validateAtlas,
   type AtlasValidationReport,
   type ChromaStrategy,
-  type ExtractedFrame,
   type HatchJobSpec,
+  type RawImage,
+  type RowBodyReference,
   type RowSlot
 } from "@bailin/pet-atlas-tools";
 import type { LocalVault } from "../store/local-vault.js";
@@ -142,6 +148,8 @@ interface FinalizeArgs {
   runId: string;
   start: number;
   manifest: ReturnType<typeof prepareHatchPetRun>;
+  /** 用于自动一次结构性重试（半身 / 跨行尺度突变）时的成本软上限判断。 */
+  costCtx: GenerationCostContext;
 }
 
 export type HatchProgressEvent =
@@ -179,6 +187,16 @@ export type HatchProgressEvent =
 const CHROMA_GREEN = { r: 0, g: 255, b: 0 };
 const CHROMA_WHITE = { r: 255, g: 255, b: 255 };
 const DEFAULT_CHROMA = CHROMA_GREEN; // 旧字段，保留供 verify-hatch-pet 等回归用
+
+/**
+ * 始终使用绿色 chroma。模型是否支持原生透明只决定请求参数，不应决定抠图底色；
+ * 白底会和白衣、白鞋及肤色抗锯齿混在一起，产生无法可靠区分的白边。
+ */
+export function selectHatchChromaKey(
+  _supportsNativeTransparency: boolean
+): { r: number; g: number; b: number } {
+  return CHROMA_GREEN;
+}
 
 function buildChromaRowSlot(
   chroma: { r: number; g: number; b: number },
@@ -292,10 +310,10 @@ export class HatchPetPipeline {
     const imgCfg = this.deps.imageGen.getConfig();
     const tierCfg = imgCfg?.tiers?.[tier];
     const useTransparent = tierCfg ? modelSupportsTransparent(tierCfg.model) : true;
-    const chroma = useTransparent ? CHROMA_GREEN : CHROMA_WHITE;
+    const chroma = selectHatchChromaKey(useTransparent);
     if (!useTransparent) {
       warnings.push(
-        `生图模型 ${tierCfg?.model ?? "?"} 不支持透明背景，已切换到白底+chroma抠像方案。`
+        `生图模型 ${tierCfg?.model ?? "?"} 不支持原生透明背景，已使用纯绿 chroma 后处理抠像。`
       );
     }
 
@@ -453,7 +471,8 @@ export class HatchPetPipeline {
       errors,
       runId,
       start,
-      manifest
+      manifest,
+      costCtx
     });
   }
 
@@ -493,7 +512,7 @@ export class HatchPetPipeline {
     const imgCfg = this.deps.imageGen.getConfig();
     const tierCfg = imgCfg?.tiers?.[tier];
     const useTransparent = tierCfg ? modelSupportsTransparent(tierCfg.model) : true;
-    const chroma = useTransparent ? CHROMA_GREEN : CHROMA_WHITE;
+    const chroma = selectHatchChromaKey(useTransparent);
 
     const manifest = prepareHatchPetRun({
       runId,
@@ -587,8 +606,45 @@ export class HatchPetPipeline {
       errors,
       runId,
       start,
-      manifest
+      manifest,
+      costCtx
     });
+  }
+
+  /**
+   * 从一行已生成的 strip 里提取「未缩放对齐」的原始帧。抽出来是因为跨行统一 scale
+   * （computeCanonicalBodyScale）必须先看完所有行的原始尺寸，才能决定共同锚点，
+   * 不能像旧实现那样逐行各自 extractStripFrames 各算各的 scale。
+   */
+  private extractRawRowFrames(
+    rowState: HatchPetRowState,
+    rowResults: Record<HatchPetRowState, RowResultEntry>,
+    frameCounts: Record<HatchPetRowState, number>,
+    cell: { width: number; height: number },
+    chroma: { r: number; g: number; b: number },
+    warnings: string[],
+    onChromaStrategy: (s: ChromaStrategy) => void
+  ): RawImage[] | null {
+    const r = rowResults[rowState];
+    if (!r?.png) return null;
+    try {
+      const slot = buildChromaRowSlot(chroma, {
+        rowIndex: HATCH_PET_ROW_STATES.indexOf(rowState),
+        frameCount: frameCounts[rowState],
+        stripPng: r.png,
+        rowState,
+        // hatch 始终要求绿幕；即使模型顺带返回了 alpha，也可能在头发/四肢之间
+        // 留下被包围的绿色孤岛，不能因“检测到透明通道”而跳过抠像。
+        forceChroma: true
+      });
+      const stripProbe = decodePng(r.png);
+      onChromaStrategy(resolveStripChromaStrategy(stripProbe, slot));
+      return selectStripRawFrames(slot, cell);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      warnings.push(`row-${rowState} 裁帧失败：${msg}`);
+      return null;
+    }
   }
 
   private async finalizeAndPersist(args: FinalizeArgs): Promise<HatchPipelineResult> {
@@ -607,84 +663,182 @@ export class HatchPetPipeline {
       errors,
       runId,
       start,
-      manifest
+      manifest,
+      costCtx
     } = args;
 
-    const rowFramesPng = {} as Record<HatchPetRowState, Buffer[]>;
-    const failedRows: HatchPetRowState[] = [];
+    let totalCostLocal = totalCost;
     let chromaStrategy: ChromaStrategy = useTransparent ? "green" : "white";
+    const setChromaStrategy = (s: ChromaStrategy) => {
+      chromaStrategy = s;
+    };
 
+    // ===== 第一步：逐行提取「未对齐原始帧」（不在这里缩放，留给下面跨行统一 scale） =====
+    const rawFramesByRow: Partial<Record<HatchPetRowState, RawImage[]>> = {};
+    const genFailedRows: HatchPetRowState[] = [];
     for (const rowState of HATCH_PET_ROW_STATES) {
-      const r = rowResults[rowState];
-      if (!r?.png) {
-        failedRows.push(rowState);
-        continue;
+      const raw = this.extractRawRowFrames(
+        rowState,
+        rowResults,
+        frameCounts,
+        cell,
+        chroma,
+        warnings,
+        setChromaStrategy
+      );
+      if (raw) rawFramesByRow[rowState] = raw;
+      else genFailedRows.push(rowState);
+    }
+
+    /**
+     * 关键修复：以前是「逐行各自 extractStripFrames」，每行按自己的 maxW/maxContentH 算 scale，
+     * 导致 idle 和 running 大小不一致（跑起来突然变小/变大）。这里先测量所有成功行的身体尺度，
+     * 取「看起来像全身」的行为准算出统一 forcedScale，再用同一个 scale 对齐每一行。
+     */
+    const buildFramesAndValidate = (): {
+      rowFramesPng: Record<HatchPetRowState, Buffer[]>;
+      validation: AtlasValidationReport;
+      atlasPng: Buffer;
+    } => {
+      const refsByRow = new Map<HatchPetRowState, RowBodyReference>();
+      for (const rowState of HATCH_PET_ROW_STATES) {
+        const raw = rawFramesByRow[rowState];
+        if (raw) refsByRow.set(rowState, computeRowBodyReference(raw));
       }
-      try {
-        const slot = buildChromaRowSlot(chroma, {
-          rowIndex: HATCH_PET_ROW_STATES.indexOf(rowState),
-          frameCount: frameCounts[rowState],
-          stripPng: r.png,
-          rowState
+      const refEntries = [...refsByRow.entries()];
+      const rowScales = computeCanonicalRowScales(
+        refEntries.map(([, ref]) => ref),
+        cell
+      );
+      const forcedScaleByRow = new Map(
+        refEntries.map(([rowState], index) => [rowState, rowScales[index]!])
+      );
+
+      const rowFramesPng = {} as Record<HatchPetRowState, Buffer[]>;
+      for (const rowState of HATCH_PET_ROW_STATES) {
+        const raw = rawFramesByRow[rowState];
+        if (!raw) continue;
+        const aligned = finalizeAlignedFrames(raw, cell, {
+          alignMode: resolveRowAlignMode(rowState),
+          safeMargin: 12,
+          bboxPadding: 8,
+          forcedScale: forcedScaleByRow.get(rowState)
         });
-        const stripProbe = decodePng(r.png);
-        chromaStrategy = resolveStripChromaStrategy(stripProbe, slot);
-        const frames = extractStripFrames(slot, cell);
-        rowFramesPng[rowState] = frames.map((f: ExtractedFrame) => f.png);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        failedRows.push(rowState);
-        warnings.push(`row-${rowState} 裁帧失败：${msg}`);
+        rowFramesPng[rowState] = aligned.map((f) => f.png);
       }
-    }
 
-    const fallbackFrame = pickFallbackFrame(rowFramesPng);
-    for (const rowState of failedRows) {
-      const count = frameCounts[rowState];
-      if (fallbackFrame) {
-        warnings.push(`row-${rowState} 用已成功行抠像帧兜底为 ${count} 帧`);
-        rowFramesPng[rowState] = Array.from({ length: count }, () => fallbackFrame);
+      const fallbackFrame = pickFallbackFrame(rowFramesPng);
+      for (const rowState of genFailedRows) {
+        const count = frameCounts[rowState];
+        if (fallbackFrame) {
+          rowFramesPng[rowState] = Array.from({ length: count }, () => fallbackFrame);
+        } else {
+          rowFramesPng[rowState] = Array.from({ length: count }, () => basePng);
+        }
+      }
+
+      const composeRows = HATCH_PET_ROW_STATES.map((state, idx) => ({
+        rowIndex: idx,
+        framesPng: rowFramesPng[state] ?? []
+      }));
+      const atlasPng = composeAtlas({ cell, grid, rows: composeRows });
+
+      const rowFrameCounts: Record<number, number> = {};
+      const rowStates: Record<number, string> = {};
+      HATCH_PET_ROW_STATES.forEach((state, idx) => {
+        rowFrameCounts[idx] = frameCounts[state];
+        rowStates[idx] = state;
+      });
+      const validation = validateAtlas({
+        atlasPng,
+        cell,
+        grid,
+        rowFrameCounts,
+        rowStates,
+        minOpaquePerFrame: Math.floor(cell.width * cell.height * 0.015)
+      });
+      return { rowFramesPng, validation, atlasPng };
+    };
+
+    let { rowFramesPng, validation, atlasPng } = buildFramesAndValidate();
+    input.onProgress?.({ kind: "atlas_composed", report: validation });
+
+    // ===== 结构性失败一次自动重试：半身裁切 / 跨行尺度突变（不含整轮生成失败的行，那些已走兜底） =====
+    const structuralFailedStates = validation.failedRowIndices
+      .map((idx) => HATCH_PET_ROW_STATES[idx])
+      .filter(
+        (s): s is HatchPetRowState => s != null && !genFailedRows.includes(s)
+      );
+
+    if (structuralFailedStates.length > 0) {
+      if (costCtx.costCapExceeded()) {
+        warnings.push(
+          `atlas 校验发现 ${structuralFailedStates.length} 行结构性问题（半身/尺度突变），但成本已超预估 ${COST_SOFT_CAP_MULTIPLIER} 倍，跳过自动重试`
+        );
       } else {
-        warnings.push(`row-${rowState} 整轮无成功行，用未抠像 base 兜底为 ${count} 帧`);
-        rowFramesPng[rowState] = Array.from({ length: count }, () => basePng);
+        warnings.push(
+          `atlas 校验发现 ${structuralFailedStates.length} 行结构性问题（半身/尺度突变），正在自动重试一次：${structuralFailedStates.join(", ")}`
+        );
+        for (const rowState of structuralFailedStates) {
+          try {
+            const result = await this.generateRow(
+              rowState,
+              frameCounts[rowState],
+              cell,
+              basePng,
+              input,
+              tier,
+              chroma,
+              useTransparent,
+              costCtx
+            );
+            rowResults[rowState] = { png: result.png, cost: result.costUsd };
+            addCost(costCtx, result.costUsd);
+            totalCostLocal += result.costUsd ?? 0;
+            const raw = this.extractRawRowFrames(
+              rowState,
+              rowResults,
+              frameCounts,
+              cell,
+              chroma,
+              warnings,
+              setChromaStrategy
+            );
+            if (raw) {
+              rawFramesByRow[rowState] = raw;
+            } else {
+              genFailedRows.push(rowState);
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            warnings.push(`row-${rowState} 结构性重试失败：${msg}`);
+          }
+        }
+        ({ rowFramesPng, validation, atlasPng } = buildFramesAndValidate());
+        input.onProgress?.({ kind: "atlas_composed", report: validation });
       }
     }
 
-    const uniqueFailedRows = [...new Set(failedRows)];
+    const stillFailedStates = validation.failedRowIndices
+      .map((idx) => HATCH_PET_ROW_STATES[idx])
+      .filter((s): s is HatchPetRowState => s != null);
+    const failedRows = [...new Set([...genFailedRows, ...stillFailedStates])];
     const failedRowReasons: Partial<Record<HatchPetRowState, string>> = {};
-    for (const rowState of uniqueFailedRows) {
+    for (const rowState of failedRows) {
       const reason = rowResults[rowState]?.failed;
       if (reason) failedRowReasons[rowState] = reason;
+      else if (stillFailedStates.includes(rowState) && !genFailedRows.includes(rowState)) {
+        failedRowReasons[rowState] = "atlas 校验判定为半身裁切或跨行尺度突变，自动重试后仍未通过";
+      }
     }
 
-    if (input.signal?.aborted) return abortResult(start);
-
-    const composeRows = HATCH_PET_ROW_STATES.map((state, idx) => ({
-      rowIndex: idx,
-      framesPng: rowFramesPng[state] ?? []
-    }));
-    const atlasPng = composeAtlas({ cell, grid, rows: composeRows });
-
-    const rowFrameCounts: Record<number, number> = {};
-    const rowStates: Record<number, string> = {};
-    HATCH_PET_ROW_STATES.forEach((state, idx) => {
-      rowFrameCounts[idx] = frameCounts[state];
-      rowStates[idx] = state;
-    });
-    const validation = validateAtlas({
-      atlasPng,
-      cell,
-      grid,
-      rowFrameCounts,
-      rowStates,
-      minOpaquePerFrame: Math.floor(cell.width * cell.height * 0.015)
-    });
-    input.onProgress?.({ kind: "atlas_composed", report: validation });
     if (!validation.ok) {
       warnings.push(
         `atlas 校验未通过：${validation.issues.slice(0, 3).join(" | ")}`
       );
     }
+
+    if (input.signal?.aborted) return abortResult(start);
 
     const contactSheet = makeContactSheet({
       rows: HATCH_PET_ROW_STATES.map((state) => ({
@@ -728,8 +882,8 @@ export class HatchPetPipeline {
             chromaSeedThreshold: chroma === CHROMA_WHITE ? 30 : 60,
             chromaSpillThreshold: chroma === CHROMA_WHITE ? 40 : 75,
             durationMs: Date.now() - start,
-            totalCostUsd: totalCost,
-            failedRows: uniqueFailedRows,
+            totalCostUsd: totalCostLocal,
+            failedRows,
             validation,
             manifest
           },
@@ -764,7 +918,7 @@ export class HatchPetPipeline {
         generator: "hatch-pet-pipeline-v1",
         generatedAt: Date.now(),
         modelTier: tier,
-        totalCostUsd: totalCost
+        totalCostUsd: totalCostLocal
       }
     };
 
@@ -782,16 +936,21 @@ export class HatchPetPipeline {
       atlas
     };
 
+    // 关键修复（delivery-gate）：以前只看 sizeOk/trailingTransparent 就判定 ok=true，
+    // 会把 validateAtlas 已经标为半身裁切 / 跨行尺度突变 / 空白帧的 issues 直接当成功交付。
+    // 现在必须 validation.ok（issues 为空）且没有遗留 failedRows 才算真正成功；
+    // 否则 program 仍会返回（供 UI 预览 + 走已有的 sprite checkpoint 重试路径），
+    // 但 ok=false，调用方不能把它当无条件成功收尾。
     return {
-      ok: validation.sizeOk && validation.trailingTransparent,
+      ok: validation.ok && failedRows.length === 0,
       program,
       atlas,
       validation,
-      totalCostUsd: totalCost,
+      totalCostUsd: totalCostLocal,
       durationMs: Date.now() - start,
       warnings,
       errors,
-      failedRows: uniqueFailedRows,
+      failedRows,
       failedRowReasons
     };
   }
@@ -873,7 +1032,15 @@ export class HatchPetPipeline {
     transparentBackground: boolean,
     costCtx: GenerationCostContext
   ): Promise<{ png: Buffer; costUsd?: number }> {
-    const images: string[] = [bufferToDataUrl(canonicalBasePng, "image/png")];
+    // 关键修复：manifest 声明了 layout-guide 输入角色，但此前从未真正生成/传入，
+    // 导致 prompt 要求的横向 N 帧 strip 构图和模型实际输出的 1024×1024 方图错位，
+    // 是"待机半身、奔跑全身"等构图不稳定的根因之一。这里把 layout guide 作为
+    // 第二张 edit 参考图传入，只提示构图比例，不影响角色身份（身份仍靠 canonical base 锚定）。
+    const layoutGuidePng = makeLayoutGuide({ frameCount, cell });
+    const images: string[] = [
+      bufferToDataUrl(canonicalBasePng, "image/png"),
+      bufferToDataUrl(layoutGuidePng, "image/png")
+    ];
     const tierCfg = this.deps.imageGen.getConfig().tiers[tier];
     const label = `hatch:${input.characterName.slice(0, 16)}:row-${rowState}`;
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { HatchPetRowState } from "@bailin/character-protocol";
 import { useT } from "../../shared/i18n/index.js";
+import type { SpriteCheckpointAction } from "../app/sprite-checkpoint-action.js";
 
 const HATCH_LABEL_KEYS: Record<HatchPetRowState, string> = {
   idle: "distill.hatchIdle",
@@ -18,25 +19,35 @@ export function SpriteCheckpointDialog(props: {
   failedRows: HatchPetRowState[];
   rowFailures?: Partial<Record<HatchPetRowState, string>>;
   totalCostUsd?: number;
+  pendingAction?: SpriteCheckpointAction | null;
   onRetry: () => void;
   onContinue: () => void;
   onCancel: () => void;
 }): JSX.Element {
   const t = useT();
-  const { failedRows, rowFailures, totalCostUsd, onRetry, onContinue, onCancel } = props;
+  const {
+    failedRows,
+    rowFailures,
+    totalCostUsd,
+    pendingAction,
+    onRetry,
+    onContinue,
+    onCancel
+  } = props;
+  const isPending = pendingAction != null;
   const retryRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     retryRef.current?.focus();
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !isPending) {
         e.preventDefault();
         onCancel();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onCancel]);
+  }, [isPending, onCancel]);
 
   return (
     <div
@@ -45,10 +56,14 @@ export function SpriteCheckpointDialog(props: {
       aria-modal="true"
       aria-labelledby="sprite-checkpoint-title"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel();
+        if (!isPending && e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="modal" style={{ width: 560, maxHeight: "85vh", overflowY: "auto" }}>
+      <div
+        className="modal"
+        style={{ width: 560, maxHeight: "85vh", overflowY: "auto" }}
+        aria-busy={isPending}
+      >
         <div className="eyebrow" style={{ marginBottom: 8 }}>
           {t("distill.spriteCheckpointEyebrow")}
         </div>
@@ -88,19 +103,35 @@ export function SpriteCheckpointDialog(props: {
           ))}
         </ul>
         <div className="row row--end gap-2">
-          <button type="button" className="btn btn--ghost" onClick={() => onCancel()} data-hint="Esc">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={isPending}
+            onClick={() => onCancel()}
+            data-hint="Esc"
+          >
             {t("distill.checkpointCancel")}
           </button>
-          <button type="button" className="btn btn--ghost" onClick={() => onContinue()}>
-            {t("distill.spriteCheckpointContinue")}
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={isPending}
+            onClick={() => onContinue()}
+          >
+            {pendingAction === "continue"
+              ? t("distill.spriteCheckpointContinuing")
+              : t("distill.spriteCheckpointContinue")}
           </button>
           <button
             type="button"
             className="btn btn--magenta"
             ref={retryRef}
+            disabled={isPending}
             onClick={() => onRetry()}
           >
-            {t("distill.spriteCheckpointRetry")}
+            {pendingAction === "retry"
+              ? t("distill.spriteCheckpointRetrying")
+              : t("distill.spriteCheckpointRetry")}
           </button>
         </div>
       </div>

@@ -423,8 +423,9 @@ export function useActiveCharacter(): {
 
   useEffect(() => {
     void refresh();
-    const off = bailin.on.activeCharacterChanged((b) => {
-      setBundle(b);
+    // 事件里可能带完整 bundle；再拉一次 getActive，避免大 payload 异常或窗体刚 show 时状态不同步
+    const off = bailin.on.activeCharacterChanged(() => {
+      void refresh();
     });
     return off;
   }, [bailin, refresh]);
