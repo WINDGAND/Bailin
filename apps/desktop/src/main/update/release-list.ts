@@ -191,7 +191,8 @@ export async function fetchReleaseSummaries(options?: {
     return { ok: false, error: "GitHub 响应缺少 tag_name" };
   }
 
-  if (disk && disk.latestTag === latestTag) {
+  const diskContainsLatest = disk?.releases.some((release) => release.tag === latestTag) ?? false;
+  if (disk && disk.latestTag === latestTag && diskContainsLatest) {
     store.save({ ...disk, fetchedAt: nowMs });
     return { ok: true, releases: disk.releases, fromCache: true };
   }

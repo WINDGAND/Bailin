@@ -82,7 +82,7 @@ export const en: TranslationTree = {
     checkNow: "Check for updates",
     checking: "Checking…",
     upToDate: "You're on the latest version",
-    checkFailed: "Update check failed, please check your network and try again",
+    checkFailed: "Update check failed: {{reason}}",
     bannerTitle: "New version v{{version}} available",
     viewRelease: "View / download the update",
     dismiss: "Dismiss this version",

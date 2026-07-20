@@ -26,10 +26,13 @@ interface GitHubReleaseResponse {
  * 网络/解析失败一律返回 `{ hasUpdate: false, error }`，不抛异常——这是一个
  * 后台便利检查，失败了不该打断用户或搞崩后台定时任务。
  */
-export async function checkForUpdates(currentVersion: string): Promise<UpdateCheckResult> {
+export async function checkForUpdates(
+  currentVersion: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<UpdateCheckResult> {
   let res: Response;
   try {
-    res = await fetch(GITHUB_RELEASES_API_URL, {
+    res = await fetchImpl(GITHUB_RELEASES_API_URL, {
       headers: {
         Accept: "application/vnd.github+json",
         // GitHub API 要求带 User-Agent，否则可能直接拒绝请求。
@@ -42,7 +45,25 @@ export async function checkForUpdates(currentVersion: string): Promise<UpdateChe
   }
 
   if (!res.ok) {
-    return { hasUpdate: false, error: `GitHub API 返回 HTTP ${res.status}` };
+    let detail = "";
+    try {
+      const body = (await res.json()) as { message?: string };
+      if (typeof body?.message === "string") detail = body.message.trim();
+    } catch {
+      // 响应体不是 JSON 时仍保留 HTTP 状态作为诊断信息。
+    }
+    if (res.status === 403 && /rate limit/i.test(detail)) {
+      return {
+        hasUpdate: false,
+        error: "GitHub API 请求过于频繁（未认证限流），请稍后再试"
+      };
+    }
+    return {
+      hasUpdate: false,
+      error: detail
+        ? `GitHub API 返回 HTTP ${res.status}：${detail}`
+        : `GitHub API 返回 HTTP ${res.status}`
+    };
   }
 
   let json: GitHubReleaseResponse;

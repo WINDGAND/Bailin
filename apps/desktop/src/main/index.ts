@@ -1,4 +1,4 @@
-import { app, globalShortcut, Tray, Menu, nativeImage, BrowserWindow, dialog, screen } from "electron";
+import { app, globalShortcut, Tray, Menu, nativeImage, BrowserWindow, dialog, net, screen } from "electron";
 Menu.setApplicationMenu(null);
 import { join } from "node:path";
 import log from "electron-log/main";
@@ -597,7 +597,10 @@ void app.whenReady().then(() => {
   updateScheduler = new UpdateScheduler({
     getCurrentVersion: () => app.getVersion(),
     getDismissedTag: () => vault.getSetting(SETTING_UPDATE_DISMISSED_TAG),
-    checkFn: checkForUpdates,
+    checkFn: (currentVersion) =>
+      checkForUpdates(currentVersion, (input, init) =>
+        net.fetch(input instanceof URL ? input.href : input, init)
+      ),
     onUpdateAvailable: (result) => appBroadcast(IPC.EventUpdateAvailable, result)
   });
   updateScheduler.start();

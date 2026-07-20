@@ -80,7 +80,7 @@ export const zh = {
     checkNow: "检查更新",
     checking: "检查中…",
     upToDate: "已是最新版本",
-    checkFailed: "检查更新失败，请检查网络后重试",
+    checkFailed: "检查更新失败：{{reason}}",
     bannerTitle: "发现新版本 v{{version}}",
     viewRelease: "查看/下载新版本",
     dismiss: "忽略此版本",

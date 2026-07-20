@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow, shell } from "electron";
+import { app, ipcMain, BrowserWindow, net, shell } from "electron";
 import { ulid } from "ulid";
 import {
   IPC,
@@ -163,7 +163,9 @@ export function registerIpc(deps: IpcDeps): void {
     // 否则"忽略此版本"点完立刻手动点一下"检查更新"就会把横幅马上弹回来，
     // 用户会觉得"忽略"这个功能根本没用。用 dismissed 字段把这个信息带给前端，
     // 由前端决定 toast 怎么说，而不是在这里直接篡改 hasUpdate。
-    const result = await checkForUpdates(app.getVersion());
+    const result = await checkForUpdates(app.getVersion(), (input, init) =>
+      net.fetch(input instanceof URL ? input.href : input, init)
+    );
     const dismissed =
       result.hasUpdate && isVersionDismissed(result.latestVersion, vault.getSetting(SETTING_UPDATE_DISMISSED_TAG));
     if (result.hasUpdate && !dismissed) {
@@ -196,7 +198,8 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.AppListReleases, (_evt, options?: { forceRefresh?: boolean }) =>
     fetchReleaseSummaries({
       store: releaseListStore,
-      forceRefresh: options?.forceRefresh === true
+      forceRefresh: options?.forceRefresh === true,
+      fetchImpl: (input, init) => net.fetch(input instanceof URL ? input.href : input, init)
     })
   );
   ipcMain.handle(IPC.AppDismissUpdate, (_evt, latestVersion: unknown) => {
