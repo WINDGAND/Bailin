@@ -150,6 +150,16 @@ export interface BailinApi {
     }>;
     regenerateSprite(characterId: string): Promise<{ ok: boolean; warnings?: string[]; error?: string }>;
     /**
+     * 重新核实代表性原话（座右铭），不动人格 / 外貌 / sprite。
+     */
+    regenerateQuote(characterId: string): Promise<{
+      ok: boolean;
+      quoteStatus?: "verified" | "provisional" | "missing";
+      quoteOneLiner?: string;
+      warnings?: string[];
+      error?: string;
+    }>;
+    /**
      * v0.2：用新一批 referenceImages（或复用旧的）重新跑「外貌调研 + sprite」管道，
      * 不动人格 / 调研档案。
      */
@@ -734,6 +744,7 @@ export const IPC = {
   CharactersGetResearchDocs: "bailin.characters.getResearchDocs",
   CharactersGetResearchByCharacter: "bailin.characters.getResearchByCharacter",
   CharactersRegenerateSprite: "bailin.characters.regenerateSprite",
+  CharactersRegenerateQuote: "bailin.characters.regenerateQuote",
   CharactersRegenerateAppearance: "bailin.characters.regenerateAppearance",
   CharactersDelete: "bailin.characters.delete",
   CharactersActivate: "bailin.characters.activate",

@@ -85,6 +85,16 @@ export const CharacterMetaSchema = z.object({
   track: z.enum(["utility", "companion"]),
   quoteOneLiner: z.string().max(280).optional(),
   /**
+   * 座右铭核验状态：
+   * - verified：quoteOneLiner 为已核验原话
+   * - provisional：原话未核验，UI 用人格表达顶上
+   * - missing：无可展示签名文案
+   * 缺省时由读侧按 quoteOneLiner / 人格内容推导（兼容旧卡）。
+   */
+  quoteStatus: z.enum(["verified", "provisional", "missing"]).optional(),
+  /** 最近一次座右铭核验失败原因（调试 / toast，不直接当产品长文）。 */
+  quoteStatusReason: z.string().max(400).optional(),
+  /**
    * 视觉气质摘要（≤800 字，0~800）。
    * 优先用 meta.appearance 结构化外貌；avatarHint 是兼容字段，orchestrator 会在 Step2 完成后用
    * `summarizeAppearance(appearance)` 自动写入。Step1 的人格卡 LLM 不再被要求输出此字段。

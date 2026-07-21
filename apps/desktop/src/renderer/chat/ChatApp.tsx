@@ -20,6 +20,7 @@ import { ChatResizeHandles } from "./ChatResizeHandles.js";
 import { ChatHistoryPanel } from "./ChatHistoryPanel.js";
 import type { ProfileChange, ProfileUpdatedEvent } from "../../shared/ipc-contract.js";
 import { useT } from "../shared/i18n/index.js";
+import { resolveCharacterSignature } from "../settings/library/character-signature.js";
 
 export function ChatApp(): JSX.Element {
   const bailin = useBailin();
@@ -125,12 +126,20 @@ export function ChatApp(): JSX.Element {
       });
     }
     if (bundle.card.meta.quoteOneLiner) {
-      list.push({
-        id: "quote",
-        title: t("chat.suggestionQuoteTitle"),
-        hint: bundle.card.meta.quoteOneLiner.slice(0, 70),
-        prompt: t("chat.suggestionQuotePrompt", { quote: bundle.card.meta.quoteOneLiner })
+      const sig = resolveCharacterSignature({
+        quoteOneLiner: bundle.card.meta.quoteOneLiner,
+        quoteStatus: bundle.card.meta.quoteStatus,
+        signatureVocabulary: bundle.card.expressionDNA.vocabulary.signature,
+        selfIntro: bundle.card.identity.selfIntro
       });
+      if (sig.status === "verified" && sig.text) {
+        list.push({
+          id: "quote",
+          title: t("chat.suggestionQuoteTitle"),
+          hint: sig.text.slice(0, 70),
+          prompt: t("chat.suggestionQuotePrompt", { quote: sig.text })
+        });
+      }
     }
     list.push({
       id: "stuck",
@@ -695,7 +704,13 @@ function CharacterInfoButton({
   }, [open]);
 
   const mms = bundle.card.mentalModels.slice(0, 3);
-  const quote = bundle.card.meta.quoteOneLiner;
+  const quote = resolveCharacterSignature({
+    quoteOneLiner: bundle.card.meta.quoteOneLiner,
+    quoteStatus: bundle.card.meta.quoteStatus,
+    signatureVocabulary: bundle.card.expressionDNA.vocabulary.signature,
+    selfIntro: bundle.card.identity.selfIntro
+  });
+  const quoteText = quote.status === "verified" ? quote.text : "";
 
   return (
     <>
@@ -729,10 +744,10 @@ function CharacterInfoButton({
               </div>
             </>
           ) : null}
-          {quote ? (
+          {quoteText ? (
             <>
               <div className="char-info-popover__divider" />
-              <div className="char-info-popover__quote">「{quote}」</div>
+              <div className="char-info-popover__quote">「{quoteText}」</div>
             </>
           ) : null}
         </div>

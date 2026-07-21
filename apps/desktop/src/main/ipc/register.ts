@@ -383,6 +383,39 @@ export function registerIpc(deps: IpcDeps): void {
     }
   });
 
+  ipcMain.handle(IPC.CharactersRegenerateQuote, async (_e, characterId: string) => {
+    try {
+      const bundle = vault.getCharacter(characterId);
+      if (!bundle) return { ok: false, error: "角色不存在" };
+      const result = await orchestrator.regenerateQuote({ card: bundle.card });
+      if (!result.card) {
+        return { ok: false, error: result.error ?? "座右铭核实失败", warnings: result.warnings };
+      }
+      const newBundle: CharacterBundle = {
+        ...bundle,
+        card: result.card
+      };
+      vault.upsertCharacter({
+        id: characterId,
+        bundle: newBundle,
+        isSkeleton: false,
+        now: Date.now()
+      });
+      if (deps.getActiveCharacterId() === characterId) {
+        broadcast(IPC.EventActiveCharacterChanged, newBundle);
+      }
+      return {
+        ok: result.ok,
+        quoteStatus: result.quoteStatus,
+        quoteOneLiner: result.quoteOneLiner,
+        warnings: result.warnings,
+        error: result.ok ? undefined : result.error
+      };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
   ipcMain.handle(IPC.CharactersDelete, (_e, characterId: string) => {
     vault.deleteCharacter(characterId);
     if (deps.getActiveCharacterId() === characterId) {

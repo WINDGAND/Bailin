@@ -4115,6 +4115,48 @@ body {
   border-radius: 0;
 }
 
+.char-quote-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.stack--lg > .char-quote-block {
+  margin-top: var(--space-6);
+}
+
+.char-quote--provisional {
+  opacity: 0.92;
+}
+
+.char-quote--missing {
+  font-style: normal;
+  color: var(--ink-caption);
+}
+
+.char-quote-retry {
+  padding: 0;
+  min-height: auto;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-caption);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.85;
+}
+
+.char-quote-retry:hover:not(:disabled) {
+  color: var(--ink);
+  opacity: 1;
+}
+
+.char-quote-retry:disabled {
+  opacity: 0.5;
+  text-decoration: none;
+}
+
 /* 与上方角色头像/名称区块拉开距离（stack--lg 默认 26px 仍偏紧） */
 .stack--lg > .char-quote {
   margin-top: var(--space-6);

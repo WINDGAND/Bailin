@@ -3,34 +3,60 @@ import { describe, it } from "node:test";
 import { resolveCharacterSignature } from "./character-signature.js";
 
 describe("resolveCharacterSignature", () => {
-  it("prefers a verified representative quote", () => {
-    assert.equal(
-      resolveCharacterSignature({
-        quoteOneLiner: "当下就是最慷慨的礼物。",
-        signatureVocabulary: ["顺其自然。"],
-        selfIntro: "我是田馥甄。"
-      }),
-      "当下就是最慷慨的礼物。"
-    );
+  it("returns verified when quoteStatus is verified", () => {
+    const r = resolveCharacterSignature({
+      quoteOneLiner: "当下就是最慷慨的礼物。",
+      quoteStatus: "verified",
+      signatureVocabulary: ["顺其自然。"],
+      selfIntro: "我是田馥甄。"
+    });
+    assert.equal(r.status, "verified");
+    assert.equal(r.text, "当下就是最慷慨的礼物。");
+    assert.equal(r.canRetry, false);
   });
 
-  it("falls back to expression DNA when quote lookup yields nothing", () => {
-    assert.equal(
-      resolveCharacterSignature({
-        signatureVocabulary: ["走回心里才能找到方向", "时间会筛选一切"],
-        selfIntro: "我是田馥甄。"
-      }),
-      "走回心里才能找到方向"
-    );
+  it("treats skeleton placeholder as missing quote and falls back to provisional", () => {
+    const r = resolveCharacterSignature({
+      quoteOneLiner: "我还没准备好。",
+      signatureVocabulary: ["走回心里才能找到方向"],
+      selfIntro: "我是田馥甄。"
+    });
+    assert.equal(r.status, "provisional");
+    assert.equal(r.text, "走回心里才能找到方向");
+    assert.equal(r.canRetry, true);
   });
 
-  it("always returns a non-empty signature for a valid character card", () => {
-    assert.equal(
-      resolveCharacterSignature({
-        signatureVocabulary: [],
-        selfIntro: "我是田馥甄，一个安静但坚定的陪伴者。"
-      }),
-      "我是田馥甄，一个安静但坚定的陪伴者。"
-    );
+  it("returns provisional from selfIntro when no signature vocabulary", () => {
+    const r = resolveCharacterSignature({
+      quoteStatus: "missing",
+      signatureVocabulary: [],
+      selfIntro: "我是田馥甄，一个安静但坚定的陪伴者。"
+    });
+    assert.equal(r.status, "provisional");
+    assert.equal(r.text, "我是田馥甄，一个安静但坚定的陪伴者。");
+    assert.equal(r.canRetry, true);
+  });
+
+  it("returns missing when nothing usable remains", () => {
+    const r = resolveCharacterSignature({
+      quoteOneLiner: "我还没准备好。",
+      quoteStatus: "missing",
+      signatureVocabulary: [],
+      selfIntro: ""
+    });
+    assert.equal(r.status, "missing");
+    assert.equal(r.text, "");
+    assert.equal(r.canRetry, true);
+  });
+
+  it("legacy cards with a real quote and no status are verified", () => {
+    const r = resolveCharacterSignature({
+      quoteOneLiner: "当下就是最慷慨的礼物。",
+      signatureVocabulary: ["顺其自然。"],
+      selfIntro: "我是田馥甄。"
+    });
+    assert.equal(r.status, "verified");
+    assert.equal(r.text, "当下就是最慷慨的礼物。");
+    assert.equal(r.canRetry, false);
   });
 });

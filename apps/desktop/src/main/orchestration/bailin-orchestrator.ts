@@ -13,6 +13,9 @@ import {
   isChineseNativeForQuote,
   chineseNameToPinyinEnglish,
   normalizeQuoteOneLiner,
+  isSkeletonPlaceholderQuote,
+  effectiveQuoteOneLiner,
+  deriveQuoteStatus,
   type CharacterNamePair,
   SCHEMA_VERSION,
   defaultRuntimeConfig,
@@ -117,6 +120,15 @@ export interface RegenerateAppearanceResult {
   error?: string;
 }
 
+export interface RegenerateQuoteResult {
+  ok: boolean;
+  card?: CharacterCard;
+  quoteStatus?: "verified" | "provisional" | "missing";
+  quoteOneLiner?: string;
+  warnings: string[];
+  error?: string;
+}
+
 /** 深度蒸馏 generator 产出的进度事件。 */
 export type DeepProgressEvent =
   | { kind: "started"; jobId: string }
@@ -161,6 +173,8 @@ export interface DeepOrchestrateInput {
 
 export class BailinOrchestrator {
   private hatchPipeline: HatchPetPipeline | null;
+  /** 座右铭手动重试并发锁（characterId）。 */
+  private quoteJobs = new Set<string>();
 
   constructor(
     private llm: LLMAdapter,
@@ -221,6 +235,60 @@ export class BailinOrchestrator {
       };
     }
     return { ok: true, sprite: visual.sprite, warnings };
+  }
+
+  /**
+   * 只重跑座右铭核验流水线：不动人格 / 外貌 / sprite。
+   * 与创建时 finalizeCharacterQuote 共用 resolve 策略。
+   */
+  async regenerateQuote(input: { card: CharacterCard }): Promise<RegenerateQuoteResult> {
+    const characterId = input.card.id;
+    if (this.quoteJobs.has(characterId)) {
+      return { ok: false, error: "座右铭正在核实中", warnings: [] };
+    }
+    this.quoteJobs.add(characterId);
+    const warnings: string[] = [];
+    try {
+      const card: CharacterCard = structuredClone(input.card);
+      // 强制重新检索：清掉旧原话与状态后再走 finalize
+      card.meta.quoteOneLiner = undefined;
+      card.meta.quoteStatus = undefined;
+      card.meta.quoteStatusReason = undefined;
+      await this.finalizeCharacterQuote(
+        card,
+        card.meta.sourceType,
+        this.metadataWebSearchEnabled(card.meta.sourceType),
+        warnings
+      );
+      const quoteStatus =
+        card.meta.quoteStatus ??
+        deriveQuoteStatus({
+          quoteOneLiner: card.meta.quoteOneLiner,
+          quoteStatus: card.meta.quoteStatus,
+          signatureVocabulary: card.expressionDNA.vocabulary.signature,
+          selfIntro: card.identity.selfIntro
+        });
+      card.meta.quoteStatus = quoteStatus;
+      return {
+        ok: quoteStatus === "verified",
+        card,
+        quoteStatus,
+        quoteOneLiner: card.meta.quoteOneLiner,
+        warnings,
+        error:
+          quoteStatus === "verified"
+            ? undefined
+            : card.meta.quoteStatusReason ?? "仍未能核实代表性原话"
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+        warnings
+      };
+    } finally {
+      this.quoteJobs.delete(characterId);
+    }
   }
 
   /**
@@ -1053,7 +1121,7 @@ export class BailinOrchestrator {
     return { chineseName, englishName };
   }
 
-  /** 联网检索角色原话，写回 meta.quoteOneLiner；外国角色确保「原文（中文译）」格式。 */
+  /** 联网检索角色原话，写回 meta.quoteOneLiner + quoteStatus；外国角色确保「原文（中文译）」格式。 */
   private async finalizeCharacterQuote(
     card: CharacterCard,
     sourceType: CharacterCard["meta"]["sourceType"],
@@ -1075,7 +1143,7 @@ export class BailinOrchestrator {
     );
     const quoteOpts = { chineseNative };
 
-    let quote = card.meta.quoteOneLiner;
+    let quote = effectiveQuoteOneLiner(card.meta.quoteOneLiner);
 
     if (needsQuoteLookup(quote, sourceType, quoteOpts)) {
       const resolved = await this.runQuoteResolutionStep(
@@ -1101,7 +1169,7 @@ export class BailinOrchestrator {
         warnings.push(
           `[quote·evidence] 未能核实台词归属（重试后仍不合格：${resolved.reasons.join("；")}），已清空未验证台词`
         );
-        card.meta.quoteOneLiner = undefined;
+        this.applyUnresolvedQuote(card, resolved.reasons);
         return;
       }
     }
@@ -1114,7 +1182,10 @@ export class BailinOrchestrator {
       if (translated) quote = translated;
     }
 
-    if (!quote?.trim()) return;
+    if (!quote?.trim() || isSkeletonPlaceholderQuote(quote)) {
+      this.applyUnresolvedQuote(card, ["座右铭为空或仍为骨架占位"]);
+      return;
+    }
 
     if (!isQuoteAcceptable(quote, quoteOpts)) {
       if (chineseNative) {
@@ -1125,12 +1196,24 @@ export class BailinOrchestrator {
     }
 
     card.meta.quoteOneLiner = normalizeQuoteOneLiner(quote);
+    card.meta.quoteStatus = "verified";
+    card.meta.quoteStatusReason = undefined;
+  }
+
+  /** 原话核验失败：清空 quoteOneLiner，按人格内容写入 provisional / missing。 */
+  private applyUnresolvedQuote(card: CharacterCard, reasons: string[]): void {
+    card.meta.quoteOneLiner = undefined;
+    card.meta.quoteStatus = deriveQuoteStatus({
+      quoteOneLiner: undefined,
+      signatureVocabulary: card.expressionDNA.vocabulary.signature,
+      selfIntro: card.identity.selfIntro
+    });
+    card.meta.quoteStatusReason = reasons.join("；").slice(0, 400) || undefined;
   }
 
   /**
-   * 台词证据闸门：结构化检索一次，用 checkQuoteEvidence 校验说话人 / 出处 / 来源链接。
-   * 不合格时按「成本优先」策略再重试一次（把上次失败原因喂回去，逼模型重新检索）；
-   * 仍不合格则返回 ok=false，调用方必须清空台词而不是接受错误归属。
+   * 台词证据闸门：最多 3 次 attempt（首次 + 两次策略换挡）。
+   * 不合格则返回 ok=false，调用方必须清空台词而不是接受错误归属。
    */
   private async runQuoteResolutionStep(
     input: {
@@ -1146,8 +1229,12 @@ export class BailinOrchestrator {
     warnings: string[],
     researchModel?: string
   ): Promise<{ ok: true; quote: string } | { ok: false; reasons: string[] }> {
+    const safeHint = effectiveQuoteOneLiner(input.hintQuote);
+    const promptInput = { ...input, hintQuote: safeHint };
+
     const attempt = async (
-      extraNote?: string
+      extraNote: string | undefined,
+      opts: { enableWebSearch: boolean; attemptLabel: string }
     ): Promise<{
       quoteOneLiner: string;
       speaker: string;
@@ -1155,23 +1242,25 @@ export class BailinOrchestrator {
       sourceUrl: string;
       citations: string[];
     } | null> => {
-      const { system, user } = buildCharacterQuoteResolutionPrompt(input);
+      const { system, user } = buildCharacterQuoteResolutionPrompt(promptInput);
       const userWithNote = extraNote ? `${user}\n\n${extraNote}` : user;
+      let useWeb = opts.enableWebSearch;
       let r = await this.llm.chatWithTools({
         systemPrompt: system,
         messages: [{ role: "user", content: userWithNote }],
         temperature: 0.2,
         maxTokens: 400,
         stream: false,
-        enableWebSearch: webSearchEnabled,
+        enableWebSearch: useWeb,
         maxToolCalls: 4,
         searchContextSize: "medium",
-        modelOverride: webSearchEnabled ? researchModel : undefined
+        modelOverride: useWeb ? researchModel : undefined
       });
-      if (r.kind === "error" && webSearchEnabled) {
+      if (r.kind === "error" && useWeb) {
         warnings.push(
-          `[quote·lookup] 联网检索失败（${r.message}），回退到模型内置知识。`
+          `[quote·lookup] ${opts.attemptLabel}联网检索失败（${r.message}），回退到模型内置知识。`
         );
+        useWeb = false;
         r = await this.llm.chatWithTools({
           systemPrompt: system,
           messages: [{ role: "user", content: userWithNote }],
@@ -1182,18 +1271,24 @@ export class BailinOrchestrator {
         });
       }
       if (r.kind === "error") {
-        warnings.push(`[quote·lookup] LLM 调用失败：${r.message}`);
+        warnings.push(`[quote·lookup] ${opts.attemptLabel}LLM 调用失败：${r.message}`);
         return null;
       }
       const json = extractJSON(r.text) as Record<string, unknown> | null;
       if (!json) {
-        warnings.push("[quote·lookup] LLM 未返回合法 JSON");
+        warnings.push(`[quote·lookup] ${opts.attemptLabel}LLM 未返回合法 JSON`);
         return null;
       }
       const quoteOneLiner =
         typeof json.quoteOneLiner === "string" ? json.quoteOneLiner.trim() : "";
       if (!quoteOneLiner) {
-        warnings.push("[quote·lookup] JSON 缺少 quoteOneLiner");
+        warnings.push(`[quote·lookup] ${opts.attemptLabel}JSON 缺少 quoteOneLiner`);
+        return null;
+      }
+      if (isSkeletonPlaceholderQuote(quoteOneLiner)) {
+        warnings.push(
+          `[quote·lookup] ${opts.attemptLabel}返回骨架占位句，已拒绝`
+        );
         return null;
       }
       return {
@@ -1217,26 +1312,105 @@ export class BailinOrchestrator {
         sourceType: input.sourceType
       });
 
-    const first = await attempt();
-    if (!first) return { ok: false, reasons: ["LLM 未产出可用结果"] };
-    const firstCheck = evaluate(first);
-    if (firstCheck.ok) {
-      return { ok: true, quote: normalizeQuoteOneLiner(first.quoteOneLiner) };
+    const PLACEHOLDER_BAN =
+      "禁止输出「我还没准备好」或 I'm not ready yet 等占位句；找不到可核验原话时 quoteOneLiner 必须返回空字符串。";
+
+    // Attempt 1：联网（若开启）正常检索
+    warnings.push("[quote·lookup] 正在核实代表性原话…（1/3）");
+    const first = await attempt(PLACEHOLDER_BAN, {
+      enableWebSearch: webSearchEnabled,
+      attemptLabel: "第1次"
+    });
+    if (first) {
+      const firstCheck = evaluate(first);
+      if (firstCheck.ok) {
+        return { ok: true, quote: normalizeQuoteOneLiner(first.quoteOneLiner) };
+      }
+      warnings.push(
+        `[quote·evidence] 第1次未通过证据核验（${firstCheck.reasons.join("；")}），换检索策略重试`
+      );
+
+      // Attempt 2：喂失败原因，要求换出处 / 检索词
+      warnings.push("[quote·lookup] 正在核实代表性原话…（2/3）");
+      const retryNote =
+        `上一次的结果把台词归属为 speaker="${first.speaker}" / work="${first.work}"，但核验失败：${firstCheck.reasons.join("；")}。` +
+        "请更换检索词与出处来源后重新检索，确保说话人和出处与目标角色完全一致。" +
+        PLACEHOLDER_BAN;
+      const second = await attempt(retryNote, {
+        enableWebSearch: webSearchEnabled,
+        attemptLabel: "第2次"
+      });
+      if (second) {
+        const secondCheck = evaluate(second);
+        if (secondCheck.ok) {
+          return { ok: true, quote: normalizeQuoteOneLiner(second.quoteOneLiner) };
+        }
+        warnings.push(
+          `[quote·evidence] 第2次未通过证据核验（${secondCheck.reasons.join("；")}），最后一轮换挡`
+        );
+
+        // Attempt 3：策略换挡——有联网则强制内置知识；无联网则收紧为短句约束
+        warnings.push("[quote·lookup] 正在核实代表性原话…（3/3）");
+        const thirdNote = webSearchEnabled
+          ? "本轮请仅使用你已有的可靠知识，给出一句可核验的短原话，并填写准确的 speaker / work。" +
+            PLACEHOLDER_BAN
+          : "请只返回一句不超过 40 字、可核验的短原话，并填写 speaker；不确定就留空。" +
+            PLACEHOLDER_BAN;
+        const third = await attempt(thirdNote, {
+          enableWebSearch: false,
+          attemptLabel: "第3次"
+        });
+        if (third) {
+          const thirdCheck = evaluate(third);
+          if (thirdCheck.ok) {
+            return { ok: true, quote: normalizeQuoteOneLiner(third.quoteOneLiner) };
+          }
+          return { ok: false, reasons: thirdCheck.reasons };
+        }
+        return { ok: false, reasons: secondCheck.reasons };
+      }
+      return { ok: false, reasons: firstCheck.reasons };
     }
 
-    warnings.push(
-      `[quote·evidence] 首次检索台词未通过证据核验（${firstCheck.reasons.join("；")}），正在重试一次`
+    // 首次 LLM 无结果：仍尝试第 2、3 轮
+    warnings.push("[quote·lookup] 第1次未产出结果，继续重试（2/3）");
+    const second = await attempt(
+      "上一次未能产出可用 JSON。请重新检索并严格返回指定字段。" + PLACEHOLDER_BAN,
+      { enableWebSearch: webSearchEnabled, attemptLabel: "第2次" }
     );
-    const retry = await attempt(
-      `上一次的结果把台词归属为 speaker="${first.speaker}" / work="${first.work}"，但核验失败：${firstCheck.reasons.join("；")}。` +
-        "请重新联网检索，确保台词的确切说话人和出处与目标角色完全一致；如果确实找不到，quoteOneLiner 请返回空字符串。"
-    );
-    if (!retry) return { ok: false, reasons: firstCheck.reasons };
-    const retryCheck = evaluate(retry);
-    if (retryCheck.ok) {
-      return { ok: true, quote: normalizeQuoteOneLiner(retry.quoteOneLiner) };
+    if (second) {
+      const secondCheck = evaluate(second);
+      if (secondCheck.ok) {
+        return { ok: true, quote: normalizeQuoteOneLiner(second.quoteOneLiner) };
+      }
+      warnings.push(
+        `[quote·evidence] 第2次未通过（${secondCheck.reasons.join("；")}），最后一轮（3/3）`
+      );
+      const third = await attempt(
+        "请换一种出处再试；找不到则 quoteOneLiner 留空。" + PLACEHOLDER_BAN,
+        { enableWebSearch: false, attemptLabel: "第3次" }
+      );
+      if (third) {
+        const thirdCheck = evaluate(third);
+        if (thirdCheck.ok) {
+          return { ok: true, quote: normalizeQuoteOneLiner(third.quoteOneLiner) };
+        }
+        return { ok: false, reasons: thirdCheck.reasons };
+      }
+      return { ok: false, reasons: secondCheck.reasons };
     }
-    return { ok: false, reasons: retryCheck.reasons };
+
+    warnings.push("[quote·lookup] 第2次仍无结果，最后一轮（3/3）");
+    const third = await attempt(
+      "最后一次尝试：给出一句短原话或留空。" + PLACEHOLDER_BAN,
+      { enableWebSearch: false, attemptLabel: "第3次" }
+    );
+    if (!third) return { ok: false, reasons: ["LLM 未产出可用结果"] };
+    const thirdCheck = evaluate(third);
+    if (thirdCheck.ok) {
+      return { ok: true, quote: normalizeQuoteOneLiner(third.quoteOneLiner) };
+    }
+    return { ok: false, reasons: thirdCheck.reasons };
   }
 
   /** 为缺少中文译文的外文座右铭补译。 */
