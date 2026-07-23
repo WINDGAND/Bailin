@@ -1,4 +1,4 @@
-import { app, globalShortcut, Tray, Menu, nativeImage, BrowserWindow, dialog, net, screen } from "electron";
+import { app, globalShortcut, Tray, Menu, nativeImage, BrowserWindow, dialog, net, screen, nativeTheme } from "electron";
 Menu.setApplicationMenu(null);
 import { join } from "node:path";
 import log from "electron-log/main";
@@ -36,6 +36,7 @@ import {
   registerIpc,
   SETTING_LOCALE,
   SETTING_PET_POS,
+  SETTING_THEME,
   SETTING_UPDATE_DISMISSED_TAG
 } from "./ipc/register.js";
 import { UpdateScheduler } from "./update/update-scheduler.js";
@@ -61,6 +62,10 @@ import {
   type ChatWindowSize
 } from "./windows/chat-window.js";
 import { createSettingsWindow } from "./windows/settings-window.js";
+import {
+  applySettingsWindowChrome,
+  resolveChromeTheme
+} from "./windows/title-bar-chrome.js";
 import { loadAppIcon } from "./app-icon.js";
 import { AmbientMonitor } from "./ambient/ambient-monitor.js";
 import { ProactiveOrchestrator } from "./proactive/proactive-orchestrator.js";
@@ -138,7 +143,8 @@ function ensureSettingsWindow(tab?: SettingsTab): void {
     if (tab) broadcastToAllWindows(IPC.EventNavigateSettings, { tab });
     return;
   }
-  settingsWin = createSettingsWindow(devUrl);
+  const themePref = vaultRef?.getSetting(SETTING_THEME) ?? "system";
+  settingsWin = createSettingsWindow(devUrl, themePref);
   // 等 React 把首屏画完再 show，杜绝白闪 + 防止"创建即显示"时
   // 抢走桌宠拖动的焦点。
   settingsWin.once("ready-to-show", () => {
@@ -151,6 +157,12 @@ function ensureSettingsWindow(tab?: SettingsTab): void {
   settingsWin.on("closed", () => {
     settingsWin = null;
   });
+}
+
+function syncSettingsWindowChrome(): void {
+  if (!settingsWin || settingsWin.isDestroyed()) return;
+  const themePref = vaultRef?.getSetting(SETTING_THEME) ?? "system";
+  applySettingsWindowChrome(settingsWin, resolveChromeTheme(themePref));
 }
 
 function ensurePetWindow(): BrowserWindow {
@@ -648,7 +660,14 @@ void app.whenReady().then(() => {
     petDragEnd,
     getChatWindowSize,
     setChatWindowSize,
-    onLocaleChanged: rebuildTrayMenu
+    onLocaleChanged: rebuildTrayMenu,
+    onThemeChanged: syncSettingsWindowChrome
+  });
+
+  nativeTheme.on("updated", () => {
+    const pref = vault.getSetting(SETTING_THEME);
+    if (pref === "light" || pref === "dark") return;
+    syncSettingsWindowChrome();
   });
 
   registerChatTurnHandlers(runtime);

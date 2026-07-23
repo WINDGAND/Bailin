@@ -1481,16 +1481,40 @@ body {
 
 /* ---------- Minimal settings language ---------- */
 
+/* 设置窗：内容延伸进隐藏标题区；顶栏色由 titleBarOverlay 同步 paper */
+body.settings-window {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body.settings-window #root {
+  box-sizing: border-box;
+  height: 100vh;
+  padding-top: env(titlebar-area-height, 36px);
+}
+
+.settings-titlebar-drag {
+  position: fixed;
+  top: env(titlebar-area-y, 0px);
+  left: env(titlebar-area-x, 0px);
+  width: env(titlebar-area-width, 100%);
+  height: env(titlebar-area-height, 36px);
+  -webkit-app-region: drag;
+  z-index: 1000;
+}
+
 .settings-shell {
   --sidebar-drawer-duration: 440ms;
   --sidebar-drawer-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --sidebar-fade-duration: 260ms;
   display: flex;
   align-items: stretch;
-  height: 100vh;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 100%;
   overflow: hidden;
   background: var(--paper);
+  position: relative;
 }
 
 .settings-sidebar {
@@ -1501,6 +1525,7 @@ body {
   padding: 28px 18px;
   background: rgba(251, 250, 247, 0.94);
   overflow: hidden;
+  -webkit-app-region: no-drag;
   transition:
     width var(--sidebar-drawer-duration) var(--sidebar-drawer-ease),
     padding var(--sidebar-drawer-duration) var(--sidebar-drawer-ease);
@@ -4571,6 +4596,7 @@ body {
   overflow: auto;
   scrollbar-gutter: stable;
   background: transparent;
+  -webkit-app-region: no-drag;
 }
 
 .settings-page {
