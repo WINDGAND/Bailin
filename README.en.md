@@ -73,7 +73,7 @@ Bailin is a **fully local**, open-source Windows desktop AI character companion.
 ## Quick Start
 
 > [!NOTE]
-> Download the latest **Bailin-Setup-x.y.z.exe** from [Releases](https://github.com/WINDGAND/Bailin/releases/latest) (currently `0.0.8`, Windows x64), or build from source below.
+> Download the latest **Bailin-Setup-x.y.z.exe** from [Releases](https://github.com/WINDGAND/Bailin/releases/latest) (currently `0.0.9`, Windows x64), or build from source below.
 
 ### Requirements
 
@@ -376,7 +376,7 @@ node ./scripts/a11y-scan.mjs
 
 | Phase | Theme | Highlights |
 | --- | --- | --- |
-| **v0.x** (now · `0.0.8`) | MVP loop | Deep create, desktop pet, local memory, changelog / update check, Windows, BYO key |
+| **v0.x** (now · `0.0.9`) | MVP loop | Deep create, desktop pet, local memory, changelog / update check, Windows, BYO key |
 | **v1.0** | Polish | Deep distillation UX, chat improvements, optional silent installer updates (opt-in) |
 | **v1.1** | Multi-pet | Multiple pets on desktop |
 | **v1.2+** | Relationship | Long-term memory, proactive companion |
@@ -387,7 +387,7 @@ node ./scripts/a11y-scan.mjs
 
 ## Contributing
 
-Early **v0.0.x** (currently `0.0.8`) — contributions welcome:
+Early **v0.0.x** (currently `0.0.9`) — contributions welcome:
 
 - Pixel sprite styles / palettes
 - New perspective skills (**original or public-domain figures only**)

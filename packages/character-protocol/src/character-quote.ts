@@ -12,12 +12,81 @@ const SKELETON_PLACEHOLDER_QUOTES = [
   "I am not ready yet."
 ] as const;
 
+export type QuoteStatus = "verified" | "provisional" | "missing";
+
 export function isSkeletonPlaceholderQuote(quote: string | undefined): boolean {
   const trimmed = quote?.trim();
   if (!trimmed) return false;
   return SKELETON_PLACEHOLDER_QUOTES.some(
     (s) => s.toLowerCase() === trimmed.toLowerCase()
   );
+}
+
+/** 去掉骨架占位后的有效原话；占位或空串视为无原话。 */
+export function effectiveQuoteOneLiner(quote: string | undefined): string | undefined {
+  const trimmed = quote?.trim();
+  if (!trimmed || isSkeletonPlaceholderQuote(trimmed)) return undefined;
+  return trimmed;
+}
+
+/** 人格卡里可顶上签名区的文案（标志性表达优先，其次自我介绍）。 */
+export function pickProvisionalSignatureText(input: {
+  signatureVocabulary?: string[];
+  selfIntro?: string;
+}): string | undefined {
+  for (const value of input.signatureVocabulary ?? []) {
+    const trimmed = value?.trim();
+    if (trimmed && !isSkeletonPlaceholderQuote(trimmed)) return trimmed;
+  }
+  const intro = input.selfIntro?.trim();
+  if (intro && !isSkeletonPlaceholderQuote(intro)) return intro;
+  return undefined;
+}
+
+/**
+ * 读侧 / 写回前推导 quoteStatus。
+ * 已核验原话 → verified；否则有人格顶上 → provisional；否则 missing。
+ */
+export function deriveQuoteStatus(input: {
+  quoteOneLiner?: string;
+  quoteStatus?: QuoteStatus;
+  signatureVocabulary?: string[];
+  selfIntro?: string;
+}): QuoteStatus {
+  const quote = effectiveQuoteOneLiner(input.quoteOneLiner);
+  if (quote && (input.quoteStatus === "verified" || input.quoteStatus == null)) {
+    return "verified";
+  }
+  if (input.quoteStatus === "verified" && quote) return "verified";
+  if (pickProvisionalSignatureText(input)) return "provisional";
+  return "missing";
+}
+
+/** 清洗 meta 上的座右铭字段：清除占位句并补齐 quoteStatus。 */
+export function coerceQuoteMeta(input: {
+  quoteOneLiner?: string;
+  quoteStatus?: QuoteStatus;
+  quoteStatusReason?: string;
+  signatureVocabulary?: string[];
+  selfIntro?: string;
+}): {
+  quoteOneLiner?: string;
+  quoteStatus: QuoteStatus;
+  quoteStatusReason?: string;
+} {
+  const quoteOneLiner = effectiveQuoteOneLiner(input.quoteOneLiner);
+  const quoteStatus = deriveQuoteStatus({
+    quoteOneLiner,
+    quoteStatus: input.quoteStatus,
+    signatureVocabulary: input.signatureVocabulary,
+    selfIntro: input.selfIntro
+  });
+  return {
+    quoteOneLiner,
+    quoteStatus,
+    quoteStatusReason:
+      quoteStatus === "verified" ? undefined : input.quoteStatusReason
+  };
 }
 
 function hasCjk(value: string): boolean {

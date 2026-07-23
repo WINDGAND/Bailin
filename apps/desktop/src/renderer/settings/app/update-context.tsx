@@ -67,12 +67,13 @@ export function UpdateProvider({ children }: { children: ReactNode }): JSX.Eleme
         // 功能形同虚设），但如实告诉用户确实有更新，而不是谎称已是最新。
         showToast({ kind: "info", text: t("update.bannerTitle", { version: result.latestVersion ?? "" }) });
       } else if (result.error) {
-        showToast({ kind: "error", text: t("update.checkFailed") });
+        showToast({ kind: "error", text: t("update.checkFailed", { reason: result.error }) });
       } else if (!result.hasUpdate) {
         showToast({ kind: "success", text: t("update.upToDate") });
       }
-    } catch {
-      showToast({ kind: "error", text: t("update.checkFailed") });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      showToast({ kind: "error", text: t("update.checkFailed", { reason }) });
     } finally {
       setChecking(false);
     }

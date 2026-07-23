@@ -26,7 +26,7 @@ export function makeSkeletonCard(input: {
       sourceName,
       sourceType,
       track,
-      quoteOneLiner: "我还没准备好。",
+      quoteStatus: "missing",
       avatarHint: "中性 chibi 像素角色，温暖米白配深墨青底色，朴素短发。",
       disclaimer:
         sourceName != null

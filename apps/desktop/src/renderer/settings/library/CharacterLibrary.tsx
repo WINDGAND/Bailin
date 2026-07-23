@@ -86,6 +86,7 @@ export function CharacterLibrary({
   const [qualityReport, setQualityReport] = useState<QualityReport | undefined>(undefined);
   const [openedAgentId, setOpenedAgentId] = useState<number | null>(null);
   const [appearanceMenuOpen, setAppearanceMenuOpen] = useState(false);
+  const [quoteRetrying, setQuoteRetrying] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [listPage, setListPage] = useState(1);
   const [pageMotion, setPageMotion] = useState<{ nonce: number; direction: PageDirection }>({
@@ -286,10 +287,11 @@ export function CharacterLibrary({
       selected
         ? resolveCharacterSignature({
             quoteOneLiner: selected.card.meta.quoteOneLiner,
+            quoteStatus: selected.card.meta.quoteStatus,
             signatureVocabulary: selected.card.expressionDNA.vocabulary.signature,
             selfIntro: selected.card.identity.selfIntro
           })
-        : "",
+        : null,
     [selected]
   );
 
@@ -300,7 +302,37 @@ export function CharacterLibrary({
   const isSelectedActive = selectedItem?.isActive ?? false;
   const selectedVisualJob = selected ? getJob(selected.card.id) : undefined;
   const selectedRegenerating = selected ? isBusy(selected.card.id) : false;
-  const anyBusy = selectedRegenerating || activating;
+  const anyBusy = selectedRegenerating || activating || quoteRetrying;
+
+  async function retryQuote(): Promise<void> {
+    if (!selected || quoteRetrying) return;
+    const id = selected.card.id;
+    setQuoteRetrying(true);
+    try {
+      const r = await bailin.characters.regenerateQuote(id);
+      if (r.ok) {
+        showToast({ kind: "success", text: t("library.toastQuoteVerified") });
+      } else if (r.quoteStatus === "provisional" || r.quoteStatus === "missing") {
+        showToast({ kind: "warn", text: t("library.toastQuoteStillMissing") });
+      } else {
+        showToast({
+          kind: "warn",
+          text: t("library.toastQuoteRetryFailed", { error: r.error ?? "unknown" })
+        });
+      }
+      const b = await bailin.characters.get(id);
+      if (b) setSelected(b);
+    } catch (e) {
+      showToast({
+        kind: "warn",
+        text: t("library.toastQuoteRetryFailed", {
+          error: e instanceof Error ? e.message : String(e)
+        })
+      });
+    } finally {
+      setQuoteRetrying(false);
+    }
+  }
 
   const filteredItems = useMemo(() => {
     if (!items) return null;
@@ -644,10 +676,42 @@ export function CharacterLibrary({
                 </div>
               ) : null}
 
-              {selectedSignature ? (
-                <blockquote className="char-quote">
-                  「{selectedSignature}」
-                </blockquote>
+              {selectedSignature && selectedSignature.status === "missing" ? (
+                <div className="char-quote-block">
+                  <p className="char-quote char-quote--missing">{t("library.quoteMissing")}</p>
+                  <button
+                    type="button"
+                    className="btn btn--ghost char-quote-retry"
+                    disabled={anyBusy}
+                    onClick={() => void retryQuote()}
+                  >
+                    {quoteRetrying ? t("library.quoteRetrying") : t("library.quoteRetry")}
+                  </button>
+                </div>
+              ) : selectedSignature?.text ? (
+                <div className="char-quote-block">
+                  <blockquote
+                    className={
+                      selectedSignature.status === "provisional"
+                        ? "char-quote char-quote--provisional"
+                        : "char-quote"
+                    }
+                  >
+                    「{selectedSignature.text}」
+                  </blockquote>
+                  {selectedSignature.canRetry ? (
+                    <button
+                      type="button"
+                      className="btn btn--ghost char-quote-retry"
+                      disabled={anyBusy}
+                      onClick={() => void retryQuote()}
+                    >
+                      {quoteRetrying
+                        ? t("library.quoteRetrying")
+                        : t("library.quoteUnverifiedRetry")}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
 
               <section className="bl-section">

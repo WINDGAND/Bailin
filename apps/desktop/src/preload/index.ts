@@ -44,6 +44,7 @@ const api = {
     getResearchByCharacter: (characterId: string) =>
       ipcRenderer.invoke(IPC.CharactersGetResearchByCharacter, characterId),
     regenerateSprite: (id: string) => ipcRenderer.invoke(IPC.CharactersRegenerateSprite, id),
+    regenerateQuote: (id: string) => ipcRenderer.invoke(IPC.CharactersRegenerateQuote, id),
     regenerateAppearance: (input: unknown) =>
       ipcRenderer.invoke(IPC.CharactersRegenerateAppearance, input),
     delete: (id: string) => ipcRenderer.invoke(IPC.CharactersDelete, id),

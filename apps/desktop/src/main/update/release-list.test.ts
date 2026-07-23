@@ -161,6 +161,55 @@ describe("fetchReleaseSummaries", () => {
     assert.equal(store.data?.fetchedAt, 1_000_000 + 7 * 60 * 60 * 1000);
   });
 
+  it("force refresh repairs a cache whose latest tag is missing from its release list", async () => {
+    const urls: string[] = [];
+    const store = memoryStore({
+      latestTag: "v0.0.8",
+      fetchedAt: 1_000_000,
+      releases: [
+        {
+          version: "0.0.7",
+          tag: "v0.0.7",
+          title: "stale list",
+          publishedAt: "2026-07-15T04:00:00Z",
+          url: "https://example.com/v7",
+          notesMarkdown: ""
+        }
+      ]
+    });
+    const fetchImpl = async (input: string | URL) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes("/releases/latest")) {
+        return jsonResponse({ tag_name: "v0.0.8" });
+      }
+      return jsonResponse([
+        {
+          tag_name: "v0.0.8",
+          name: "Bailin v0.0.8",
+          html_url: "https://example.com/v8",
+          body: "",
+          published_at: "2026-07-19T04:00:00Z",
+          draft: false,
+          prerelease: false
+        }
+      ]);
+    };
+
+    const result = await fetchReleaseSummaries({
+      fetchImpl: fetchImpl as typeof fetch,
+      store,
+      nowMs: 2_000_000,
+      forceRefresh: true
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.releases[0]?.tag, "v0.0.8");
+    assert.equal(result.fromCache, false);
+    assert.equal(urls.length, 2);
+  });
+
   it("refetches list when latest tag is newer than disk", async () => {
     const store = memoryStore({
       latestTag: "v0.0.5",

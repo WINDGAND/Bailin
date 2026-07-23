@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow, shell } from "electron";
+import { app, ipcMain, BrowserWindow, net, shell } from "electron";
 import { ulid } from "ulid";
 import {
   IPC,
@@ -163,7 +163,9 @@ export function registerIpc(deps: IpcDeps): void {
     // 否则"忽略此版本"点完立刻手动点一下"检查更新"就会把横幅马上弹回来，
     // 用户会觉得"忽略"这个功能根本没用。用 dismissed 字段把这个信息带给前端，
     // 由前端决定 toast 怎么说，而不是在这里直接篡改 hasUpdate。
-    const result = await checkForUpdates(app.getVersion());
+    const result = await checkForUpdates(app.getVersion(), (input, init) =>
+      net.fetch(input instanceof URL ? input.href : input, init)
+    );
     const dismissed =
       result.hasUpdate && isVersionDismissed(result.latestVersion, vault.getSetting(SETTING_UPDATE_DISMISSED_TAG));
     if (result.hasUpdate && !dismissed) {
@@ -196,7 +198,8 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.AppListReleases, (_evt, options?: { forceRefresh?: boolean }) =>
     fetchReleaseSummaries({
       store: releaseListStore,
-      forceRefresh: options?.forceRefresh === true
+      forceRefresh: options?.forceRefresh === true,
+      fetchImpl: (input, init) => net.fetch(input instanceof URL ? input.href : input, init)
     })
   );
   ipcMain.handle(IPC.AppDismissUpdate, (_evt, latestVersion: unknown) => {
@@ -375,6 +378,39 @@ export function registerIpc(deps: IpcDeps): void {
         broadcast(IPC.EventActiveCharacterChanged, newBundle);
       }
       return { ok: true, warnings: result.warnings };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  ipcMain.handle(IPC.CharactersRegenerateQuote, async (_e, characterId: string) => {
+    try {
+      const bundle = vault.getCharacter(characterId);
+      if (!bundle) return { ok: false, error: "角色不存在" };
+      const result = await orchestrator.regenerateQuote({ card: bundle.card });
+      if (!result.card) {
+        return { ok: false, error: result.error ?? "座右铭核实失败", warnings: result.warnings };
+      }
+      const newBundle: CharacterBundle = {
+        ...bundle,
+        card: result.card
+      };
+      vault.upsertCharacter({
+        id: characterId,
+        bundle: newBundle,
+        isSkeleton: false,
+        now: Date.now()
+      });
+      if (deps.getActiveCharacterId() === characterId) {
+        broadcast(IPC.EventActiveCharacterChanged, newBundle);
+      }
+      return {
+        ok: result.ok,
+        quoteStatus: result.quoteStatus,
+        quoteOneLiner: result.quoteOneLiner,
+        warnings: result.warnings,
+        error: result.ok ? undefined : result.error
+      };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }

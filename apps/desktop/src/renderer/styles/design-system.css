@@ -1,4 +1,4 @@
-/* 百灵 Bailin · Design System
+﻿/* 百灵 Bailin · Design System
  * 方向：Editorial × Soft Pixel Studio
  * - Display: 系统 serif（ui-serif → Source Han Serif → Songti SC），无网络字体加载
  * - Body / UI: 系统 sans
@@ -48,7 +48,7 @@
  *  [30] Action bar            (line ~3021)  表单底部主操作条
  *  [31] Chip group            (line ~3071)
  *  [32] Sidebar nav 强化       (line ~3121)
- *  [33] Dark theme overrides  (line ~3134)  data-theme="dark"
+ *  [33] Dark theme overrides  (line ~4874)  data-theme="dark" · 暮色编辑室
  *  [34] App-specific          (line ~3562)  pet-empty / bl-select / pet-preview
  *  [35] Distillation stage rail            深度创建页顶部步骤条 + 折叠摘要
  *  [36] Memory panel（用户画像）           .memory-switch .memory-ledger .memory-activity
@@ -400,6 +400,7 @@ body {
 .input::placeholder,
 .textarea::placeholder {
   color: var(--ink-ghost);
+  opacity: 1;
 }
 .input:hover,
 .textarea:hover,
@@ -984,7 +985,7 @@ body {
 
 [data-theme="dark"] .checkpoint-agent-item:hover .checkpoint-agent-row,
 [data-theme="dark"] .checkpoint-agent-item.is-selected .checkpoint-agent-row {
-  background: rgba(255, 248, 240, 0.05);
+  background: rgba(244, 240, 235, 0.05);
 }
 
 /* ---------- Motion utilities ---------- */
@@ -2054,7 +2055,7 @@ body {
 
 [data-theme="dark"] .library-actions__menu-item:hover:not(:disabled),
 [data-theme="dark"] .library-actions__menu-item:focus-visible {
-  background: rgba(255, 248, 240, 0.06);
+  background: rgba(244, 240, 235, 0.06);
 }
 
 /* —— 调研档案：扁平卷宗列表（无卡片） —— */
@@ -2345,7 +2346,7 @@ body {
 
 [data-theme="dark"] .research-archive__row:hover,
 [data-theme="dark"] .research-archive__item.is-open .research-archive__row {
-  background: rgba(255, 248, 240, 0.045);
+  background: rgba(244, 240, 235, 0.045);
 }
 
 /* —— 蒸馏过程指标：与调研档案同壳的扁平清单 —— */
@@ -3732,6 +3733,7 @@ body {
 .forge-field-name__input::placeholder {
   color: var(--ink-ghost);
   font-weight: 400;
+  opacity: 1;
 }
 
 .forge-field-name__input:hover {
@@ -4115,13 +4117,55 @@ body {
   border-radius: 0;
 }
 
+.char-quote-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.stack--lg > .char-quote-block {
+  margin-top: var(--space-6);
+}
+
+.char-quote--provisional {
+  opacity: 0.92;
+}
+
+.char-quote--missing {
+  font-style: normal;
+  color: var(--ink-caption);
+}
+
+.char-quote-retry {
+  padding: 0;
+  min-height: auto;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-caption);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.85;
+}
+
+.char-quote-retry:hover:not(:disabled) {
+  color: var(--ink);
+  opacity: 1;
+}
+
+.char-quote-retry:disabled {
+  opacity: 0.5;
+  text-decoration: none;
+}
+
 /* 与上方角色头像/名称区块拉开距离（stack--lg 默认 26px 仍偏紧） */
 .stack--lg > .char-quote {
   margin-top: var(--space-6);
 }
 
 [data-theme="dark"] .char-quote {
-  color: var(--ink-caption);
+  color: var(--ink-soft);
   border-left-color: var(--hairline-strong);
 }
 
@@ -4830,80 +4874,79 @@ body {
 }
 
 /* =============================================================
- * Dark theme · 夜读稿纸 (Warm Manuscript Night)
+ * Dark theme · 暮色编辑室 (Dusk Editorial)
  *
- * 浅色是「暖纸 + 墨青 + 洋红」；暗色不是简单反色，而是同一套
- * 编辑室叙事：暖棕稿纸、奶油字、低饱和洋红/琥珀光晕。
- * 避免冷青黑底 + 惨白字的高对比「阴间感」。
+ * 浅色留下的是「暖纸 + 洋红印泥 + 琥珀标签」的欲望感。
+ * 深色不再用骨灰中性灰抽干色相，而是：抬升地板 + 淡紫红炭底
+ * + 更高饱和的洋红/琥珀。忌近黑、忌泥棕、忌 RAW 灰。
  * ============================================================= */
 
 [data-theme="dark"] {
   color-scheme: dark;
   accent-color: var(--magenta);
 
-  /* 暖棕稿纸 —— 对齐浅色 paper 色温，不是冷绿黑 */
-  --paper: #26221e;
-  --paper-deep: #201c19;
-  --paper-sink: #1a1714;
-  --paper-warm: #2e2924;
+  /* 暮色炭 —— 带洋红家族微色相，不是 RGB 均等骨灰灰 */
+  --paper: #2b262a;
+  --paper-deep: #231f23;
+  --paper-sink: #1c191c;
+  --paper-warm: #3b3439;
 
-  /* 奶油墨 —— 略降对比，长时间阅读不刺眼 */
-  --ink: #ece6df;
-  --ink-soft: #b9aea2;
-  --ink-faint: #887f75;
-  --ink-caption: #b5aaa0;
-  --ink-ghost: #5f5750;
+  /* 暖奶油字阶梯：可读，略带回浅色纸的温度 */
+  --ink: #f4f0eb;
+  --ink-soft: #d2cbc6;
+  --ink-faint: #bfb6b0;
+  --ink-caption: #c9c2bc;
+  --ink-ghost: #a89f99;
 
-  /* 品牌色：暗底上略提亮、降饱和 */
-  --magenta: #d46794;
-  --magenta-soft: #e895b5;
-  --magenta-deep: #a83262;
-  --amber: #d4a052;
-  --emerald: #5a9f7a;
+  /* 品牌色：拉回浅色的「印泥感」，暗底上略提亮饱和 */
+  --magenta: #cc2a68;
+  --magenta-soft: #f08ab0;
+  --magenta-deep: #a0184e;
+  --amber: #e8b34d;
+  --emerald: #5cba8a;
 
-  /* 暖色分隔与阴影 */
-  --grid: rgba(236, 230, 223, 0.06);
-  --grid-strong: rgba(236, 230, 223, 0.11);
-  --grid-stronger: rgba(236, 230, 223, 0.2);
-  --shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.38);
+  /* 分隔带暖白；阴影略收，让色面自己说话 */
+  --grid: rgba(244, 240, 235, 0.09);
+  --grid-strong: rgba(244, 240, 235, 0.15);
+  --grid-stronger: rgba(244, 240, 235, 0.24);
+  --shadow: 0 18px 42px -28px rgba(20, 8, 14, 0.45);
   --shadow-soft: none;
-  --shadow-pressed: 0 2px 4px -2px rgba(0, 0, 0, 0.45);
-  --shadow-lifted: 0 18px 40px -16px rgba(0, 0, 0, 0.42);
+  --shadow-pressed: 0 2px 4px -2px rgba(20, 8, 14, 0.4);
+  --shadow-lifted: 0 18px 40px -16px rgba(20, 8, 14, 0.42);
   --shadow-card:
-    0 1px 0 rgba(255, 248, 240, 0.04),
-    0 14px 28px -22px rgba(0, 0, 0, 0.38);
+    0 1px 0 rgba(255, 220, 230, 0.07),
+    0 14px 32px -18px rgba(20, 8, 14, 0.4);
 
-  --magenta-tint: rgba(212, 103, 148, 0.12);
-  --amber-tint: rgba(212, 160, 82, 0.12);
-  --emerald-tint: rgba(90, 159, 122, 0.14);
+  --magenta-tint: rgba(204, 42, 104, 0.22);
+  --amber-tint: rgba(232, 179, 77, 0.2);
+  --emerald-tint: rgba(92, 186, 138, 0.18);
 
-  --surface-glass: rgba(38, 34, 30, 0.82);
-  --surface-glass-strong: rgba(42, 38, 34, 0.94);
-  --surface-subtle: rgba(32, 28, 25, 0.72);
-  --hairline: rgba(236, 230, 223, 0.09);
-  --hairline-strong: rgba(236, 230, 223, 0.14);
-  --focus-ring-soft: 0 0 0 4px rgba(212, 103, 148, 0.14);
+  --surface-glass: rgba(43, 38, 42, 0.9);
+  --surface-glass-strong: rgba(59, 52, 57, 0.96);
+  --surface-subtle: rgba(35, 30, 34, 0.82);
+  --hairline: rgba(244, 240, 235, 0.13);
+  --hairline-strong: rgba(244, 240, 235, 0.2);
+  --focus-ring-soft: 0 0 0 4px rgba(204, 42, 104, 0.24);
   --shadow-panel:
-    0 1px 0 rgba(255, 248, 240, 0.05) inset,
-    0 18px 60px -48px rgba(0, 0, 0, 0.42);
+    0 1px 0 rgba(255, 220, 230, 0.07) inset,
+    0 18px 52px -40px rgba(20, 8, 14, 0.48);
 
-  /* 角色预览台：比页面底略抬升，深色角色也能看清轮廓 */
-  --character-pedestal: #4a433b;
-  --character-pedestal-deep: #3d3832;
-  --character-pedestal-active: #4f4540;
+  /* 角色台：暖灰紫，贴合暮色 */
+  --character-pedestal: #524850;
+  --character-pedestal-deep: #443c44;
+  --character-pedestal-active: #5c5058;
 }
 
-/* —— 设置壳：暖光晕，像台灯照在稿纸上 —— */
+/* —— 设置壳：洋红 + 琥珀双光，对齐浅色「台灯」欲望 —— */
 [data-theme="dark"] .settings-shell {
   background:
-    radial-gradient(circle at 58% 14%, rgba(178, 24, 88, 0.11), transparent 34%),
-    radial-gradient(circle at 84% 78%, rgba(217, 154, 58, 0.09), transparent 32%),
-    radial-gradient(circle at 8% 92%, rgba(90, 159, 122, 0.05), transparent 28%),
-    linear-gradient(180deg, #1e1b18 0%, var(--paper) 50%, var(--paper-deep) 100%);
+    radial-gradient(circle at 56% 8%, rgba(204, 42, 104, 0.14), transparent 40%),
+    radial-gradient(circle at 88% 78%, rgba(232, 179, 77, 0.09), transparent 38%),
+    linear-gradient(180deg, #322c31 0%, var(--paper) 48%, var(--paper-deep) 100%);
 }
 
 [data-theme="dark"] .settings-sidebar {
-  background: rgba(34, 30, 27, 0.88);
+  background: rgba(35, 30, 34, 0.95);
 }
 
 [data-theme="dark"] .settings-sidebar__toggle {
@@ -4911,7 +4954,7 @@ body {
 }
 
 [data-theme="dark"] .settings-sidebar__toggle:hover {
-  background: rgba(255, 248, 240, 0.06);
+  background: rgba(244, 240, 235, 0.08);
   color: var(--ink);
 }
 
@@ -4936,22 +4979,22 @@ body {
 }
 
 [data-theme="dark"] .settings-nav__item:hover {
-  background: rgba(255, 248, 240, 0.06);
+  background: rgba(244, 240, 235, 0.07);
 }
 
 [data-theme="dark"] .settings-nav__item.is-active {
-  background: rgba(255, 248, 240, 0.09);
+  background: var(--magenta-tint);
   box-shadow:
-    0 1px 0 rgba(255, 248, 240, 0.07) inset,
-    0 10px 30px -26px rgba(0, 0, 0, 0.4);
+    0 1px 0 rgba(255, 220, 230, 0.08) inset,
+    0 8px 24px -20px rgba(20, 8, 14, 0.35);
 }
 
 [data-theme="dark"] .settings-nav__item.is-active::before {
-  box-shadow: 0 0 12px rgba(212, 103, 148, 0.38);
+  box-shadow: 0 0 14px rgba(204, 42, 104, 0.45);
 }
 
 [data-theme="dark"] .settings-nav__item.is-active::after {
-  box-shadow: 0 0 10px rgba(212, 103, 148, 0.32);
+  box-shadow: 0 0 12px rgba(204, 42, 104, 0.38);
 }
 
 /* —— 卡片 / 表单 / 浮层 —— */
@@ -4960,6 +5003,7 @@ body {
 [data-theme="dark"] .bl-card {
   background: var(--paper-warm);
   border-color: var(--hairline);
+  box-shadow: var(--shadow-card);
 }
 
 [data-theme="dark"] .modal-backdrop {
@@ -4974,10 +5018,16 @@ body {
 [data-theme="dark"] .select,
 [data-theme="dark"] select.input,
 [data-theme="dark"] select.select {
-  background: rgba(255, 248, 240, 0.04);
+  background: rgba(244, 240, 235, 0.04);
   border-color: var(--hairline);
   color: var(--ink);
   color-scheme: dark;
+}
+
+[data-theme="dark"] .input::placeholder,
+[data-theme="dark"] .textarea::placeholder {
+  color: var(--ink-ghost);
+  opacity: 1;
 }
 
 [data-theme="dark"] select option {
@@ -4990,95 +5040,97 @@ body {
 [data-theme="dark"] .select:hover,
 [data-theme="dark"] select.input:hover {
   border-color: var(--hairline-strong);
-  background: rgba(255, 248, 240, 0.06);
+  background: rgba(244, 240, 235, 0.07);
 }
 
-/* 角色列表：去掉 Apple 层的白块高光，改为暖色微抬升 + 洋红选中条 */
+/* 角色列表：冷面微抬升 + 洋红选中条 */
 [data-theme="dark"] .plain-list__item:hover {
-  background: rgba(255, 248, 240, 0.045);
+  background: rgba(244, 240, 235, 0.05);
 }
 
 [data-theme="dark"] .plain-list__item.is-selected {
-  background: rgba(212, 103, 148, 0.11);
+  background: rgba(204, 42, 104, 0.16);
   border-left-color: transparent;
-  box-shadow: inset 3px 0 0 rgba(212, 103, 148, 0.62);
+  box-shadow: inset 3px 0 0 rgba(204, 42, 104, 0.85);
 }
 
 [data-theme="dark"] .library-item__thumb {
   background: linear-gradient(180deg, var(--character-pedestal), var(--character-pedestal-deep));
-  border: 1px solid rgba(236, 230, 223, 0.16);
+  border: 1px solid rgba(244, 240, 235, 0.14);
   box-shadow:
-    0 1px 0 rgba(255, 248, 240, 0.07) inset,
-    0 6px 14px -10px rgba(0, 0, 0, 0.35);
+    0 1px 0 rgba(244, 240, 235, 0.07) inset,
+    0 6px 14px -10px rgba(0, 0, 0, 0.4);
 }
 
 [data-theme="dark"] .library-item__thumb.is-active-pet {
   background: linear-gradient(180deg, var(--character-pedestal-active), var(--character-pedestal-deep));
-  border-color: rgba(212, 103, 148, 0.28);
+  border-color: rgba(204, 42, 104, 0.32);
 }
 
 [data-theme="dark"] .apple-stage {
-  --stage-grid-color: rgba(236, 230, 223, 0.09);
+  --stage-grid-color: rgba(244, 240, 235, 0.09);
   background:
-    radial-gradient(circle at 50% 36%, rgba(212, 160, 82, 0.12), transparent 44%),
-    radial-gradient(circle at 50% 42%, rgba(212, 103, 148, 0.1), transparent 40%),
+    radial-gradient(circle at 50% 34%, rgba(232, 179, 77, 0.14), transparent 46%),
+    radial-gradient(circle at 50% 42%, rgba(204, 42, 104, 0.14), transparent 42%),
     linear-gradient(180deg, var(--character-pedestal), var(--character-pedestal-deep));
-  border-color: rgba(236, 230, 223, 0.16);
+  border-color: rgba(244, 240, 235, 0.16);
   box-shadow:
-    0 1px 0 rgba(255, 248, 240, 0.08) inset,
-    0 26px 60px -46px rgba(0, 0, 0, 0.42);
+    0 1px 0 rgba(255, 220, 230, 0.08) inset,
+    0 26px 60px -42px rgba(20, 8, 14, 0.5);
 }
 
 [data-theme="dark"] .pet-preview__sheet {
-  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.32));
+  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.36));
 }
 
 [data-theme="dark"] .segmented {
-  background: rgba(255, 248, 240, 0.04);
+  background: rgba(244, 240, 235, 0.04);
   border-color: var(--hairline);
 }
 
 [data-theme="dark"] .segmented__item.is-active {
-  background: rgba(255, 248, 240, 0.08);
+  background: rgba(244, 240, 235, 0.09);
   box-shadow: none;
   color: var(--ink);
 }
 
 [data-theme="dark"] .toast {
-  background: rgba(42, 38, 34, 0.96);
+  background: rgba(59, 52, 57, 0.96);
   border-color: var(--hairline-strong);
 }
 
 [data-theme="dark"] .btn--ghost {
-  background: rgba(255, 248, 240, 0.05);
-  border-color: var(--hairline);
+  background: rgba(244, 240, 235, 0.06);
+  border-color: color-mix(in srgb, var(--magenta) 18%, var(--hairline));
 }
 
 [data-theme="dark"] .btn--ghost:hover {
-  background: rgba(255, 248, 240, 0.1);
-  border-color: var(--hairline-strong);
+  background: rgba(204, 42, 104, 0.12);
+  border-color: color-mix(in srgb, var(--magenta) 35%, var(--hairline-strong));
 }
 
 [data-theme="dark"] .btn--magenta {
-  box-shadow: 0 12px 28px -22px rgba(178, 24, 88, 0.55);
+  box-shadow:
+    0 1px 0 rgba(255, 200, 220, 0.18) inset,
+    0 14px 32px -14px rgba(204, 42, 104, 0.65);
 }
 
-/* Apple 层：forge / status / tag 的白底在暗色下改为暖半透明 */
+/* Apple 层：forge / status / tag 在暗色下改为冷半透明 */
 [data-theme="dark"] .forge-mode__card {
-  background: rgba(255, 248, 240, 0.04);
+  background: rgba(244, 240, 235, 0.04);
 }
 
 [data-theme="dark"] .forge-mode__card:hover:not(:disabled) {
-  background: rgba(255, 248, 240, 0.07);
+  background: rgba(244, 240, 235, 0.07);
   border-color: var(--hairline-strong);
 }
 
 [data-theme="dark"] .forge-mode__card.is-active {
-  background: color-mix(in srgb, var(--magenta) 14%, rgba(255, 248, 240, 0.08));
+  background: color-mix(in srgb, var(--magenta) 14%, rgba(244, 240, 235, 0.08));
   border-color: color-mix(in srgb, var(--magenta) 45%, var(--hairline-strong, transparent));
   box-shadow:
     inset 3px 0 0 0 var(--magenta),
-    0 1px 0 rgba(255, 248, 240, 0.06) inset;
+    0 1px 0 rgba(244, 240, 235, 0.06) inset;
 }
 
 [data-theme="dark"] .forge-mode__card.is-active .forge-mode__title {
@@ -5089,81 +5141,118 @@ body {
 [data-theme="dark"] .bl-status-strip.is-ok,
 [data-theme="dark"] .bl-status-strip.is-warn,
 [data-theme="dark"] .bl-status-strip.is-error {
-  background: rgba(255, 248, 240, 0.05);
-  box-shadow: 0 1px 0 rgba(255, 248, 240, 0.04) inset;
+  background: rgba(244, 240, 235, 0.05);
+  box-shadow: 0 1px 0 rgba(244, 240, 235, 0.04) inset;
 }
 
 [data-theme="dark"] .bl-tag--utility,
 [data-theme="dark"] .bl-tag--companion,
 [data-theme="dark"] .bl-tag--skeleton {
-  background: rgba(255, 248, 240, 0.06);
+  background: rgba(244, 240, 235, 0.06);
   border-color: var(--hairline);
 }
 
 [data-theme="dark"] .bl-tag--companion {
-  color: #d4a052;
+  color: #f0c56a;
+  background: rgba(232, 179, 77, 0.22);
+  border-color: rgba(232, 179, 77, 0.42);
+}
+
+[data-theme="dark"] .bl-tag--utility {
+  color: var(--magenta-soft);
+  background: var(--magenta-tint);
+  border-color: rgba(204, 42, 104, 0.38);
 }
 
 [data-theme="dark"] .bl-tag--active {
-  color: var(--magenta-soft);
-  background: var(--magenta-tint);
-  border-color: rgba(212, 103, 148, 0.28);
+  color: #f4a8c4;
+  background: rgba(204, 42, 104, 0.24);
+  border-color: rgba(204, 42, 104, 0.45);
 }
 
 [data-theme="dark"] .apple-dropzone {
   border-color: var(--hairline);
-  background: rgba(255, 248, 240, 0.03);
+  background: rgba(244, 240, 235, 0.03);
 }
 
 [data-theme="dark"] .provider-connect__surface {
   border-color: var(--hairline);
   background:
-    radial-gradient(circle at 88% 12%, rgba(212, 103, 148, 0.1), transparent 42%),
-    rgba(255, 248, 240, 0.03);
+    radial-gradient(circle at 88% 12%, rgba(204, 42, 104, 0.08), transparent 42%),
+    rgba(244, 240, 235, 0.03);
 }
 
 [data-theme="dark"] .provider-connect__surface::after {
   background:
     repeating-linear-gradient(
       0deg,
-      rgba(236, 230, 223, 0.04) 0 1px,
+      rgba(244, 240, 235, 0.04) 0 1px,
       transparent 1px 18px
     ),
     repeating-linear-gradient(
       90deg,
-      rgba(236, 230, 223, 0.04) 0 1px,
+      rgba(244, 240, 235, 0.04) 0 1px,
       transparent 1px 18px
     );
 }
 
+[data-theme="dark"] .provider-role-spectrum__item {
+  background: rgba(244, 240, 235, 0.05);
+  border-color: var(--hairline);
+}
+
+[data-theme="dark"] .provider-role-spectrum__item--chat {
+  background: rgba(204, 42, 104, 0.14);
+}
+
+[data-theme="dark"] .provider-role-spectrum__item--vision {
+  background: rgba(201, 160, 106, 0.14);
+}
+
+[data-theme="dark"] .provider-role-spectrum__item--webSearch {
+  background: rgba(77, 154, 118, 0.14);
+}
+
+[data-theme="dark"] .provider-role-spectrum__item--imageGen {
+  background: rgba(204, 42, 104, 0.1);
+}
+
+[data-theme="dark"] .provider-role-spectrum__index {
+  color: var(--ink-faint);
+}
+
+[data-theme="dark"] .provider-role-spectrum__when {
+  color: var(--ink-soft);
+}
+
 [data-theme="dark"] .provider-step-rail__node {
   color: var(--magenta-soft);
-  background: rgba(255, 248, 240, 0.08);
-  border-color: rgba(212, 103, 148, 0.28);
+  background: rgba(244, 240, 235, 0.08);
+  border-color: rgba(204, 42, 104, 0.32);
 }
 
 /* —— 聊天窗 —— */
 [data-theme="dark"] .chat-panel {
-  border-color: rgba(236, 230, 223, 0.08);
+  border-color: rgba(244, 240, 235, 0.1);
   box-shadow:
-    inset 0 1px 0 rgba(255, 248, 240, 0.05),
-    0 22px 56px -28px rgba(0, 0, 0, 0.48),
-    0 10px 28px -16px rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(244, 240, 235, 0.06),
+    0 22px 56px -28px rgba(0, 0, 0, 0.55),
+    0 10px 28px -16px rgba(0, 0, 0, 0.32);
 }
 
 [data-theme="dark"] .chat-scroll-down {
   background: color-mix(in srgb, var(--paper-warm) 92%, transparent);
   box-shadow:
-    0 6px 18px -8px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 248, 240, 0.06);
+    0 6px 18px -8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(244, 240, 235, 0.06);
 }
 
 [data-theme="dark"] .chat-scroll-down:hover {
   background: var(--paper-warm);
   border-color: var(--magenta-soft);
   box-shadow:
-    0 10px 24px -8px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 248, 240, 0.08);
+    0 10px 24px -8px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(244, 240, 235, 0.08);
 }
 
 /* —— 桌宠空状态 CTA ——
@@ -5276,11 +5365,11 @@ body {
 }
 
 [data-theme="dark"] .pet-empty-cta__trigger {
-  background: rgba(46, 40, 36, 0.94);
-  border-color: rgba(212, 103, 148, 0.55);
+  background: rgba(59, 52, 57, 0.94);
+  border-color: rgba(204, 42, 104, 0.5);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 18px 36px -16px rgba(0, 0, 0, 0.42);
+    inset 0 1px 0 rgba(244, 240, 235, 0.06),
+    0 18px 36px -16px rgba(0, 0, 0, 0.5);
 }
 
 [data-theme="dark"] .pet-empty-cta__eyebrow {
@@ -5292,7 +5381,7 @@ body {
 }
 
 [data-theme="dark"] .pet-empty-cta__pip {
-  background: rgba(212, 103, 148, 0.16);
+  background: rgba(204, 42, 104, 0.16);
   color: var(--magenta-soft);
 }
 
@@ -5414,12 +5503,12 @@ body {
 }
 
 [data-theme="dark"] .bl-select__menu {
-  background: rgba(42, 38, 34, 0.98);
+  background: rgba(59, 52, 57, 0.98);
   border-color: var(--hairline-strong);
 }
 
 [data-theme="dark"] .bl-select__option:hover {
-  background: rgba(255, 248, 240, 0.04);
+  background: rgba(244, 240, 235, 0.05);
   color: var(--ink);
 }
 
@@ -5431,9 +5520,9 @@ body {
 
 [data-theme="dark"] .bl-select.is-open .bl-select__option:hover,
 [data-theme="dark"] .bl-select.is-open .bl-select__option.is-active {
-  background: rgba(212, 103, 148, 0.1);
+  background: rgba(204, 42, 104, 0.12);
   color: var(--ink);
-  box-shadow: inset 2px 0 0 rgba(212, 103, 148, 0.48);
+  box-shadow: inset 2px 0 0 rgba(204, 42, 104, 0.55);
 }
 
 /* =============================================================
@@ -5467,7 +5556,7 @@ body {
 }
 [data-theme="dark"] .settings-shortcuts__open:hover {
   border-color: var(--magenta-soft);
-  background: rgba(212, 103, 148, 0.1);
+  background: rgba(204, 42, 104, 0.12);
   color: var(--ink);
 }
 
@@ -5621,7 +5710,7 @@ body {
 
 [data-theme="dark"] .modal--shortcuts {
   box-shadow:
-    inset 0 1px 0 rgba(255, 248, 240, 0.06),
+    inset 0 1px 0 rgba(244, 240, 235, 0.06),
     0 1px 0 rgba(0, 0, 0, 0.3),
     0 36px 80px -32px rgba(0, 0, 0, 0.65);
 }
@@ -5636,14 +5725,14 @@ body {
 }
 
 [data-theme="dark"] .shortcuts-modal__row:hover {
-  background: rgba(212, 103, 148, 0.1);
+  background: rgba(204, 42, 104, 0.1);
 }
 
 [data-theme="dark"] .shortcuts-kbd {
-  background: linear-gradient(180deg, rgba(255, 248, 240, 0.08) 0%, rgba(0, 0, 0, 0.22) 100%);
+  background: linear-gradient(180deg, rgba(244, 240, 235, 0.08) 0%, rgba(0, 0, 0, 0.22) 100%);
   border-color: var(--hairline-strong);
   box-shadow:
-    inset 0 1px 0 rgba(255, 248, 240, 0.1),
+    inset 0 1px 0 rgba(244, 240, 235, 0.1),
     0 1px 0 rgba(0, 0, 0, 0.35),
     0 2px 4px -2px rgba(0, 0, 0, 0.4);
 }
@@ -6825,7 +6914,7 @@ body {
 [data-theme="dark"] .pet-menu-panel {
   border-color: var(--hairline-strong);
   box-shadow:
-    inset 0 1px 0 rgba(255, 248, 240, 0.06),
+    inset 0 1px 0 rgba(244, 240, 235, 0.06),
     0 1px 0 rgba(0, 0, 0, 0.3),
     0 12px 28px -16px rgba(0, 0, 0, 0.55);
 }
@@ -6844,10 +6933,9 @@ body {
   background: rgba(0, 0, 0, 0.42);
 }
 
-/* —— Markdown bold：light 用 --ink 已经够强，dark 下 --ink 是奶油色，
-   bold 用同色弱区分；提亮一点 weight 让 strong 更明确 —— */
+/* —— Markdown bold：dark 下 --ink 已是微暖白，再亮一档区分 weight —— */
 [data-theme="dark"] .chat-md strong {
-  color: #f5efe6; /* 比 --ink 再亮一档，确保 bold 视觉上"重" */
+  color: #f0eeeb;
 }
 
 /* ---------- ChatMarkdown 基础排版（聊天消息 + 更新说明横幅共用） ---------- */
@@ -7048,6 +7136,7 @@ body {
 
 .memory-ledger-row__input::placeholder {
   color: var(--ink-ghost);
+  opacity: 1;
 }
 
 .memory-ledger-row__input:hover {

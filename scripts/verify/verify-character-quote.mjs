@@ -3,7 +3,10 @@ import {
   needsQuoteLookup,
   needsQuoteTranslation,
   isChineseNativeForQuote,
-  chineseNameToPinyinEnglish
+  chineseNameToPinyinEnglish,
+  effectiveQuoteOneLiner,
+  deriveQuoteStatus,
+  makeSkeletonCard
 } from "../../packages/character-protocol/dist/index.js";
 
 const mikasa =
@@ -43,6 +46,28 @@ assert("张雪峰无需补译", !needsQuoteTranslation(zhang, { chineseNative: t
 assert(
   "骨架座右铭需重新检索",
   needsQuoteLookup("我还没准备好。", "public-figure", { chineseNative: false })
+);
+
+assert(
+  "骨架占位不视为有效原话",
+  effectiveQuoteOneLiner("我还没准备好。") === undefined
+);
+
+const skeleton = makeSkeletonCard({
+  id: "skel",
+  name: "测试",
+  sourceType: "public-figure",
+  track: "companion",
+  now: 0
+});
+assert("骨架卡无占位 quoteOneLiner", skeleton.meta.quoteOneLiner === undefined);
+assert("骨架卡 quoteStatus 为 missing", skeleton.meta.quoteStatus === "missing");
+assert(
+  "有自我介绍时失败态为 provisional",
+  deriveQuoteStatus({
+    signatureVocabulary: [],
+    selfIntro: skeleton.identity.selfIntro
+  }) === "provisional"
 );
 
 const kobePinyin = chineseNameToPinyinEnglish("科比布莱恩特");

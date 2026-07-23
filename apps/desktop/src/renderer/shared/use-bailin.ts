@@ -59,6 +59,13 @@ interface BailinWindow {
       getResearchDocs(jobId: string): Promise<ResearchDoc[]>;
       getResearchByCharacter(characterId: string): Promise<{ docs: ResearchDoc[]; qualityReport?: QualityReport }>;
       regenerateSprite(id: string): Promise<{ ok: boolean; warnings?: string[]; error?: string }>;
+      regenerateQuote(id: string): Promise<{
+        ok: boolean;
+        quoteStatus?: "verified" | "provisional" | "missing";
+        quoteOneLiner?: string;
+        warnings?: string[];
+        error?: string;
+      }>;
       regenerateAppearance(input: {
         characterId: string;
         referenceImages?: Array<{
@@ -244,6 +251,7 @@ function makeBailinStub(): BailinWindow["bailin"] {
       getResearchDocs: async () => [],
       getResearchByCharacter: async () => ({ docs: [] }),
       regenerateSprite: async () => ({ ok: false, error: "stub" }),
+      regenerateQuote: async () => ({ ok: false, error: "stub" }),
       regenerateAppearance: async () => ({ ok: false, error: "stub" }),
       delete: async () => ({ ok: false }),
       activate: async () => ({ ok: false }),

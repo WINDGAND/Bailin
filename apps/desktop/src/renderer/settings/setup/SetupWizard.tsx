@@ -18,6 +18,7 @@ import {
 import { ProviderGuideSection } from "../provider/ProviderGuideSection.js";
 import { QuickStartSection } from "../provider/QuickStartSection.js";
 import { useT } from "../../shared/i18n/index.js";
+import { resolveCharacterSignature } from "../library/character-signature.js";
 
 interface SetupWizardProps {
   onDone(): void | Promise<void>;
@@ -424,7 +425,12 @@ function StarterStep({
                   WebkitBoxOrient: "vertical"
                 }}
               >
-                {bundle.card.meta.quoteOneLiner ?? bundle.card.identity.selfIntro}
+                {resolveCharacterSignature({
+                  quoteOneLiner: bundle.card.meta.quoteOneLiner,
+                  quoteStatus: bundle.card.meta.quoteStatus,
+                  signatureVocabulary: bundle.card.expressionDNA.vocabulary.signature,
+                  selfIntro: bundle.card.identity.selfIntro
+                }).text || bundle.card.identity.selfIntro}
               </p>
               {importing === bundle.card.id ? (
                 <span className="body-sm" style={{ color: "var(--magenta)" }}>
