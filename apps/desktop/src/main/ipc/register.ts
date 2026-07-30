@@ -76,6 +76,8 @@ export interface IpcDeps {
   getChatWindowSize: () => { width: number; height: number };
   setChatWindowSize: (width: number, height: number) => { width: number; height: number };
   onLocaleChanged?: () => void;
+  /** 主题偏好变更后同步设置窗 titleBarOverlay / backgroundColor。 */
+  onThemeChanged?: () => void;
   applyPetDisplayScale: (scale?: number) => void;
   syncProactiveAmbient?: () => void;
 }
@@ -142,6 +144,7 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.AppSetTheme, (_evt, theme: string) => {
     const next = theme === "light" || theme === "dark" || theme === "system" ? theme : "system";
     vault.setSetting(SETTING_THEME, next);
+    deps.onThemeChanged?.();
     broadcast(IPC.EventThemeChanged, next);
   });
   ipcMain.handle(IPC.AppOpenExternal, async (_evt, url: unknown) => {

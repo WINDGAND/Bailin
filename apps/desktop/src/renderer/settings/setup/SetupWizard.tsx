@@ -8,15 +8,27 @@ import { PetRenderer } from "../../shared/pet-renderer.js";
 import { Spinner, StatusDot, useToast } from "../../shared/feedback.js";
 import {
   DEFAULT_BUNDLE_ID,
-  getRecommendedBundle
+  DEFAULT_LOCAL_PRESET_ID,
+  EMPTY_IMAGE_CONFIG,
+  LOCAL_PLACEHOLDER_API_KEY,
+  getLocalEndpointPreset,
+  getRecommendedBundle,
+  type LocalEndpointPreset
 } from "../provider/presets.js";
 import {
   applyOhMyGptBundle,
+  verifyLocalProvider,
   IDLE_READINESS,
   type ReadinessMap
 } from "../provider/apply-recommended-bundle.js";
 import { ProviderGuideSection } from "../provider/ProviderGuideSection.js";
 import { QuickStartSection } from "../provider/QuickStartSection.js";
+import { LocalConfigSection } from "../provider/LocalConfigSection.js";
+import {
+  ProviderModeSwitch,
+  writeProviderMode,
+  type ProviderMode
+} from "../provider/ProviderModeSwitch.js";
 import { useT } from "../../shared/i18n/index.js";
 import { resolveCharacterSignature } from "../library/character-signature.js";
 
@@ -200,7 +212,12 @@ function ProviderStep({
   const t = useT();
   const bailin = useBailin();
   const { showToast } = useToast();
+  const [mode, setMode] = useState<ProviderMode>("ohmygpt");
   const [selectedBundleId] = useState(DEFAULT_BUNDLE_ID);
+  const defaultLocal = getLocalEndpointPreset(DEFAULT_LOCAL_PRESET_ID)!;
+  const [localPresetId, setLocalPresetId] = useState(DEFAULT_LOCAL_PRESET_ID);
+  const [baseUrl, setBaseUrl] = useState(defaultLocal.baseUrl);
+  const [model, setModel] = useState(defaultLocal.defaultModel);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -228,6 +245,32 @@ function ProviderStep({
   );
 
   const selectedBundle = getRecommendedBundle(selectedBundleId)!;
+
+  function scheduleNext(): void {
+    nextTimerRef.current = window.setTimeout(() => {
+      nextTimerRef.current = null;
+      if (mountedRef.current) onNext();
+    }, 500);
+  }
+
+  function applyLocalPreset(preset: LocalEndpointPreset): void {
+    setLocalPresetId(preset.id);
+    setBaseUrl(preset.baseUrl);
+    setModel(preset.defaultModel);
+  }
+
+  function handleModeChange(next: ProviderMode): void {
+    if (next === mode) return;
+    writeProviderMode(next);
+    setMode(next);
+    setReadiness(IDLE_READINESS);
+    setOneClickProgress(null);
+    setStatus({ kind: "idle" });
+    if (next === "local") {
+      applyLocalPreset(defaultLocal);
+      setApiKey("");
+    }
+  }
 
   async function connect(): Promise<void> {
     if (!apiKey.trim()) return;
@@ -268,11 +311,58 @@ function ProviderStep({
       kind: "success",
       text: t("provider.toastChatReady", { latency: chat.latencyMs ?? "?" })
     });
-    // 500ms 后自动 next；用 ref 跟踪 timer，组件 unmount / back 时 cleanup 取消。
-    nextTimerRef.current = window.setTimeout(() => {
-      nextTimerRef.current = null;
-      if (mountedRef.current) onNext();
-    }, 500);
+    scheduleNext();
+  }
+
+  async function connectLocal(): Promise<void> {
+    if (!baseUrl.trim() || !model.trim()) return;
+    setBusy(true);
+    setStatus({ kind: "running" });
+    setReadiness(IDLE_READINESS);
+    setOneClickProgress(t("provider.oneClickProgressSave"));
+
+    const result = await verifyLocalProvider(
+      bailin,
+      {
+        kind: "openai-compatible",
+        baseUrl: baseUrl.trim(),
+        model: model.trim(),
+        visionModel: "",
+        webSearchModel: "",
+        apiKey: apiKey.trim() || LOCAL_PLACEHOLDER_API_KEY,
+        imageConfig: EMPTY_IMAGE_CONFIG
+      },
+      (key, state) => {
+        if (!mountedRef.current) return;
+        if (state.status === "running" && key === "chat") {
+          setOneClickProgress(t("provider.oneClickProgressChat"));
+        }
+        setReadiness((prev) => ({ ...prev, [key]: state }));
+      }
+    );
+    if (!mountedRef.current) return;
+    setBusy(false);
+    setOneClickProgress(null);
+
+    if (!result.saveOk) {
+      setStatus({ kind: "error", message: result.saveError ?? t("provider.toastSaveFailed") });
+      return;
+    }
+    const chat = result.readiness.chat;
+    if (chat.status !== "ok") {
+      setStatus({
+        kind: "error",
+        message: chat.status === "fail" ? chat.reason : t("setup.testFailed")
+      });
+      return;
+    }
+    writeProviderMode("local");
+    setStatus({ kind: "ok", latency: chat.latencyMs });
+    showToast({
+      kind: "success",
+      text: t("provider.toastLocalReady", { latency: chat.latencyMs ?? "?" })
+    });
+    scheduleNext();
   }
 
   return (
@@ -284,21 +374,53 @@ function ProviderStep({
         {t("setup.stepProvider")}
       </div>
 
-      <ProviderGuideSection compact />
+      <ProviderModeSwitch mode={mode} onChange={handleModeChange} />
 
-      <QuickStartSection
-        compact
-        selectedBundle={selectedBundle}
-        apiKey={apiKey}
-        showKey={showKey}
-        busy={busy}
-        oneClickProgress={oneClickProgress}
-        readiness={readiness}
-        onApiKeyChange={setApiKey}
-        onToggleShowKey={() => setShowKey((v) => !v)}
-        onConnect={() => void connect()}
-        onClear={() => {}}
-      />
+      {mode === "ohmygpt" ? (
+        <>
+          <ProviderGuideSection compact />
+          <QuickStartSection
+            compact
+            selectedBundle={selectedBundle}
+            apiKey={apiKey}
+            showKey={showKey}
+            busy={busy}
+            oneClickProgress={oneClickProgress}
+            readiness={readiness}
+            onApiKeyChange={setApiKey}
+            onToggleShowKey={() => setShowKey((v) => !v)}
+            onConnect={() => void connect()}
+            onClear={() => {}}
+          />
+        </>
+      ) : null}
+
+      {mode === "local" ? (
+        <LocalConfigSection
+          compact
+          busy={busy}
+          presetId={localPresetId}
+          baseUrl={baseUrl}
+          model={model}
+          apiKey={apiKey}
+          showKey={showKey}
+          verifyProgress={oneClickProgress}
+          readiness={readiness}
+          onPresetChange={applyLocalPreset}
+          onBaseUrlChange={setBaseUrl}
+          onModelChange={setModel}
+          onApiKeyChange={setApiKey}
+          onToggleShowKey={() => setShowKey((v) => !v)}
+          onVerify={() => void connectLocal()}
+          onClear={() => {}}
+        />
+      ) : null}
+
+      {mode === "custom" ? (
+        <p className="body-sm" style={{ color: "var(--ink-muted)", margin: 0 }}>
+          {t("setup.customLaterHint")}
+        </p>
+      ) : null}
 
       {status.kind !== "idle" ? (
         <div className="row gap-2" style={{ minHeight: 22, marginTop: 8 }}>

@@ -189,39 +189,46 @@ export function SettingsApp(): JSX.Element {
     // 启动闪现的加载态：用 eyebrow + display + skeleton 行配色调，
     // 跟 panel 的视觉语言一致，避免「光秃秃一行字」的廉价感。
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        aria-busy="true"
-        aria-label={t("common.loading")}
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 12,
-          padding: 40,
-          background: "var(--paper)"
-        }}
-      >
-        <BrandLogo size={48} className="brand-logo brand-logo--hero" />
-        <div className="eyebrow">{appVersion ? `Bailin · v${appVersion}` : "Bailin"}</div>
-        <div className="display display--section" style={{ color: "var(--ink-faint)" }}>
-          {t("common.loading")}
+      <>
+        <div className="settings-titlebar-drag" aria-hidden="true" />
+        <div
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+          aria-label={t("common.loading")}
+          style={{
+            minHeight: "100%",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 12,
+            padding: 40,
+            background: "var(--paper)"
+          }}
+        >
+          <BrandLogo size={48} className="brand-logo brand-logo--hero" />
+          <div className="eyebrow">{appVersion ? `Bailin · v${appVersion}` : "Bailin"}</div>
+          <div className="display display--section" style={{ color: "var(--ink-faint)" }}>
+            {t("common.loading")}
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (firstRun) {
     return (
-      <SetupWizard
-        onDone={async () => {
-          await bailin.app.completeFirstRun();
-          setFirstRun(false);
-        }}
-      />
+      <>
+        <div className="settings-titlebar-drag" aria-hidden="true" />
+        <SetupWizard
+          onDone={async () => {
+            await bailin.app.completeFirstRun();
+            setFirstRun(false);
+          }}
+        />
+      </>
     );
   }
 
@@ -230,6 +237,7 @@ export function SettingsApp(): JSX.Element {
       <UpdateProvider>
       <DistillationJobProvider>
         <VisualJobProvider>
+          <div className="settings-titlebar-drag" aria-hidden="true" />
           <div className="settings-shell">
             <aside
               className={`settings-sidebar${sidebarCollapsed ? " is-collapsed" : ""}`}

@@ -90,7 +90,9 @@ pnpm install          # builds packages + rebuilds better-sqlite3
 pnpm dev              # Vite + tsc watch + Electron
 ```
 
-First launch runs the **setup wizard**: disclaimer → API key → create or import a character → pet appears on desktop.
+First launch runs the **setup wizard**: disclaimer → connect a model (cloud API key **or** local model) → create or import a character → pet appears on desktop.
+
+**Local model (chat) example:** start [Ollama](https://ollama.com) and `ollama pull llama3.2`, then in setup / Settings choose **Local model**, set base URL to `http://127.0.0.1:11434/v1`, and use the loaded model name. Local setup prioritizes daily chat; web research and pixel-pet image generation usually still need a cloud API.
 
 For development, configure `.env.dev` at the repo root (see `.env.dev.example`) to inject LLM credentials.
 

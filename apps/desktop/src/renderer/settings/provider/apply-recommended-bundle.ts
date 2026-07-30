@@ -292,6 +292,95 @@ export async function verifyCustomProvider(
   return { saveOk: true, readiness, allRequiredPassed };
 }
 
+/**
+ * 本地模型：保存后仅要求聊天通过。
+ * 视觉 / 联网 / 生图标记为 unavailable（可带原因），不阻断接入。
+ */
+export async function verifyLocalProvider(
+  bailin: BailinProviderApis,
+  input: CustomProviderInput,
+  onProgress: ProgressFn
+): Promise<ApplyBundleResult> {
+  const readiness: ReadinessMap = { ...IDLE_READINESS };
+
+  const imageValidation = validateImageConfig(input.imageConfig);
+  if (imageValidation) {
+    return {
+      saveOk: false,
+      saveError: imageValidation.key,
+      readiness,
+      allRequiredPassed: false
+    };
+  }
+
+  const save = await saveCustomProvider(bailin, input);
+  if (!save.ok) {
+    return {
+      saveOk: false,
+      saveError: save.error,
+      readiness,
+      allRequiredPassed: false
+    };
+  }
+
+  readiness.chat = await runChatTest(bailin, onProgress);
+
+  const softUnavailable = (reason: string): ReadinessState => ({
+    status: "unavailable",
+    reason
+  });
+
+  if (input.visionModel.trim()) {
+    const vision = await runVisionTest(bailin, onProgress);
+    readiness.vision =
+      vision.status === "ok"
+        ? vision
+        : softUnavailable(
+            vision.status === "fail" ? vision.reason : "provider.local.unavailableVisionDefault"
+          );
+  } else {
+    readiness.vision = softUnavailable("provider.local.unavailableVisionUnset");
+    onProgress("vision", readiness.vision);
+  }
+
+  if (input.webSearchModel.trim()) {
+    const web = await runWebSearchTest(bailin, onProgress);
+    readiness.webSearch =
+      web.status === "ok"
+        ? web
+        : softUnavailable(
+            web.status === "fail" ? web.reason : "provider.local.unavailableWebDefault"
+          );
+  } else {
+    readiness.webSearch = softUnavailable("provider.local.unavailableWebUnset");
+    onProgress("webSearch", readiness.webSearch);
+  }
+
+  const hasImageModel = Object.values(input.imageConfig.tiers).some((tier) =>
+    Boolean(tier.model?.trim())
+  );
+  if (hasImageModel) {
+    const img = await runImageGenTest(
+      bailin,
+      input.imageConfig.defaultTier,
+      input.imageConfig,
+      onProgress
+    );
+    readiness.imageGen =
+      img.status === "ok"
+        ? img
+        : softUnavailable(
+            img.status === "fail" ? img.reason : "provider.local.unavailableImageDefault"
+          );
+  } else {
+    readiness.imageGen = softUnavailable("provider.local.unavailableImageUnset");
+    onProgress("imageGen", readiness.imageGen);
+  }
+
+  const allRequiredPassed = readiness.chat.status === "ok";
+  return { saveOk: true, readiness, allRequiredPassed };
+}
+
 /** @deprecated 使用 applyOhMyGptBundle 或 verifyCustomProvider */
 export async function applyRecommendedBundle(
   bailin: BailinProviderApis,

@@ -1,13 +1,14 @@
 import { useT } from "../../shared/i18n/index.js";
 
-export type ProviderMode = "ohmygpt" | "custom";
+export type ProviderMode = "ohmygpt" | "local" | "custom";
 
 const STORAGE_KEY = "bailin.providerMode";
 
 export function readProviderMode(): ProviderMode {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return v === "custom" ? "custom" : "ohmygpt";
+    if (v === "custom" || v === "local" || v === "ohmygpt") return v;
+    return "ohmygpt";
   } catch {
     return "ohmygpt";
   }
@@ -40,6 +41,15 @@ export function ProviderModeSwitch({ mode, onChange }: ProviderModeSwitchProps):
           onClick={() => onChange("ohmygpt")}
         >
           {t("provider.modeOhmygpt")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "local"}
+          className={mode === "local" ? "segmented__item is-active" : "segmented__item"}
+          onClick={() => onChange("local")}
+        >
+          {t("provider.modeLocal")}
         </button>
         <button
           type="button"
