@@ -629,21 +629,23 @@ export const zh = {
     eyebrow: "Model Service",
     title: "模型与 API Key",
     subtitle:
-      "选择 OhMyGPT 一键接入（只验证 Key 与主模型），或个性化配置并逐项实测四类模型。",
+      "可选 OhMyGPT 一键接入、本机本地模型（优先保证聊天），或个性化配置并逐项验证。",
     modeSwitchAria: "接入方式",
     modeOhmygpt: "OhMyGPT 一键接入",
+    modeLocal: "本地模型",
     modeCustom: "个性化配置",
     verifyKeyAndChat: "验证 Key 与主模型",
     saveAndVerify: "保存并验证",
     verifyRunning: "正在保存并验证…",
     toastChatReady: "Key 与主模型已连通（{{latency}} ms）",
+    toastLocalReady: "本地聊天模型已连通（{{latency}} ms）",
     readinessTitleQuick: "连接验证",
     guide: {
       title: "使用指引",
       collapse: "收起指引",
       expand: "展开指引",
       purpose:
-        "这页用来连接你的 API Key。配置成功后，百灵就能和桌宠聊天、读懂参考图、联网深度创建角色、生成像素桌宠。",
+        "这页用来连接模型服务。云端 API Key 可启用聊天、识图、联网调研与生图；本机本地模型通常只保证日常聊天。",
       modelRolesTitle: "百灵需要哪几类模型？",
       modelRoles: {
         chat: {
@@ -664,7 +666,7 @@ export const zh = {
         }
       },
       authorStack: {
-        title: "作者同款方案（推荐）",
+        title: "作者同款方案（可选）",
         intro: "作者使用 OhMyGPT 中转，一个 API Key 调用下面全部模型，无需手动逐个配置："
       },
       authorStackRows: {
@@ -675,18 +677,49 @@ export const zh = {
         imageGen: "桌宠生图"
       },
       otherRelays:
-        "你也可以使用其他 API 聚合站 / 中转站的 Key，只要它能调用上述几类模型即可。选「个性化配置」可手动填写 API 地址和模型名。",
+        "你也可以使用其他 API 聚合站 / 中转站的 Key，或切换到「本地模型」连接本机 Ollama / LM Studio。选「个性化配置」可手动填写 API 地址和模型名。",
       ohmygptDisclaimer:
-        "声明：作者与 OhMyGPT 无任何官方合作或利益关联。推荐该平台仅因使用方便、相对稳定，且支持微信 / 支付宝充值；你完全可以自行选择其他靠谱的 API 中转平台。"
+        "声明：作者与 OhMyGPT 无任何官方合作或利益关联。展示该平台仅因使用相对方便；你完全可以自行选择其他中转，或使用本机本地模型聊天。"
     },
     quickStart: {
       title: "快速上手 · 作者同款方案",
       titleAlt: "快速上手 · {{bundle}}",
-      subtitle: "去 OhMyGPT 拿 Key，粘贴后一键接入，自动配置全部模型。",
+      subtitle: "去服务商拿 Key，粘贴后一键接入（可按需配置全部模型）。",
       subtitleAlt: "粘贴 Key 后一键接入并验证。",
       stepsTitle: "获取 API Key",
       openSite: "打开 OhMyGPT 官网 →",
       openSiteAlt: "打开 {{site}} →"
+    },
+    local: {
+      title: "本地模型",
+      lede: "连接本机已启动的 OpenAI 兼容服务（如 Ollama、LM Studio）。",
+      steps:
+        "先在本机启动模型服务并下载/加载模型，再填下方地址与模型名。API Key 通常可不填。",
+      presetLabel: "常用预设",
+      modelPlaceholder: "例如 llama3.2、qwen2.5 …（须与本机已加载名称一致）",
+      optionalKeyTitle: "可选：API Key（多数本地服务不需要）",
+      apiKeyPlaceholder: "留空即可",
+      apiKeyHint: "未填写时会保存占位值，仅用于兼容请求头。",
+      capabilityNote:
+        "本地接入优先保证日常聊天。联网深度创建、像素桌宠生图、参考图识读通常仍需云端能力，下方清单会标明哪些不可用。",
+      fillRequired: "请填写 API 地址与聊天模型",
+      saveAndVerify: "保存并验证聊天",
+      unavailableVisionUnset: "未配置识图模型；本地聊天仍可用",
+      unavailableVisionDefault: "本地端点通常不提供识图能力",
+      unavailableWebUnset: "未配置联网模型；深度创建将不可用",
+      unavailableWebDefault: "本地端点通常不支持联网调研",
+      unavailableImageUnset: "未配置生图；像素桌宠生成需云端生图模型",
+      unavailableImageDefault: "本地端点通常不支持生图",
+      presets: {
+        ollama: {
+          label: "Ollama",
+          hint: "默认 http://127.0.0.1:11434/v1。先 ollama pull 模型并保持服务运行。"
+        },
+        lmstudio: {
+          label: "LM Studio",
+          hint: "默认 http://127.0.0.1:1234/v1。在 LM Studio 中加载模型并开启 Local Server。"
+        }
+      }
     },
     alternatives: {
       title: "其他推荐方案（可选）",
@@ -740,27 +773,27 @@ export const zh = {
     faqSteps: {
       ohmygpt: {
         step1: "打开 ohmygpt.com 注册账号",
-        step2: "充值（建议 ¥10 起，日常聊天够用很久）",
+        step2: "按需充值（小数额通常足够日常聊天）",
         step3: "在控制台创建 API Key 并复制",
         step4: "粘贴到下方，点「验证 Key 与主模型」"
       },
       openai: {
         step1: "打开 platform.openai.com 注册（需海外支付方式）",
-        step2: "在 Billing 中充值",
+        step2: "在 Billing 中按需充值",
         step3: "在 API Keys 页面创建 Key 并复制",
         step4: "粘贴到下方，点「验证 Key 与主模型」"
       },
       deepseek: {
         step1: "打开 platform.deepseek.com 注册",
-        step2: "充值后创建 API Key",
+        step2: "创建 API Key（按需充值）",
         step3: "粘贴到下方即可聊天（识图/生图/深度创建不可用）",
-        step4: "需要全功能请改选 OhMyGPT 推荐方案"
+        step4: "需要全功能可改选 OhMyGPT，或仅用本地模型聊天"
       }
     },
     bundles: {
       ohmygpt: {
         label: "OhMyGPT",
-        tagline: "一个 Key 搞定全部功能，国内用户首选",
+        tagline: "一个 Key 可覆盖聊天 / 识图 / 联网 / 生图",
         featChat: "日常聊天",
         featVision: "参考图识读",
         featWeb: "深度调研",
@@ -787,6 +820,8 @@ export const zh = {
       bundles:
         "百灵可为聊天、识图、联网调研、生图分别配置不同模型；一键接入会写入对应选型。",
       apiKey: "从中转站或官方平台获取的密钥，通常以 sk- 开头。",
+      localApiKey: "本地服务多数不校验密钥；需要时可填任意占位字符串。",
+      localPreset: "一键填入常见本机服务地址；仍可手动修改。",
       protocol:
         "百灵目前仅支持以上两种。多数中转站（OhMyGPT、DeepSeek、Moonshot 等）及 OpenAI 格式接口请选「OpenAI 兼容」；仅当服务商文档明确要求 Anthropic / Claude 接口格式时才选「Anthropic 兼容」。不确定时保持 OpenAI 兼容即可。",
       baseUrl: "API 服务的基础地址（通常含 /v1 等版本路径）。",
@@ -803,7 +838,8 @@ export const zh = {
       presets: "切换预设时会覆盖下方连接方式与模型字段。",
       connStatus: "显示 API Key 是否已保存，以及连接测试的结果。",
       readiness: "保存并验证后逐项检查聊天、识图、联网调研、生图是否可用。",
-      readinessQuick: "验证 API Key 能否连通，以及主模型是否可用。"
+      readinessQuick: "验证 API Key 能否连通，以及主模型是否可用。",
+      readinessLocal: "本地接入以聊天为准；识图 / 联网 / 生图不可用时会标明原因，不阻断保存。"
     },
     chatModelTitle: "对话模型",
     chatModelLede: "所有调用从这台电脑直接发出。Key 用 DPAPI 加密落盘。",
@@ -965,6 +1001,8 @@ export const zh = {
     stepWelcome: "开始之前",
     stepDisclaimer: "数据如何处理",
     stepProvider: "接入你的 LLM",
+    customLaterHint:
+      "首启请用「OhMyGPT 一键接入」或「本地模型」。更细的个性化配置可在完成后到设置页调整。",
     stepStarter: "挑一只先上桌",
     welcomeBody:
       "Bailin 不会替代真实的咨询、医疗或法律意见。它给你的是一位「受公开资料启发的视角助手」，不是本人，也不是官方授权。",
@@ -973,7 +1011,8 @@ export const zh = {
       "角色卡、像素桌宠、用户画像都默认存在本机；完整对话默认不保存；可一键清空所有数据。",
     disclaimerCta: "明白，下一步",
     back: "← 上一步",
-    providerIntro: "选一个推荐方案，粘贴 API Key，点「一键接入并验证」。百灵会自动配置聊天、识图、生图所需的全部模型。",
+    providerIntro:
+      "可选 OhMyGPT 一键接入、本机本地模型（优先保证聊天），或之后在设置里做个性化配置。",
     advancedHint: "完成首启后，可在「模型与 API Key」页的「高级自定义」中调整细节。",
     protocolOpenAILong: "OpenAI 兼容（含 DeepSeek / Moonshot / SiliconFlow ...）",
     protocolAnthropicLong: "Anthropic 兼容（Claude 系列）",

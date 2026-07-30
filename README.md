@@ -90,7 +90,9 @@ pnpm install          # 自动 build packages + rebuild better-sqlite3
 pnpm dev              # Vite + tsc watch + Electron
 ```
 
-首次启动会进入**首启向导**：免责声明 → 配置 API Key → 创建或导入角色 → 桌宠上桌。
+首次启动会进入**首启向导**：免责声明 → 配置模型（云端 API Key **或** 本机本地模型）→ 创建或导入角色 → 桌宠上桌。
+
+**本地模型（聊天）示例：** 先启动 [Ollama](https://ollama.com) 并 `ollama pull llama3.2`，在设置 / 首启选择「本地模型」，地址填 `http://127.0.0.1:11434/v1`，模型名填本机已加载的名称。本地接入优先保证日常对话；联网深度创建与像素桌宠生图通常仍需云端 API。
 
 开发调试可在项目根目录配置 `.env.dev`（参考 `.env.dev.example`）注入 LLM 凭据。
 

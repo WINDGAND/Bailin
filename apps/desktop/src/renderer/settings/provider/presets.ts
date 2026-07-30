@@ -277,3 +277,43 @@ export const VISION_MODEL_PRESETS: VisionModelPreset[] = [
 ];
 
 export const DEFAULT_VISION_MODEL = "bytedance/doubao-seed-2.0-lite-260428";
+
+/** 本地 OpenAI 兼容端点预设（Ollama / LM Studio 等）。 */
+export interface LocalEndpointPreset {
+  id: string;
+  /** i18n: provider.local.presets.{id}.label */
+  baseUrl: string;
+  /** 默认聊天模型；用户可改成本机已 pull / 已加载的名称。 */
+  defaultModel: string;
+}
+
+export const LOCAL_ENDPOINT_PRESETS: LocalEndpointPreset[] = [
+  {
+    id: "ollama",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    defaultModel: "llama3.2"
+  },
+  {
+    id: "lmstudio",
+    baseUrl: "http://127.0.0.1:1234/v1",
+    defaultModel: ""
+  }
+];
+
+export const DEFAULT_LOCAL_PRESET_ID = "ollama";
+
+/** 本地服务常不校验 Key；保存时用占位值以兼容 Bearer 头。 */
+export const LOCAL_PLACEHOLDER_API_KEY = "local";
+
+export function isLocalBaseUrl(url: string): boolean {
+  try {
+    const host = new URL(url.trim()).hostname.toLowerCase();
+    return host === "127.0.0.1" || host === "localhost" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+export function getLocalEndpointPreset(id: string): LocalEndpointPreset | undefined {
+  return LOCAL_ENDPOINT_PRESETS.find((p) => p.id === id);
+}

@@ -3128,9 +3128,9 @@ body.settings-window #root {
 }
 
 .provider-mode-switch__control .segmented__item {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 7px 14px;
+  padding: 7px 11px;
   white-space: nowrap;
   transition:
     background var(--motion-fast) var(--ease-out),

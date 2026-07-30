@@ -631,21 +631,23 @@ export const en: TranslationTree = {
     eyebrow: "Model Service",
     title: "Model & API Key",
     subtitle:
-      "Choose OhMyGPT one-click (Key + chat model only) or custom setup with full four-model verification.",
+      "Choose OhMyGPT one-click, a local model (chat first), or custom setup with full verification.",
     modeSwitchAria: "Connection mode",
     modeOhmygpt: "OhMyGPT one-click",
+    modeLocal: "Local model",
     modeCustom: "Custom configuration",
     verifyKeyAndChat: "Verify Key & chat model",
     saveAndVerify: "Save & verify",
     verifyRunning: "Saving and verifying…",
     toastChatReady: "Key and chat model connected ({{latency}} ms)",
+    toastLocalReady: "Local chat model connected ({{latency}} ms)",
     readinessTitleQuick: "Connection check",
     guide: {
       title: "How it works",
       collapse: "Hide guide",
       expand: "Show guide",
       purpose:
-        "This page connects your API Key. Once configured, Bailin can chat with your pet, read reference images, research characters on the web, and generate pixel sprites.",
+        "Connect a model service here. A cloud API Key can unlock chat, vision, web research, and image generation; a local model usually covers daily chat only.",
       modelRolesTitle: "What model types does Bailin need?",
       modelRoles: {
         chat: {
@@ -666,7 +668,7 @@ export const en: TranslationTree = {
         }
       },
       authorStack: {
-        title: "Author's setup (recommended)",
+        title: "Author's setup (optional)",
         intro: "The author uses OhMyGPT as a relay—one API Key calls all models below, no manual setup:"
       },
       authorStackRows: {
@@ -677,18 +679,49 @@ export const en: TranslationTree = {
         imageGen: "Pet sprites"
       },
       otherRelays:
-        "You can also use keys from other API relays or aggregators, as long as they support the model types above. Use Custom configuration to enter API URLs and model IDs manually.",
+        "You can also use keys from other API relays, or switch to Local model for Ollama / LM Studio on this machine. Use Custom configuration to enter API URLs and model IDs manually.",
       ohmygptDisclaimer:
-        "Disclaimer: The author has no official partnership or affiliation with OhMyGPT. OhMyGPT is shown only as a convenient example—it is relatively easy to use and supports WeChat and Alipay top-ups. You are free to choose any other reliable API relay you prefer."
+        "Disclaimer: The author has no official partnership or affiliation with OhMyGPT. It is shown only as a convenient example. You may use any other relay, or a local model for chat."
     },
     quickStart: {
       title: "Quick start · author's setup",
       titleAlt: "Quick start · {{bundle}}",
-      subtitle: "Get a key from OhMyGPT, paste it, and connect—all models configured automatically.",
+      subtitle: "Get a key from your provider, paste it, and connect (all model roles when available).",
       subtitleAlt: "Paste your key and connect with one click.",
       stepsTitle: "Get your API Key",
       openSite: "Open OhMyGPT →",
       openSiteAlt: "Open {{site}} →"
+    },
+    local: {
+      title: "Local model",
+      lede: "Connect a local OpenAI-compatible server (Ollama, LM Studio, etc.).",
+      steps:
+        "Start the local server and load a model first, then enter the base URL and model name below. An API Key is usually optional.",
+      presetLabel: "Common presets",
+      modelPlaceholder: "e.g. llama3.2, qwen2.5 … (must match the loaded model name)",
+      optionalKeyTitle: "Optional: API Key (most local servers ignore it)",
+      apiKeyPlaceholder: "Leave empty",
+      apiKeyHint: "If empty, a placeholder is saved only to satisfy the Bearer header.",
+      capabilityNote:
+        "Local setup prioritizes daily chat. Web research, pixel pet image generation, and reference-image vision usually still need cloud APIs—the checklist below shows what is unavailable.",
+      fillRequired: "Enter API URL and chat model",
+      saveAndVerify: "Save & verify chat",
+      unavailableVisionUnset: "No vision model set; local chat still works",
+      unavailableVisionDefault: "Local endpoints usually lack vision",
+      unavailableWebUnset: "No web-search model set; deep create unavailable",
+      unavailableWebDefault: "Local endpoints usually lack web research",
+      unavailableImageUnset: "No image model set; pixel pets need a cloud image API",
+      unavailableImageDefault: "Local endpoints usually lack image generation",
+      presets: {
+        ollama: {
+          label: "Ollama",
+          hint: "Default http://127.0.0.1:11434/v1. Run ollama pull and keep the service running."
+        },
+        lmstudio: {
+          label: "LM Studio",
+          hint: "Default http://127.0.0.1:1234/v1. Load a model and enable Local Server in LM Studio."
+        }
+      }
     },
     alternatives: {
       title: "Other recommended plans (optional)",
@@ -742,27 +775,27 @@ export const en: TranslationTree = {
     faqSteps: {
       ohmygpt: {
         step1: "Register at ohmygpt.com",
-        step2: "Add credits (¥10+ is enough for a long time)",
+        step2: "Top up if needed (a small amount often covers everyday chat)",
         step3: "Create an API Key in the dashboard and copy it",
         step4: "Paste below and click Connect & verify"
       },
       openai: {
         step1: "Register at platform.openai.com (international payment required)",
-        step2: "Add billing credits",
+        step2: "Add billing credits as needed",
         step3: "Create an API Key on the API Keys page",
         step4: "Paste below and click Connect & verify"
       },
       deepseek: {
         step1: "Register at platform.deepseek.com",
-        step2: "Add credits and create an API Key",
+        step2: "Create an API Key (top up as needed)",
         step3: "Paste below for chat only (vision/images/deep creation unavailable)",
-        step4: "For full features, switch to the OhMyGPT recommended plan"
+        step4: "For full features pick OhMyGPT, or use a local model for chat only"
       }
     },
     bundles: {
       ohmygpt: {
         label: "OhMyGPT",
-        tagline: "One key for everything—best for users in China",
+        tagline: "One key can cover chat / vision / web / image",
         featChat: "Chat",
         featVision: "Reference images",
         featWeb: "Deep research",
@@ -789,6 +822,8 @@ export const en: TranslationTree = {
       bundles:
         "Bailin can use different models for chat, vision, web research, and image generation; one-click connect writes the selected stack.",
       apiKey: "Secret key from your relay or official provider, usually starting with sk-.",
+      localApiKey: "Most local servers ignore the key; any placeholder string is fine if required.",
+      localPreset: "Fills common local server URLs; you can still edit them.",
       protocol:
         "Bailin supports only these two. Choose OpenAI compatible for most relays (OhMyGPT, DeepSeek, Moonshot, etc.) and OpenAI-format endpoints; choose Anthropic compatible only when your provider's docs specify Anthropic / Claude Messages API. When unsure, keep OpenAI compatible.",
       baseUrl: "Base URL of the API service (often includes a version path such as /v1).",
@@ -806,7 +841,9 @@ export const en: TranslationTree = {
       presets: "Switching a preset overwrites connection settings and model fields below.",
       connStatus: "Shows whether an API Key is saved and the latest connection test result.",
       readiness: "After save & verify, checks chat, vision, web research, and image generation.",
-      readinessQuick: "Verifies that your API Key and chat model respond."
+      readinessQuick: "Verifies that your API Key and chat model respond.",
+      readinessLocal:
+        "Local setup is gated on chat; unavailable vision / web / image show reasons without blocking save."
     },
     chatModelTitle: "Chat model",
     chatModelLede: "All requests go directly from this machine. Keys are encrypted at rest with DPAPI.",
@@ -969,6 +1006,8 @@ export const en: TranslationTree = {
     stepWelcome: "Before you start",
     stepDisclaimer: "How your data is handled",
     stepProvider: "Connect your LLM",
+    customLaterHint:
+      "For first-run, use OhMyGPT one-click or Local model. Fine-tune custom settings later in Settings.",
     stepStarter: "Pick one to start",
     welcomeBody:
       "Bailin is not a substitute for professional counseling, medical, or legal advice. It offers a perspective assistant inspired by public sources—not the person themselves, and not officially authorized.",
@@ -978,7 +1017,7 @@ export const en: TranslationTree = {
     disclaimerCta: "Got it, next",
     back: "← Back",
     providerIntro:
-      "Pick a recommended plan, paste your API Key, and click Connect & verify. Bailin auto-configures chat, vision, and image models.",
+      "Choose OhMyGPT one-click, a local model (chat first), or fine-tune later in Settings.",
     advancedHint:
       "After setup, adjust details under Advanced customization on the Model & API Key page.",
     protocolOpenAILong: "OpenAI compatible (DeepSeek / Moonshot / SiliconFlow …)",

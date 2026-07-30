@@ -16,7 +16,10 @@ interface ReadinessChecklistProps {
   readiness: ReadinessMap;
   rows?: ReadinessKey[];
   titleKey?: "provider.readinessTitle" | "provider.readinessTitleQuick";
-  helpKey?: "provider.help.readiness" | "provider.help.readinessQuick";
+  helpKey?:
+    | "provider.help.readiness"
+    | "provider.help.readinessQuick"
+    | "provider.help.readinessLocal";
 }
 
 export function ReadinessChecklist({
@@ -65,7 +68,12 @@ function ReadinessCell({ label, state }: { label: string; state: ReadinessState 
     statusText = state.reason || t("provider.readinessFail");
   } else if (state.status === "unavailable") {
     statusClass = "is-unavailable";
-    statusText = t("provider.readinessUnavailable");
+    const reason = state.reason?.trim();
+    statusText = reason
+      ? reason.startsWith("provider.")
+        ? t(reason as "provider.readinessUnavailable")
+        : reason
+      : t("provider.readinessUnavailable");
   }
 
   return (

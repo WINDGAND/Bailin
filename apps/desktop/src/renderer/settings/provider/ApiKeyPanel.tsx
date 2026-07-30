@@ -10,12 +10,18 @@ import { useDirtyTracker } from "../app/dirty-context.js";
 import {
   EMPTY_IMAGE_CONFIG,
   DEFAULT_BUNDLE_ID,
+  DEFAULT_LOCAL_PRESET_ID,
+  LOCAL_PLACEHOLDER_API_KEY,
+  getLocalEndpointPreset,
   getRecommendedBundle,
+  isLocalBaseUrl,
+  type LocalEndpointPreset,
   type RecommendedBundle
 } from "./presets.js";
 import {
   applyOhMyGptBundle,
   verifyCustomProvider,
+  verifyLocalProvider,
   IDLE_READINESS,
   type ReadinessKey,
   type ReadinessMap
@@ -23,6 +29,7 @@ import {
 import { ProviderGuideSection } from "./ProviderGuideSection.js";
 import { QuickStartSection } from "./QuickStartSection.js";
 import { CustomConfigSection } from "./CustomConfigSection.js";
+import { LocalConfigSection } from "./LocalConfigSection.js";
 import {
   ProviderModeSwitch,
   readProviderMode,
@@ -34,6 +41,7 @@ import { useT } from "../../shared/i18n/index.js";
 type Kind = "openai-compatible" | "anthropic-compatible";
 
 const OHMYGPT_BUNDLE = getRecommendedBundle(DEFAULT_BUNDLE_ID)!;
+const DEFAULT_LOCAL = getLocalEndpointPreset(DEFAULT_LOCAL_PRESET_ID)!;
 
 const DEFAULT_WEB_SEARCH_MODEL = "gpt-4o-mini-search-preview";
 
@@ -56,6 +64,64 @@ function applyBundleToForm(
   setters.setImageConfig({ ...bundle.image });
 }
 
+function resolveLocalPresetId(baseUrl: string): string {
+  const norm = (u: string) => u.replace(/\/+$/, "").toLowerCase();
+  const ollama = getLocalEndpointPreset("ollama");
+  const lm = getLocalEndpointPreset("lmstudio");
+  if (ollama && norm(baseUrl) === norm(ollama.baseUrl)) return ollama.id;
+  if (lm && norm(baseUrl) === norm(lm.baseUrl)) return lm.id;
+  return DEFAULT_LOCAL_PRESET_ID;
+}
+
+type FormOrigin = {
+  kind: Kind;
+  baseUrl: string;
+  model: string;
+  visionModel: string;
+  webSearchModel: string;
+  hasKey: boolean;
+};
+
+function formDiffersFromOrigin(
+  form: {
+    kind: Kind;
+    baseUrl: string;
+    model: string;
+    visionModel: string;
+    webSearchModel: string;
+    apiKey: string;
+  },
+  origin: FormOrigin
+): boolean {
+  return (
+    form.kind !== origin.kind ||
+    form.baseUrl.trim() !== origin.baseUrl ||
+    form.model.trim() !== origin.model ||
+    form.visionModel.trim() !== origin.visionModel ||
+    form.webSearchModel.trim() !== origin.webSearchModel ||
+    (form.apiKey.length > 0 && !origin.hasKey) ||
+    (form.apiKey === "" && origin.hasKey)
+  );
+}
+
+function snapshotOrigin(input: {
+  kind: Kind;
+  baseUrl: string;
+  model: string;
+  visionModel: string;
+  webSearchModel: string;
+  apiKey: string;
+}): FormOrigin {
+  return {
+    kind: input.kind,
+    baseUrl: input.baseUrl.trim(),
+    model: input.model.trim(),
+    visionModel: input.visionModel.trim(),
+    webSearchModel: input.webSearchModel.trim(),
+    hasKey: Boolean(input.apiKey.trim())
+  };
+}
+
 export function ApiKeyPanel(): JSX.Element {
   const t = useT();
   const bailin = useBailin();
@@ -73,24 +139,69 @@ export function ApiKeyPanel(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<ReadinessMap>(IDLE_READINESS);
-  const [baseline, setBaseline] = useState<{
-    kind: Kind;
-    baseUrl: string;
-    model: string;
-    visionModel: string;
-    webSearchModel: string;
-    hasKey: boolean;
-  } | null>(null);
+  const [localPresetId, setLocalPresetId] = useState(DEFAULT_LOCAL_PRESET_ID);
+  const [baseline, setBaseline] = useState<FormOrigin | null>(null);
 
   const [imageConfig, setImageConfig] = useState<ImageGenerationConfigDTO>(EMPTY_IMAGE_CONFIG);
   const [imageApiKeyDraft, setImageApiKeyDraft] = useState("");
+  /** 避免 getProvider 返回前，默认 webSearchModel 等把页面标成 dirty。 */
+  const [hydrated, setHydrated] = useState(false);
+  /**
+   * 尚无已保存 provider 时，用这份快照判断侧栏离开是否脏。
+   * 有 vault baseline 时不用它。
+   */
+  const [draftOrigin, setDraftOrigin] = useState<FormOrigin | null>(null);
+  /**
+   * 进入当前模式标签时的表单快照。
+   * 三档切换只在「相对此快照有编辑」时弹丢弃确认，避免仅切换标签就误报。
+   */
+  const [viewOrigin, setViewOrigin] = useState<FormOrigin | null>(null);
+  /** 已保存的 Key，切到本地再切回时用于恢复，避免清空导致脏标记。 */
+  const [savedApiKey, setSavedApiKey] = useState("");
 
   const bundleSetters = useMemo(
     () => ({ setKind, setBaseUrl, setModel, setVisionModel, setWebSearchModel, setImageConfig }),
     []
   );
 
+  const applyLocalPreset = useCallback((preset: LocalEndpointPreset) => {
+    setLocalPresetId(preset.id);
+    setKind("openai-compatible");
+    setBaseUrl(preset.baseUrl);
+    setModel(preset.defaultModel);
+    setVisionModel("");
+    setWebSearchModel("");
+    setImageConfig({ ...EMPTY_IMAGE_CONFIG });
+  }, []);
+
+  /** 用户在本地面板点预设：同步当前标签原点，避免空手点预设也算未保存。 */
+  function handleLocalPresetChange(preset: LocalEndpointPreset): void {
+    applyLocalPreset(preset);
+    setApiKey("");
+    const origin: FormOrigin = {
+      kind: "openai-compatible",
+      baseUrl: preset.baseUrl,
+      model: preset.defaultModel,
+      visionModel: "",
+      webSearchModel: "",
+      hasKey: false
+    };
+    if (!baseline) setDraftOrigin(origin);
+    setViewOrigin(origin);
+  }
+
+  function restoreFromBaseline(): void {
+    if (!baseline) return;
+    setKind(baseline.kind);
+    setBaseUrl(baseline.baseUrl);
+    setModel(baseline.model);
+    setVisionModel(baseline.visionModel);
+    setWebSearchModel(baseline.webSearchModel);
+    setApiKey(savedApiKey);
+  }
+
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       const p = (await bailin.llm.getProvider()) as
         | {
@@ -102,56 +213,99 @@ export function ApiKeyPanel(): JSX.Element {
             apiKey: string;
           }
         | null;
+      if (cancelled) return;
       if (p) {
         const nextKind = p.kind as Kind;
         const nextVision = p.visionModel?.trim() ?? "";
-        const nextWeb = p.webSearchModel?.trim() || DEFAULT_WEB_SEARCH_MODEL;
+        const storedWeb = p.webSearchModel?.trim() ?? "";
+        const nextWeb = isLocalBaseUrl(p.baseUrl)
+          ? storedWeb
+          : storedWeb || DEFAULT_WEB_SEARCH_MODEL;
+        const displayKey = p.apiKey === LOCAL_PLACEHOLDER_API_KEY ? "" : p.apiKey;
         setKind(nextKind);
         setBaseUrl(p.baseUrl);
         setModel(p.model);
         setVisionModel(nextVision);
         setWebSearchModel(nextWeb);
-        setApiKey(p.apiKey);
-        setBaseline({
+        setApiKey(displayKey);
+        setSavedApiKey(displayKey);
+        const origin: FormOrigin = {
           kind: nextKind,
           baseUrl: p.baseUrl,
           model: p.model,
           visionModel: nextVision,
           webSearchModel: nextWeb,
-          hasKey: !!p.apiKey
-        });
+          hasKey: !!p.apiKey && p.apiKey !== LOCAL_PLACEHOLDER_API_KEY
+        };
+        setBaseline(origin);
+        setDraftOrigin(null);
+        setViewOrigin(origin);
+        if (isLocalBaseUrl(p.baseUrl)) {
+          setMode("local");
+          writeProviderMode("local");
+          setLocalPresetId(resolveLocalPresetId(p.baseUrl));
+        }
         try {
           const img = await bailin.imageGen.getConfig();
-          if (img) setImageConfig(img);
+          if (!cancelled && img) setImageConfig(img);
         } catch {
           // ignore
         }
+      } else if (readProviderMode() === "local") {
+        applyLocalPreset(DEFAULT_LOCAL);
+        setApiKey("");
+        setSavedApiKey("");
+        setBaseline(null);
+        const origin: FormOrigin = {
+          kind: "openai-compatible",
+          baseUrl: DEFAULT_LOCAL.baseUrl,
+          model: DEFAULT_LOCAL.defaultModel,
+          visionModel: "",
+          webSearchModel: "",
+          hasKey: false
+        };
+        setDraftOrigin(origin);
+        setViewOrigin(origin);
+      } else {
+        setSavedApiKey("");
+        const origin: FormOrigin = {
+          kind: "openai-compatible",
+          baseUrl: "",
+          model: "",
+          visionModel: "",
+          webSearchModel: DEFAULT_WEB_SEARCH_MODEL,
+          hasKey: false
+        };
+        setDraftOrigin(origin);
+        setViewOrigin(origin);
       }
+      if (!cancelled) setHydrated(true);
     })();
-  }, [bailin]);
+    return () => {
+      cancelled = true;
+    };
+  }, [bailin, applyLocalPreset]);
 
-  const dirty = useMemo(() => {
-    if (!baseline) {
-      return (
-        apiKey.length > 0 ||
-        baseUrl.length > 0 ||
-        model.length > 0 ||
-        visionModel.length > 0 ||
-        webSearchModel.length > 0
-      );
-    }
-    return (
-      kind !== baseline.kind ||
-      baseUrl.trim() !== baseline.baseUrl ||
-      model.trim() !== baseline.model ||
-      visionModel.trim() !== baseline.visionModel ||
-      webSearchModel.trim() !== baseline.webSearchModel ||
-      (apiKey.length > 0 && !baseline.hasKey) ||
-      (apiKey === "" && baseline.hasKey)
-    );
-  }, [kind, baseUrl, model, visionModel, webSearchModel, apiKey, baseline]);
+  const formFields = useMemo(
+    () => ({ kind, baseUrl, model, visionModel, webSearchModel, apiKey }),
+    [kind, baseUrl, model, visionModel, webSearchModel, apiKey]
+  );
 
-  useDirtyTracker(dirty);
+  /** 侧栏离开：相对已保存配置（或无配置时的草稿原点）。 */
+  const navDirty = useMemo(() => {
+    if (!hydrated) return false;
+    const origin = baseline ?? draftOrigin;
+    if (!origin) return false;
+    return formDiffersFromOrigin(formFields, origin);
+  }, [hydrated, formFields, baseline, draftOrigin]);
+
+  /** 三档切换：相对进入当前标签时的快照。 */
+  const modeDirty = useMemo(() => {
+    if (!hydrated || !viewOrigin) return false;
+    return formDiffersFromOrigin(formFields, viewOrigin);
+  }, [hydrated, formFields, viewOrigin]);
+
+  useDirtyTracker(navDirty);
 
   const ohmygptProgressLabels: Partial<Record<ReadinessKey, string>> = useMemo(
     () => ({
@@ -172,7 +326,7 @@ export function ApiKeyPanel(): JSX.Element {
 
   async function handleModeChange(next: ProviderMode): Promise<void> {
     if (next === mode) return;
-    if (dirty) {
+    if (modeDirty) {
       const ok = await confirm({
         title: t("common.discardTitle"),
         body: t("common.discardBody"),
@@ -186,9 +340,55 @@ export function ApiKeyPanel(): JSX.Element {
     setMode(next);
     setReadiness(IDLE_READINESS);
     setProgressLabel(null);
-    if (next === "ohmygpt") {
-      applyBundleToForm(OHMYGPT_BUNDLE, bundleSetters);
+
+    let nextOrigin: FormOrigin;
+
+    if (next === "local") {
+      applyLocalPreset(DEFAULT_LOCAL);
+      setApiKey("");
+      nextOrigin = {
+        kind: "openai-compatible",
+        baseUrl: DEFAULT_LOCAL.baseUrl,
+        model: DEFAULT_LOCAL.defaultModel,
+        visionModel: "",
+        webSearchModel: "",
+        hasKey: false
+      };
+    } else if (next === "ohmygpt") {
+      if (baseline && !isLocalBaseUrl(baseline.baseUrl)) {
+        restoreFromBaseline();
+        nextOrigin = { ...baseline };
+      } else {
+        applyBundleToForm(OHMYGPT_BUNDLE, bundleSetters);
+        setApiKey(savedApiKey);
+        nextOrigin = {
+          kind: OHMYGPT_BUNDLE.llm.kind,
+          baseUrl: OHMYGPT_BUNDLE.llm.baseUrl,
+          model: OHMYGPT_BUNDLE.llm.model,
+          visionModel: OHMYGPT_BUNDLE.llm.visionModel,
+          webSearchModel: OHMYGPT_BUNDLE.llm.webSearchModel,
+          hasKey: Boolean(savedApiKey.trim())
+        };
+      }
+    } else {
+      // custom
+      if (baseline) {
+        restoreFromBaseline();
+        nextOrigin = { ...baseline };
+      } else {
+        nextOrigin = snapshotOrigin({
+          kind,
+          baseUrl,
+          model,
+          visionModel,
+          webSearchModel,
+          apiKey
+        });
+      }
     }
+
+    setViewOrigin(nextOrigin);
+    if (!baseline) setDraftOrigin(nextOrigin);
   }
 
   async function oneClickConnect(): Promise<void> {
@@ -217,18 +417,21 @@ export function ApiKeyPanel(): JSX.Element {
       }
 
       const bundle = OHMYGPT_BUNDLE;
-      setBaseline({
+      const origin: FormOrigin = {
         kind: bundle.llm.kind,
         baseUrl: bundle.llm.baseUrl.trim(),
         model: bundle.llm.model.trim(),
         visionModel: bundle.llm.visionModel,
         webSearchModel: bundle.llm.webSearchModel,
-        hasKey: !!apiKey
-      });
+        hasKey: !!apiKey.trim()
+      };
+      setBaseline(origin);
+      setDraftOrigin(null);
+      setViewOrigin(origin);
+      setSavedApiKey(apiKey.trim());
       setImageConfig({ ...bundle.image });
 
       if (result.allRequiredPassed) {
-        // allRequiredPassed=true 时 chat 必为 ok 状态；TS 无法跨返回值 narrow，显式取。
         const chat = result.readiness.chat;
         const latency = chat.status === "ok" ? chat.latencyMs : undefined;
         showToast({
@@ -288,19 +491,89 @@ export function ApiKeyPanel(): JSX.Element {
         return;
       }
 
-      setBaseline({
+      const origin: FormOrigin = {
         kind,
         baseUrl: baseUrl.trim(),
         model: model.trim(),
         visionModel: visionModel.trim(),
         webSearchModel: webSearchModel.trim(),
-        hasKey: !!apiKey
-      });
+        hasKey: !!apiKey.trim()
+      };
+      setBaseline(origin);
+      setDraftOrigin(null);
+      setViewOrigin(origin);
+      setSavedApiKey(apiKey.trim());
 
       if (result.allRequiredPassed) {
         showToast({ kind: "success", text: t("provider.toastAllReady") });
       } else {
         showToast({ kind: "warn", text: t("provider.toastPartialReady") });
+      }
+    } finally {
+      setBusy(false);
+      setProgressLabel(null);
+    }
+  }
+
+  async function verifyLocal(): Promise<void> {
+    if (!baseUrl.trim() || !model.trim()) return;
+    setBusy(true);
+    setProgressLabel(t("provider.oneClickProgressSave"));
+    setReadiness(IDLE_READINESS);
+
+    const effectiveKey = apiKey.trim() || LOCAL_PLACEHOLDER_API_KEY;
+
+    try {
+      const result = await verifyLocalProvider(
+        bailin,
+        {
+          kind: "openai-compatible",
+          baseUrl: baseUrl.trim(),
+          model: model.trim(),
+          visionModel: visionModel.trim(),
+          webSearchModel: webSearchModel.trim(),
+          apiKey: effectiveKey,
+          imageConfig: EMPTY_IMAGE_CONFIG
+        },
+        (key, state) => {
+          if (state.status === "running") setProgressLabel(customProgressLabels[key]);
+          setReadiness((prev) => ({ ...prev, [key]: state }));
+        }
+      );
+
+      if (!result.saveOk) {
+        showToast({ kind: "error", text: result.saveError ?? t("provider.toastSaveFailed") });
+        return;
+      }
+
+      const origin: FormOrigin = {
+        kind: "openai-compatible",
+        baseUrl: baseUrl.trim(),
+        model: model.trim(),
+        visionModel: visionModel.trim(),
+        webSearchModel: webSearchModel.trim(),
+        hasKey: Boolean(apiKey.trim())
+      };
+      setBaseline(origin);
+      setDraftOrigin(null);
+      setViewOrigin(origin);
+      setSavedApiKey(apiKey.trim());
+      setImageConfig({ ...EMPTY_IMAGE_CONFIG });
+
+      if (result.allRequiredPassed) {
+        const chat = result.readiness.chat;
+        const latency = chat.status === "ok" ? chat.latencyMs : undefined;
+        showToast({
+          kind: "success",
+          text: t("provider.toastLocalReady", { latency: latency ?? "?" })
+        });
+      } else {
+        const reason =
+          result.readiness.chat.status === "fail" ? result.readiness.chat.reason : undefined;
+        showToast({
+          kind: "error",
+          text: reason ?? t("provider.toastTestFailed", { error: t("provider.readinessFail") })
+        });
       }
     } finally {
       setBusy(false);
@@ -330,7 +603,18 @@ export function ApiKeyPanel(): JSX.Element {
     try {
       await bailin.llm.clearKey();
       setApiKey("");
+      setSavedApiKey("");
       setBaseline(null);
+      const origin = snapshotOrigin({
+        kind,
+        baseUrl,
+        model,
+        visionModel,
+        webSearchModel,
+        apiKey: ""
+      });
+      setDraftOrigin(origin);
+      setViewOrigin(origin);
       setReadiness(IDLE_READINESS);
       showToast({ kind: "info", text: t("provider.toastKeyCleared") });
     } catch (e) {
@@ -377,7 +661,7 @@ export function ApiKeyPanel(): JSX.Element {
       <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
         <ProviderModeSwitch mode={mode} onChange={(m) => void handleModeChange(m)} />
 
-        <ProviderGuideSection compact={mode === "custom"} />
+        {mode !== "local" ? <ProviderGuideSection compact={mode === "custom"} /> : null}
 
         {mode === "ohmygpt" ? (
           <QuickStartSection
@@ -392,7 +676,29 @@ export function ApiKeyPanel(): JSX.Element {
             onConnect={() => void oneClickConnect()}
             onClear={() => void clear()}
           />
-        ) : (
+        ) : null}
+
+        {mode === "local" ? (
+          <LocalConfigSection
+            busy={busy}
+            presetId={localPresetId}
+            baseUrl={baseUrl}
+            model={model}
+            apiKey={apiKey}
+            showKey={showKey}
+            verifyProgress={progressLabel}
+            readiness={readiness}
+            onPresetChange={handleLocalPresetChange}
+            onBaseUrlChange={setBaseUrl}
+            onModelChange={setModel}
+            onApiKeyChange={setApiKey}
+            onToggleShowKey={() => setShowKey((v) => !v)}
+            onVerify={() => void verifyLocal()}
+            onClear={() => void clear()}
+          />
+        ) : null}
+
+        {mode === "custom" ? (
           <CustomConfigSection
             busy={busy}
             apiKey={apiKey}
@@ -420,7 +726,7 @@ export function ApiKeyPanel(): JSX.Element {
             onUpdateImageTier={updateImageTier}
             onClearImageKey={() => void clearImageKey()}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );
