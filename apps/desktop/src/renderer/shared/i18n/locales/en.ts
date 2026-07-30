@@ -694,16 +694,18 @@ export const en: TranslationTree = {
     },
     local: {
       title: "Local model",
-      lede: "Connect a local OpenAI-compatible server (Ollama, LM Studio, etc.).",
-      steps:
-        "Start the local server and load a model first, then enter the base URL and model name below. An API Key is usually optional.",
-      presetLabel: "Common presets",
-      modelPlaceholder: "e.g. llama3.2, qwen2.5 … (must match the loaded model name)",
-      optionalKeyTitle: "Optional: API Key (most local servers ignore it)",
+      lede: "A local OpenAI-compatible server—built for daily chat first.",
+      stepsTitle: "Setup",
+      step1: "Start Ollama or LM Studio and load a model",
+      step2: "Pick a preset, or edit the API URL",
+      step3: "Enter the model name, then save & verify chat",
+      presetLabel: "Server preset",
+      modelPlaceholder: "llama3.2 / qwen2.5 …",
+      optionalKeyTitle: "Optional API Key",
       apiKeyPlaceholder: "Leave empty",
-      apiKeyHint: "If empty, a placeholder is saved only to satisfy the Bearer header.",
+      apiKeyHint: "Most local servers ignore this; empty saves a placeholder.",
       capabilityNote:
-        "Local setup prioritizes daily chat. Web research, pixel pet image generation, and reference-image vision usually still need cloud APIs—the checklist below shows what is unavailable.",
+        "Vision, web research, and pixel pets usually still need the cloud. Chat pass is enough to continue.",
       fillRequired: "Enter API URL and chat model",
       saveAndVerify: "Save & verify chat",
       unavailableVisionUnset: "No vision model set; local chat still works",
@@ -715,11 +717,13 @@ export const en: TranslationTree = {
       presets: {
         ollama: {
           label: "Ollama",
+          tagline: "Local daemon · port 11434",
           hint: "Default http://127.0.0.1:11434/v1. Run ollama pull and keep the service running."
         },
         lmstudio: {
           label: "LM Studio",
-          hint: "Default http://127.0.0.1:1234/v1. Load a model and enable Local Server in LM Studio."
+          tagline: "Desktop load · port 1234",
+          hint: "Default http://127.0.0.1:1234/v1. Load a model and enable Local Server."
         }
       }
     },

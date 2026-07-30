@@ -692,16 +692,17 @@ export const zh = {
     },
     local: {
       title: "本地模型",
-      lede: "连接本机已启动的 OpenAI 兼容服务（如 Ollama、LM Studio）。",
-      steps:
-        "先在本机启动模型服务并下载/加载模型，再填下方地址与模型名。API Key 通常可不填。",
-      presetLabel: "常用预设",
-      modelPlaceholder: "例如 llama3.2、qwen2.5 …（须与本机已加载名称一致）",
-      optionalKeyTitle: "可选：API Key（多数本地服务不需要）",
+      lede: "本机已启动的 OpenAI 兼容服务，优先保证日常聊天。",
+      stepsTitle: "接入步骤",
+      step1: "启动 Ollama 或 LM Studio，并加载模型",
+      step2: "选用预设，或按需改 API 地址",
+      step3: "填写模型名，保存并验证聊天",
+      presetLabel: "服务预设",
+      modelPlaceholder: "llama3.2 / qwen2.5 …",
+      optionalKeyTitle: "可选 API Key",
       apiKeyPlaceholder: "留空即可",
-      apiKeyHint: "未填写时会保存占位值，仅用于兼容请求头。",
-      capabilityNote:
-        "本地接入优先保证日常聊天。联网深度创建、像素桌宠生图、参考图识读通常仍需云端能力，下方清单会标明哪些不可用。",
+      apiKeyHint: "多数本机服务不校验；留空会写入占位值。",
+      capabilityNote: "识图、联网调研、像素生图通常仍需云端。聊天验证通过即可继续。",
       fillRequired: "请填写 API 地址与聊天模型",
       saveAndVerify: "保存并验证聊天",
       unavailableVisionUnset: "未配置识图模型；本地聊天仍可用",
@@ -713,11 +714,13 @@ export const zh = {
       presets: {
         ollama: {
           label: "Ollama",
+          tagline: "本机守护进程 · 默认 11434",
           hint: "默认 http://127.0.0.1:11434/v1。先 ollama pull 模型并保持服务运行。"
         },
         lmstudio: {
           label: "LM Studio",
-          hint: "默认 http://127.0.0.1:1234/v1。在 LM Studio 中加载模型并开启 Local Server。"
+          tagline: "桌面加载 · 默认 1234",
+          hint: "默认 http://127.0.0.1:1234/v1。加载模型并开启 Local Server。"
         }
       }
     },

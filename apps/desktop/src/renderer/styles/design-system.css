@@ -2900,6 +2900,21 @@ body.settings-window #root {
   gap: 14px;
 }
 
+.provider-connect-section > .forge-section__head {
+  animation: provider-panel-rise 420ms var(--ease-out) both;
+}
+
+.provider-connect-section > .provider-connect__surface {
+  animation: provider-panel-rise 480ms var(--ease-out) 55ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .provider-connect-section > .forge-section__head,
+  .provider-connect-section > .provider-connect__surface {
+    animation: none;
+  }
+}
+
 .provider-connect__surface {
   position: relative;
   padding: 20px 22px 22px;
@@ -3094,6 +3109,171 @@ body.settings-window #root {
   padding-left: 24px;
   padding-right: 24px;
 }
+
+/* ── Local model connect — workstation strip aligned with OhMyGPT editorial ── */
+
+.provider-local__aside {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(23, 38, 38, 0.08);
+}
+
+.provider-local__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.provider-local__steps .provider-step-rail__item {
+  padding-bottom: 0;
+}
+
+.provider-local__steps .provider-step-rail__item:not(:last-child)::before {
+  display: none;
+}
+
+.provider-local__cap {
+  margin: 14px 0 0;
+  padding: 0 0 0 14px;
+  border-left: 2px solid rgba(178, 24, 88, 0.28);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  color: var(--ink-caption);
+}
+
+@media (max-width: 640px) {
+  .provider-local__steps {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-local__steps .provider-step-rail__item:not(:last-child) {
+    padding-bottom: 12px;
+  }
+
+  .provider-local__steps .provider-step-rail__item:not(:last-child)::before {
+    display: block;
+  }
+}
+
+[data-theme="dark"] .provider-local__aside {
+  border-bottom-color: var(--hairline);
+}
+
+.provider-local__brand {
+  width: 100%;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.provider-local__host {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(23, 38, 38, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-local__host-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2e7d5b;
+  box-shadow: 0 0 0 3px rgba(46, 125, 91, 0.16);
+  flex-shrink: 0;
+}
+
+.provider-local__preset-switch {
+  margin-top: 8px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.provider-local__optional {
+  margin: 0;
+}
+
+.provider-local__optional > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+  user-select: none;
+  transition: color var(--motion-fast) var(--ease-out);
+}
+
+.provider-local__optional > summary::-webkit-details-marker {
+  display: none;
+}
+
+.provider-local__optional > summary::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 8px;
+  border-left: 5px solid var(--ink-faint);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transform: translateY(-1px);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.provider-local__optional[open] > summary::before {
+  transform: translateY(-1px) rotate(90deg);
+}
+
+.provider-local__optional > summary:hover {
+  color: var(--ink);
+}
+
+.provider-local__optional[open] > summary {
+  margin-bottom: 10px;
+  color: var(--ink);
+}
+
+.input.input--mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+
+@keyframes provider-panel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-theme="dark"] .provider-local__host {
+  border-color: var(--hairline);
+  background: rgba(244, 240, 235, 0.06);
+  color: var(--ink-caption);
+}
+
+[data-theme="dark"] .provider-local__cap {
+  border-left-color: rgba(204, 42, 104, 0.4);
+}
+
 
 /* Readiness meter */
 .provider-readiness-meter {

@@ -95,10 +95,10 @@ function formDiffersFromOrigin(
 ): boolean {
   return (
     form.kind !== origin.kind ||
-    form.baseUrl.trim() !== origin.baseUrl ||
-    form.model.trim() !== origin.model ||
-    form.visionModel.trim() !== origin.visionModel ||
-    form.webSearchModel.trim() !== origin.webSearchModel ||
+    form.baseUrl.trim() !== origin.baseUrl.trim() ||
+    form.model.trim() !== origin.model.trim() ||
+    form.visionModel.trim() !== origin.visionModel.trim() ||
+    form.webSearchModel.trim() !== origin.webSearchModel.trim() ||
     (form.apiKey.length > 0 && !origin.hasKey) ||
     (form.apiKey === "" && origin.hasKey)
   );
@@ -291,21 +291,13 @@ export function ApiKeyPanel(): JSX.Element {
     [kind, baseUrl, model, visionModel, webSearchModel, apiKey]
   );
 
-  /** 侧栏离开：相对已保存配置（或无配置时的草稿原点）。 */
-  const navDirty = useMemo(() => {
-    if (!hydrated) return false;
-    const origin = baseline ?? draftOrigin;
-    if (!origin) return false;
-    return formDiffersFromOrigin(formFields, origin);
-  }, [hydrated, formFields, baseline, draftOrigin]);
-
-  /** 三档切换：相对进入当前标签时的快照。 */
+  /** 相对进入当前标签时的快照；侧栏离开与三档切换共用，避免仅切换本地预设就误报未保存。 */
   const modeDirty = useMemo(() => {
     if (!hydrated || !viewOrigin) return false;
     return formDiffersFromOrigin(formFields, viewOrigin);
   }, [hydrated, formFields, viewOrigin]);
 
-  useDirtyTracker(navDirty);
+  useDirtyTracker(modeDirty);
 
   const ohmygptProgressLabels: Partial<Record<ReadinessKey, string>> = useMemo(
     () => ({

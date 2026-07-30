@@ -10,6 +10,16 @@ interface FieldHelpProps {
   linkLabel?: string;
 }
 
+const HIDDEN_MEASURE_STYLE: CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  transform: "none",
+  visibility: "hidden",
+  pointerEvents: "none",
+  zIndex: 10000
+};
+
 function computePopoverStyle(
   trigger: DOMRect,
   popoverWidth: number,
@@ -17,19 +27,20 @@ function computePopoverStyle(
 ): CSSProperties {
   const gap = 10;
   const pad = 12;
+  const width = Math.max(popoverWidth, 1);
+  const height = Math.max(popoverHeight, 1);
 
+  // 优先右侧；右侧不够再左侧；水平都不够才上下。
   let left = trigger.right + gap;
   let top = trigger.top + trigger.height / 2;
   let transform = "translateY(-50%)";
 
-  if (left + popoverWidth > window.innerWidth - pad) {
+  if (left + width > window.innerWidth - pad) {
     left = trigger.left - gap;
     transform = "translate(-100%, -50%)";
   }
 
-  const visualLeft = transform.startsWith("translate(-100%")
-    ? left - popoverWidth
-    : left;
+  const visualLeft = transform.startsWith("translate(-100%") ? left - width : left;
 
   if (visualLeft < pad) {
     left = trigger.left + trigger.width / 2;
@@ -37,7 +48,7 @@ function computePopoverStyle(
     transform = "translateX(-50%)";
   }
 
-  if (transform === "translateX(-50%)" && top + popoverHeight > window.innerHeight - pad) {
+  if (transform === "translateX(-50%)" && top + height > window.innerHeight - pad) {
     top = trigger.top - gap;
     transform = "translate(-50%, -100%)";
   }
@@ -48,7 +59,8 @@ function computePopoverStyle(
     left,
     transform,
     zIndex: 10000,
-    visibility: "visible"
+    visibility: "visible",
+    pointerEvents: "auto"
   };
 }
 
@@ -59,10 +71,11 @@ export function FieldHelp({ content, linkHref, linkLabel }: FieldHelpProps): JSX
   const popoverRef = useRef<HTMLSpanElement>(null);
   const hideTimer = useRef<number>();
   const [open, setOpen] = useState(false);
-  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({ visibility: "hidden" });
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>(HIDDEN_MEASURE_STYLE);
 
   const show = useCallback(() => {
     window.clearTimeout(hideTimer.current);
+    setPopoverStyle(HIDDEN_MEASURE_STYLE);
     setOpen(true);
   }, []);
 
@@ -71,21 +84,35 @@ export function FieldHelp({ content, linkHref, linkLabel }: FieldHelpProps): JSX
   }, []);
 
   const updatePosition = useCallback(() => {
-    if (!triggerRef.current || !popoverRef.current) return;
-    const trigger = triggerRef.current.getBoundingClientRect();
-    const popover = popoverRef.current.getBoundingClientRect();
-    setPopoverStyle(
-      computePopoverStyle(trigger, popover.width || 280, popover.height || 72)
-    );
+    const triggerEl = triggerRef.current;
+    const popoverEl = popoverRef.current;
+    if (!triggerEl || !popoverEl) return;
+
+    const trigger = triggerEl.getBoundingClientRect();
+    const width = popoverEl.offsetWidth || popoverEl.scrollWidth;
+    const height = popoverEl.offsetHeight || popoverEl.scrollHeight;
+    if (width <= 0 || height <= 0) return;
+
+    setPopoverStyle(computePopoverStyle(trigger, width, height));
   }, []);
 
   useLayoutEffect(() => {
     if (!open) {
-      setPopoverStyle({ visibility: "hidden" });
+      setPopoverStyle(HIDDEN_MEASURE_STYLE);
       return;
     }
+
+    // 先以隐藏态完成布局测量，再写入最终坐标——避免「先下方后右侧」的闪一下。
     updatePosition();
-    const raf = window.requestAnimationFrame(updatePosition);
+    // 仅当首帧仍量不到尺寸、popover 仍隐藏时再补一次。
+    const raf = window.requestAnimationFrame(() => {
+      const el = popoverRef.current;
+      if (!el) return;
+      if (window.getComputedStyle(el).visibility === "hidden") {
+        updatePosition();
+      }
+    });
+
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
@@ -155,7 +182,14 @@ export function FieldHelp({ content, linkHref, linkLabel }: FieldHelpProps): JSX
         aria-expanded={open}
         aria-controls={popoverId}
         aria-label="帮助"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (open) {
+            setOpen(false);
+            return;
+          }
+          setPopoverStyle(HIDDEN_MEASURE_STYLE);
+          setOpen(true);
+        }}
       >
         ?
       </button>

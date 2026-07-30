@@ -397,6 +397,7 @@ function ProviderStep({
 
       {mode === "local" ? (
         <LocalConfigSection
+          compact
           busy={busy}
           presetId={localPresetId}
           baseUrl={baseUrl}
