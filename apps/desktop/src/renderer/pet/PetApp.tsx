@@ -109,6 +109,7 @@ export function PetApp(): JSX.Element | null {
   // 状态必须由下面的 useEffect 显式强制 setMouseIgnore(false)。
   const draggingRef = useRef(false);
   const menuOpenRef = useRef(false);
+  const closingMenuRef = useRef(false);
   const checkMouseIgnore = useRafThrottle((clientX: number, clientY: number) => {
     if (draggingRef.current || menuOpenRef.current) return;
     const hitTargets = [wrapRef.current, menuLayerRef.current].filter(Boolean) as HTMLElement[];
@@ -319,11 +320,20 @@ export function PetApp(): JSX.Element | null {
   );
 
   const closeMenu = useCallback(() => {
-    setMenu(null);
+    if (closingMenuRef.current) return;
+    closingMenuRef.current = true;
     setSubmenu(null);
-    void bailin.pet.setContextMenuOpen(false);
-    // 菜单关闭后焦点回到桌宠，避免键盘用户焦点丢到 body。
-    window.setTimeout(() => wrapRef.current?.focus(), 0);
+    // 必须先缩回窗口，再卸菜单：否则 pet-slot 先变成 100% 宽，
+    // 在仍加宽的窗口里居中一帧，桌宠会左右抽一下。
+    void (async () => {
+      try {
+        await bailin.pet.setContextMenuOpen(false);
+        setMenu(null);
+        window.setTimeout(() => wrapRef.current?.focus(), 0);
+      } finally {
+        closingMenuRef.current = false;
+      }
+    })();
   }, [bailin]);
 
   // 菜单展开期间强制整窗接收 mouse events（设 ignore=false）。否则当 mouse
