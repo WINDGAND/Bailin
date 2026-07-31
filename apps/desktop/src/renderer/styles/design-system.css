@@ -3516,7 +3516,7 @@ body.settings-window #root {
   margin-left: 4px;
 }
 
-.provider-ohmygpt-disclaimer {
+.provider-cloud-endpoint-hint {
   margin: 14px 0 0;
   padding: 10px 0 10px 12px;
   border-left: 2px solid var(--ink-ghost);
@@ -3525,7 +3525,7 @@ body.settings-window #root {
   color: var(--ink-caption);
 }
 
-.provider-connect__brand .provider-ohmygpt-disclaimer {
+.provider-connect__brand .provider-cloud-endpoint-hint {
   flex-basis: 100%;
   margin-top: 10px;
 }

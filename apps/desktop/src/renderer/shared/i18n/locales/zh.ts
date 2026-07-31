@@ -628,10 +628,9 @@ export const zh = {
   provider: {
     eyebrow: "Model Service",
     title: "模型与 API Key",
-    subtitle:
-      "可选 OhMyGPT 一键接入、本机本地模型（优先保证聊天），或个性化配置并逐项验证。",
+    subtitle: "可选云端一键接入、本机本地模型，或个性化填写地址与模型。",
     modeSwitchAria: "接入方式",
-    modeOhmygpt: "OhMyGPT 一键接入",
+    modeCloud: "云端一键接入",
     modeLocal: "本地模型",
     modeCustom: "个性化配置",
     verifyKeyAndChat: "验证 Key 与主模型",
@@ -665,29 +664,26 @@ export const zh = {
           when: "生成像素桌宠外观时使用"
         }
       },
-      authorStack: {
-        title: "作者同款方案（可选）",
-        intro: "作者使用 OhMyGPT 中转，一个 API Key 调用下面全部模型，无需手动逐个配置："
+      singleKeyExample: {
+        title: "单 Key 全功能示例",
+        intro:
+          "以下为一组可同时覆盖聊天、识图、联网与生图的示例配置；可换成其他聚合站或官方 API。"
       },
-      authorStackRows: {
-        relay: "中转平台",
+      singleKeyExampleRows: {
+        relay: "示例平台",
         chat: "日常聊天",
         vision: "参考图识读",
         webSearch: "深度调研（联网）",
         imageGen: "桌宠生图"
       },
       otherRelays:
-        "你也可以使用其他 API 聚合站 / 中转站的 Key，或切换到「本地模型」连接本机 Ollama / LM Studio。选「个性化配置」可手动填写 API 地址和模型名。",
-      ohmygptDisclaimer:
-        "声明：作者与 OhMyGPT 无任何官方合作或利益关联。展示该平台仅因使用相对方便；你完全可以自行选择其他中转，或使用本机本地模型聊天。"
+        "也可使用其他 API 聚合站 / 中转站，或切换到「本地模型」连接本机 Ollama / LM Studio。选「个性化配置」可手动填写 API 地址和模型名。",
+      endpointHint: "示例端点可替换为任意 OpenAI 兼容服务；本地模型见另一页签。"
     },
     quickStart: {
-      title: "快速上手 · 作者同款方案",
-      titleAlt: "快速上手 · {{bundle}}",
-      subtitle: "去服务商拿 Key，粘贴后一键接入（可按需配置全部模型）。",
-      subtitleAlt: "粘贴 Key 后一键接入并验证。",
+      title: "粘贴 API Key 并验证",
+      subtitle: "从所选方案的服务商获取 Key，粘贴后验证主模型即可。",
       stepsTitle: "获取 API Key",
-      openSite: "打开 OhMyGPT 官网 →",
       openSiteAlt: "打开 {{site}} →"
     },
     local: {
@@ -725,20 +721,19 @@ export const zh = {
       }
     },
     alternatives: {
-      title: "其他推荐方案（可选）",
+      title: "其他云端方案",
       hint: "若已有 OpenAI 官方或 DeepSeek 直连 Key，可在此切换。选中后上方一键接入会使用对应方案。"
     },
     custom: {
       title: "个性化配置",
       lede: "手动调整连接方式、API 地址、模型名和生图参数。",
       whenNeededTitle: "什么时候需要个性化配置？",
-      whenNeeded1: "使用非 OhMyGPT 的中转站，需要手动填写 API 地址",
+      whenNeeded1: "使用其他中转站或自建服务，需要手动填写 API 地址",
       whenNeeded2: "想更换聊天、识图或生图的模型型号",
       whenNeeded3: "想独立配置生图三档质量，或使用单独的生图 API Key"
     },
-    bundlesLabel: "推荐接入方式",
-    bundlesHint: "选一个方案，粘贴 Key，点一次「一键接入并验证」即可。",
-    recommendedBadge: "推荐",
+    bundlesLabel: "云端方案",
+    bundlesHint: "选一种方案后粘贴 Key 验证；均可自行修改地址与模型名。",
     oneClickConnect: "一键接入并验证",
     oneClickRunning: "正在接入并验证…",
     oneClickProgressSave: "保存配置",
@@ -763,12 +758,12 @@ export const zh = {
     readinessFail: "未通过",
     copyErrorDetail: "复制错误详情",
     readinessUnavailable: "此方案不支持",
-    readinessUnavailableVision: "此方案不支持参考图识读，请换 OhMyGPT 或 OpenAI",
+    readinessUnavailableVision: "此方案不支持参考图识读，可改用全能力云端方案或 OpenAI",
     readinessUnavailableWeb: "此方案不支持联网调研，深度创建功能受限",
-    readinessUnavailableImage: "此方案不支持桌宠生图，请换 OhMyGPT 或 OpenAI",
+    readinessUnavailableImage: "此方案不支持桌宠生图，可改用全能力云端方案或 OpenAI",
     advancedTitle: "高级自定义",
     advancedLede: "连接方式、API 地址、模型名等细节。一般不需要改。",
-    deviatedFromBundle: "当前配置已偏离所选推荐方案",
+    deviatedFromBundle: "当前配置已偏离所选云端方案",
     faqTitle: "如何获取 API Key？",
     faqLinkOhmygpt: "打开 OhMyGPT 官网",
     faqLinkOpenai: "打开 OpenAI 平台",
@@ -790,7 +785,7 @@ export const zh = {
         step1: "打开 platform.deepseek.com 注册",
         step2: "创建 API Key（按需充值）",
         step3: "粘贴到下方即可聊天（识图/生图/深度创建不可用）",
-        step4: "需要全功能可改选 OhMyGPT，或仅用本地模型聊天"
+        step4: "需要全功能可改选其他全能力云端方案，或仅用本地模型聊天"
       }
     },
     bundles: {
@@ -836,7 +831,7 @@ export const zh = {
       imageTiers:
         "经济、标准、精品三档分别对应预览、默认与成品用途。每档填写生图模型 ID；「参数」里选择如何组装 API 请求。参考成本仅用于百灵内部统计预计花费。",
       imageCostEstimate:
-        "按作者预设的公开价格估算（美元/张），仅供生成桌宠时在进度里显示「预计花费」。不会发给 API，也不能在此修改；实际扣费以你的中转站账单为准。",
+        "按示例公开价格估算（美元/张），仅供生成桌宠时在进度里显示「预计花费」。不会发给 API，也不能在此修改；实际扣费以你的服务商账单为准。",
       defaultTier: "创建桌宠时默认使用的生图质量档位。",
       presets: "切换预设时会覆盖下方连接方式与模型字段。",
       connStatus: "显示 API Key 是否已保存，以及连接测试的结果。",
@@ -982,10 +977,10 @@ export const zh = {
       claude: "Anthropic 直连。视觉与联网均原生支持。"
     },
     visionHints: {
-      "doubao-seed": "OhMyGPT 默认；中文 / 二次元角色识别好",
-      "gpt-4o-mini": "OpenAI 直连最划算的视觉模型",
-      "gpt-4o": "高质量视觉，比 mini 准但贵 10 倍",
-      "claude-haiku": "Anthropic 路线最便宜的视觉模型"
+      "doubao-seed": "中文 / 二次元角色识别好",
+      "gpt-4o-mini": "OpenAI 直连较划算的视觉模型",
+      "gpt-4o": "高质量视觉，比 mini 准但更贵",
+      "claude-haiku": "Anthropic 路线较便宜的视觉模型"
     },
     visionLabels: {
       "doubao-seed": "豆包 Seed"
@@ -1005,7 +1000,8 @@ export const zh = {
     stepDisclaimer: "数据如何处理",
     stepProvider: "接入你的 LLM",
     customLaterHint:
-      "首启请用「OhMyGPT 一键接入」或「本地模型」。更细的个性化配置可在完成后到设置页调整。",
+      "首启请选用「云端一键接入」或「本地模型」。更细的个性化配置可在完成后到设置页调整。",
+    pickProviderMode: "请先选择一种接入方式。",
     stepStarter: "挑一只先上桌",
     welcomeBody:
       "Bailin 不会替代真实的咨询、医疗或法律意见。它给你的是一位「受公开资料启发的视角助手」，不是本人，也不是官方授权。",
@@ -1015,7 +1011,7 @@ export const zh = {
     disclaimerCta: "明白，下一步",
     back: "← 上一步",
     providerIntro:
-      "可选 OhMyGPT 一键接入、本机本地模型（优先保证聊天），或之后在设置里做个性化配置。",
+      "可选云端一键接入、本机本地模型（优先保证聊天），或之后在设置里做个性化配置。",
     advancedHint: "完成首启后，可在「模型与 API Key」页的「高级自定义」中调整细节。",
     protocolOpenAILong: "OpenAI 兼容（含 DeepSeek / Moonshot / SiliconFlow ...）",
     protocolAnthropicLong: "Anthropic 兼容（Claude 系列）",

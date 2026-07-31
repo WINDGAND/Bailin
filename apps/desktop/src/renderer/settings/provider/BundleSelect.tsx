@@ -57,9 +57,6 @@ function BundleCard({
     >
       <div className="bl-bundle-card__head">
         <span className="bl-bundle-card__title">{t(`${prefix}.label`)}</span>
-        {bundle.recommended ? (
-          <span className="bl-bundle-card__badge">{t("provider.recommendedBadge")}</span>
-        ) : null}
       </div>
       <p className="bl-bundle-card__tagline">{t(`${prefix}.tagline`)}</p>
       <ul className="bl-bundle-card__features">

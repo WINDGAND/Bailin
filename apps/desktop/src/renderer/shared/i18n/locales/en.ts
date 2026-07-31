@@ -631,9 +631,9 @@ export const en: TranslationTree = {
     eyebrow: "Model Service",
     title: "Model & API Key",
     subtitle:
-      "Choose OhMyGPT one-click, a local model (chat first), or custom setup with full verification.",
+      "Choose cloud one-click, a local model, or enter a custom API URL and models.",
     modeSwitchAria: "Connection mode",
-    modeOhmygpt: "OhMyGPT one-click",
+    modeCloud: "Cloud one-click",
     modeLocal: "Local model",
     modeCustom: "Custom configuration",
     verifyKeyAndChat: "Verify Key & chat model",
@@ -667,12 +667,13 @@ export const en: TranslationTree = {
           when: "When generating pixel pet artwork"
         }
       },
-      authorStack: {
-        title: "Author's setup (optional)",
-        intro: "The author uses OhMyGPT as a relay—one API Key calls all models below, no manual setup:"
+      singleKeyExample: {
+        title: "Single-key full-stack example",
+        intro:
+          "An example stack that can cover chat, vision, web research, and image generation with one key. Swap in any other relay or official API."
       },
-      authorStackRows: {
-        relay: "Relay platform",
+      singleKeyExampleRows: {
+        relay: "Example platform",
         chat: "Daily chat",
         vision: "Reference images",
         webSearch: "Deep research (web)",
@@ -680,16 +681,13 @@ export const en: TranslationTree = {
       },
       otherRelays:
         "You can also use keys from other API relays, or switch to Local model for Ollama / LM Studio on this machine. Use Custom configuration to enter API URLs and model IDs manually.",
-      ohmygptDisclaimer:
-        "Disclaimer: The author has no official partnership or affiliation with OhMyGPT. It is shown only as a convenient example. You may use any other relay, or a local model for chat."
+      endpointHint:
+        "Example endpoints can be replaced with any OpenAI-compatible service. For local models, use the other tab."
     },
     quickStart: {
-      title: "Quick start · author's setup",
-      titleAlt: "Quick start · {{bundle}}",
-      subtitle: "Get a key from your provider, paste it, and connect (all model roles when available).",
-      subtitleAlt: "Paste your key and connect with one click.",
+      title: "Paste API Key and verify",
+      subtitle: "Get a key from the selected provider, paste it, and verify the chat model.",
       stepsTitle: "Get your API Key",
-      openSite: "Open OhMyGPT →",
       openSiteAlt: "Open {{site}} →"
     },
     local: {
@@ -728,20 +726,19 @@ export const en: TranslationTree = {
       }
     },
     alternatives: {
-      title: "Other recommended plans (optional)",
+      title: "Other cloud plans",
       hint: "If you already have OpenAI official or DeepSeek direct keys, switch here. One-click connect above will use the selected plan."
     },
     custom: {
       title: "Custom configuration",
       lede: "Manually adjust connection type, API URL, model IDs, and image generation settings.",
       whenNeededTitle: "When do you need custom configuration?",
-      whenNeeded1: "Using a relay other than OhMyGPT—you need to enter the API URL manually",
+      whenNeeded1: "Using another relay or self-hosted service—you need to enter the API URL manually",
       whenNeeded2: "You want different chat, vision, or image model IDs",
       whenNeeded3: "You want separate image tier settings or a dedicated image API Key"
     },
-    bundlesLabel: "Recommended setup",
-    bundlesHint: "Pick a plan, paste your key, then click Connect & verify once.",
-    recommendedBadge: "Recommended",
+    bundlesLabel: "Cloud plans",
+    bundlesHint: "Pick a plan, paste your key, and verify. You can always edit the URL and model IDs.",
     oneClickConnect: "Connect & verify",
     oneClickRunning: "Connecting and verifying…",
     oneClickProgressSave: "Saving config",
@@ -766,12 +763,12 @@ export const en: TranslationTree = {
     readinessFail: "Failed",
     copyErrorDetail: "Copy error detail",
     readinessUnavailable: "Not supported on this plan",
-    readinessUnavailableVision: "Reference images not supported—try OhMyGPT or OpenAI",
+    readinessUnavailableVision: "Reference images not supported—try a full-stack cloud plan or OpenAI",
     readinessUnavailableWeb: "Web research not supported—deep creation is limited",
-    readinessUnavailableImage: "Pet images not supported—try OhMyGPT or OpenAI",
+    readinessUnavailableImage: "Pet images not supported—try a full-stack cloud plan or OpenAI",
     advancedTitle: "Advanced customization",
     advancedLede: "Connection type, API URL, model IDs, etc. Usually no changes needed.",
-    deviatedFromBundle: "Current config differs from the selected recommended plan",
+    deviatedFromBundle: "Current config differs from the selected cloud plan",
     faqTitle: "How do I get an API Key?",
     faqLinkOhmygpt: "Open OhMyGPT",
     faqLinkOpenai: "Open OpenAI platform",
@@ -793,7 +790,7 @@ export const en: TranslationTree = {
         step1: "Register at platform.deepseek.com",
         step2: "Create an API Key (top up as needed)",
         step3: "Paste below for chat only (vision/images/deep creation unavailable)",
-        step4: "For full features pick OhMyGPT, or use a local model for chat only"
+        step4: "For full features pick another full-stack cloud plan, or use a local model for chat only"
       }
     },
     bundles: {
@@ -988,10 +985,10 @@ export const en: TranslationTree = {
       claude: "Anthropic direct. Native vision and web search support."
     },
     visionHints: {
-      "doubao-seed": "OhMyGPT default; good for Chinese / anime character recognition",
-      "gpt-4o-mini": "Most cost-effective vision model on OpenAI direct",
-      "gpt-4o": "Higher quality vision—10× more accurate than mini but pricier",
-      "claude-haiku": "Cheapest vision model on the Anthropic route"
+      "doubao-seed": "Good for Chinese / anime character recognition",
+      "gpt-4o-mini": "Cost-effective vision model on OpenAI direct",
+      "gpt-4o": "Higher quality vision than mini, at a higher cost",
+      "claude-haiku": "Lower-cost vision model on the Anthropic route"
     },
     visionLabels: {
       "doubao-seed": "Doubao Seed"
@@ -1011,7 +1008,8 @@ export const en: TranslationTree = {
     stepDisclaimer: "How your data is handled",
     stepProvider: "Connect your LLM",
     customLaterHint:
-      "For first-run, use OhMyGPT one-click or Local model. Fine-tune custom settings later in Settings.",
+      "For first-run, use Cloud one-click or Local model. Fine-tune custom settings later in Settings.",
+    pickProviderMode: "Choose a connection mode to continue.",
     stepStarter: "Pick one to start",
     welcomeBody:
       "Bailin is not a substitute for professional counseling, medical, or legal advice. It offers a perspective assistant inspired by public sources—not the person themselves, and not officially authorized.",
@@ -1021,7 +1019,7 @@ export const en: TranslationTree = {
     disclaimerCta: "Got it, next",
     back: "← Back",
     providerIntro:
-      "Choose OhMyGPT one-click, a local model (chat first), or fine-tune later in Settings.",
+      "Choose cloud one-click, a local model (chat first), or fine-tune later in Settings.",
     advancedHint:
       "After setup, adjust details under Advanced customization on the Model & API Key page.",
     protocolOpenAILong: "OpenAI compatible (DeepSeek / Moonshot / SiliconFlow …)",

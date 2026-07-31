@@ -40,7 +40,7 @@ import { useT } from "../../shared/i18n/index.js";
 
 type Kind = "openai-compatible" | "anthropic-compatible";
 
-const OHMYGPT_BUNDLE = getRecommendedBundle(DEFAULT_BUNDLE_ID)!;
+const CLOUD_DEFAULT_BUNDLE = getRecommendedBundle(DEFAULT_BUNDLE_ID)!;
 const DEFAULT_LOCAL = getLocalEndpointPreset(DEFAULT_LOCAL_PRESET_ID)!;
 
 const DEFAULT_WEB_SEARCH_MODEL = "gpt-4o-mini-search-preview";
@@ -299,7 +299,7 @@ export function ApiKeyPanel(): JSX.Element {
 
   useDirtyTracker(modeDirty);
 
-  const ohmygptProgressLabels: Partial<Record<ReadinessKey, string>> = useMemo(
+  const cloudProgressLabels: Partial<Record<ReadinessKey, string>> = useMemo(
     () => ({
       chat: t("provider.oneClickProgressChat")
     }),
@@ -346,19 +346,19 @@ export function ApiKeyPanel(): JSX.Element {
         webSearchModel: "",
         hasKey: false
       };
-    } else if (next === "ohmygpt") {
+    } else if (next === "cloud") {
       if (baseline && !isLocalBaseUrl(baseline.baseUrl)) {
         restoreFromBaseline();
         nextOrigin = { ...baseline };
       } else {
-        applyBundleToForm(OHMYGPT_BUNDLE, bundleSetters);
+        applyBundleToForm(CLOUD_DEFAULT_BUNDLE, bundleSetters);
         setApiKey(savedApiKey);
         nextOrigin = {
-          kind: OHMYGPT_BUNDLE.llm.kind,
-          baseUrl: OHMYGPT_BUNDLE.llm.baseUrl,
-          model: OHMYGPT_BUNDLE.llm.model,
-          visionModel: OHMYGPT_BUNDLE.llm.visionModel,
-          webSearchModel: OHMYGPT_BUNDLE.llm.webSearchModel,
+          kind: CLOUD_DEFAULT_BUNDLE.llm.kind,
+          baseUrl: CLOUD_DEFAULT_BUNDLE.llm.baseUrl,
+          model: CLOUD_DEFAULT_BUNDLE.llm.model,
+          visionModel: CLOUD_DEFAULT_BUNDLE.llm.visionModel,
+          webSearchModel: CLOUD_DEFAULT_BUNDLE.llm.webSearchModel,
           hasKey: Boolean(savedApiKey.trim())
         };
       }
@@ -385,7 +385,7 @@ export function ApiKeyPanel(): JSX.Element {
 
   async function oneClickConnect(): Promise<void> {
     if (!apiKey.trim()) return;
-    applyBundleToForm(OHMYGPT_BUNDLE, bundleSetters);
+    applyBundleToForm(CLOUD_DEFAULT_BUNDLE, bundleSetters);
     setBusy(true);
     setProgressLabel(t("provider.oneClickProgressSave"));
     setReadiness(IDLE_READINESS);
@@ -393,11 +393,11 @@ export function ApiKeyPanel(): JSX.Element {
     try {
       const result = await applyOhMyGptBundle(
         bailin,
-        OHMYGPT_BUNDLE,
+        CLOUD_DEFAULT_BUNDLE,
         apiKey.trim(),
         (key, state) => {
-          if (state.status === "running" && ohmygptProgressLabels[key]) {
-            setProgressLabel(ohmygptProgressLabels[key]!);
+          if (state.status === "running" && cloudProgressLabels[key]) {
+            setProgressLabel(cloudProgressLabels[key]!);
           }
           setReadiness((prev) => ({ ...prev, [key]: state }));
         }
@@ -408,7 +408,7 @@ export function ApiKeyPanel(): JSX.Element {
         return;
       }
 
-      const bundle = OHMYGPT_BUNDLE;
+      const bundle = CLOUD_DEFAULT_BUNDLE;
       const origin: FormOrigin = {
         kind: bundle.llm.kind,
         baseUrl: bundle.llm.baseUrl.trim(),
@@ -422,6 +422,7 @@ export function ApiKeyPanel(): JSX.Element {
       setViewOrigin(origin);
       setSavedApiKey(apiKey.trim());
       setImageConfig({ ...bundle.image });
+      writeProviderMode("cloud");
 
       if (result.allRequiredPassed) {
         const chat = result.readiness.chat;
@@ -655,9 +656,9 @@ export function ApiKeyPanel(): JSX.Element {
 
         {mode !== "local" ? <ProviderGuideSection compact={mode === "custom"} /> : null}
 
-        {mode === "ohmygpt" ? (
+        {mode === "cloud" ? (
           <QuickStartSection
-            selectedBundle={OHMYGPT_BUNDLE}
+            selectedBundle={CLOUD_DEFAULT_BUNDLE}
             apiKey={apiKey}
             showKey={showKey}
             busy={busy}
