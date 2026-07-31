@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  AUTHOR_MODEL_STACK,
+  SINGLE_KEY_EXAMPLE_STACK,
   MODEL_ROLE_IDS,
   type ModelRoleId
 } from "./presets.js";
 import { useT } from "../../shared/i18n/index.js";
-import { OhMyGptDisclaimer } from "./OhMyGptDisclaimer.js";
+import { CloudEndpointHint } from "./CloudEndpointHint.js";
 
 const ROLE_I18N: Record<ModelRoleId, string> = {
   chat: "chat",
@@ -74,54 +74,58 @@ export function ProviderGuideSection({ compact = false }: ProviderGuideSectionPr
             <>
               <div>
                 <div className="bl-field-label" style={{ marginBottom: 6 }}>
-                  {t("provider.guide.authorStack.title")}
+                  {t("provider.guide.singleKeyExample.title")}
                 </div>
                 <p className="bl-field-hint" style={{ margin: "0 0 12px" }}>
-                  {t("provider.guide.authorStack.intro")}
+                  {t("provider.guide.singleKeyExample.intro")}
                 </p>
                 <dl className="provider-spec-rail">
                   <div className="provider-spec-rail__row">
-                    <dt>{t("provider.guide.authorStackRows.relay")}</dt>
+                    <dt>{t("provider.guide.singleKeyExampleRows.relay")}</dt>
                     <dd>
-                      {AUTHOR_MODEL_STACK.relay.label}
+                      {SINGLE_KEY_EXAMPLE_STACK.relay.label}
                       <code className="provider-spec-rail__mono">
-                        {AUTHOR_MODEL_STACK.relay.baseUrl}
+                        {SINGLE_KEY_EXAMPLE_STACK.relay.baseUrl}
                       </code>
                     </dd>
                   </div>
                   <div className="provider-spec-rail__row">
-                    <dt>{t("provider.guide.authorStackRows.chat")}</dt>
-                    <dd>
-                      <code className="provider-spec-rail__mono">{AUTHOR_MODEL_STACK.chat.model}</code>
-                    </dd>
-                  </div>
-                  <div className="provider-spec-rail__row">
-                    <dt>{t("provider.guide.authorStackRows.vision")}</dt>
-                    <dd>
-                      <code className="provider-spec-rail__mono">{AUTHOR_MODEL_STACK.vision.model}</code>
-                    </dd>
-                  </div>
-                  <div className="provider-spec-rail__row">
-                    <dt>{t("provider.guide.authorStackRows.webSearch")}</dt>
+                    <dt>{t("provider.guide.singleKeyExampleRows.chat")}</dt>
                     <dd>
                       <code className="provider-spec-rail__mono">
-                        {AUTHOR_MODEL_STACK.webSearch.model}
+                        {SINGLE_KEY_EXAMPLE_STACK.chat.model}
                       </code>
                     </dd>
                   </div>
                   <div className="provider-spec-rail__row">
-                    <dt>{t("provider.guide.authorStackRows.imageGen")}</dt>
+                    <dt>{t("provider.guide.singleKeyExampleRows.vision")}</dt>
                     <dd>
                       <code className="provider-spec-rail__mono">
-                        {AUTHOR_MODEL_STACK.imageGen.model}
+                        {SINGLE_KEY_EXAMPLE_STACK.vision.model}
+                      </code>
+                    </dd>
+                  </div>
+                  <div className="provider-spec-rail__row">
+                    <dt>{t("provider.guide.singleKeyExampleRows.webSearch")}</dt>
+                    <dd>
+                      <code className="provider-spec-rail__mono">
+                        {SINGLE_KEY_EXAMPLE_STACK.webSearch.model}
+                      </code>
+                    </dd>
+                  </div>
+                  <div className="provider-spec-rail__row">
+                    <dt>{t("provider.guide.singleKeyExampleRows.imageGen")}</dt>
+                    <dd>
+                      <code className="provider-spec-rail__mono">
+                        {SINGLE_KEY_EXAMPLE_STACK.imageGen.model}
                       </code>
                       <span className="provider-spec-rail__tier">
-                        ({AUTHOR_MODEL_STACK.imageGen.tier})
+                        ({SINGLE_KEY_EXAMPLE_STACK.imageGen.tier})
                       </span>
                     </dd>
                   </div>
                 </dl>
-                <OhMyGptDisclaimer />
+                <CloudEndpointHint />
               </div>
 
               <p className="bl-field-hint" style={{ margin: 0 }}>

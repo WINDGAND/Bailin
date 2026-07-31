@@ -78,17 +78,21 @@ Bailin is a **fully local**, open-source Windows desktop AI character companion.
 ### Requirements
 
 - Windows 10 / 11
-- [Node.js](https://nodejs.org/) ≥ 20.10
+- [Node.js](https://nodejs.org/) **20 LTS or 22 LTS** (≥ 20.10; Node 24 Current is not recommended on Windows — native modules often fail to compile)
 - [pnpm](https://pnpm.io/) 9 (`corepack enable`)
+- If `better-sqlite3` must compile from source on Windows: install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the **Desktop development with C++** workload
 
 ### Install and run
 
 ```bash
 git clone https://github.com/WINDGAND/Bailin.git
 cd Bailin
-pnpm install          # builds packages + rebuilds better-sqlite3
+pnpm run setup        # recommended: like pnpm install, with clearer failure hints; skips unused Puppeteer browser download
+# or: pnpm install
 pnpm dev              # Vite + tsc watch + Electron
 ```
+
+> If install fails: check the **Bailin install failure** section printed at the end of the terminal output. Common causes: too-new Node, missing C++ build tools, or prebuild download blocked by TLS/proxy. Prefer the Releases installer if you only want to run the app.
 
 First launch runs the **setup wizard**: disclaimer → connect a model (cloud API key **or** local model) → create or import a character → pet appears on desktop.
 

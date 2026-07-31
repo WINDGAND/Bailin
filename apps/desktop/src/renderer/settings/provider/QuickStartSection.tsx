@@ -4,7 +4,7 @@ import { FieldLabel } from "../../shared/FieldHelp.js";
 import { ReadinessChecklist } from "./ReadinessChecklist.js";
 import { useBailin } from "../../shared/use-bailin.js";
 import { useT } from "../../shared/i18n/index.js";
-import { OhMyGptDisclaimer } from "./OhMyGptDisclaimer.js";
+import { CloudEndpointHint } from "./CloudEndpointHint.js";
 
 const FAQ_LINKS: Record<RecommendedBundle["faqId"], { href: string; site: string }> = {
   ohmygpt: { href: "https://www.ohmygpt.com/", site: "OhMyGPT" },
@@ -43,7 +43,6 @@ export function QuickStartSection({
 }: QuickStartSectionProps): JSX.Element {
   const t = useT();
   const bailin = useBailin();
-  const isAuthor = selectedBundle.id === "ohmygpt";
   const faqId = selectedBundle.faqId;
   const link = FAQ_LINKS[faqId];
   const bundleLabel = t(`provider.bundles.${selectedBundle.id}.label`);
@@ -51,14 +50,8 @@ export function QuickStartSection({
   return (
     <section className="forge-section provider-connect-section">
       <div className="forge-section__head">
-        <span className="bl-field-label">
-          {isAuthor
-            ? t("provider.quickStart.title")
-            : t("provider.quickStart.titleAlt", { bundle: bundleLabel })}
-        </span>
-        <span className="forge-section__lede">
-          {isAuthor ? t("provider.quickStart.subtitle") : t("provider.quickStart.subtitleAlt")}
-        </span>
+        <span className="bl-field-label">{t("provider.quickStart.title")}</span>
+        <span className="forge-section__lede">{t("provider.quickStart.subtitle")}</span>
       </div>
 
       <div
@@ -88,28 +81,20 @@ export function QuickStartSection({
               className="provider-link-btn"
               onClick={() => void bailin.app.openExternal(link.href)}
             >
-              {isAuthor
-                ? t("provider.quickStart.openSite")
-                : t("provider.quickStart.openSiteAlt", { site: link.site })}
+              {t("provider.quickStart.openSiteAlt", { site: link.site })}
             </button>
           </div>
 
           <div className="provider-connect__action">
-            {isAuthor ? (
-              <div className="provider-connect__brand">
-                <span className="display display--section provider-connect__brand-name">OhMyGPT</span>
-                <span className="provider-connect__tagline">
-                  {t("provider.bundles.ohmygpt.tagline")}
-                </span>
-                {compact ? <OhMyGptDisclaimer /> : null}
-              </div>
-            ) : (
-              <div className="provider-connect__brand">
-                <span className="display display--section provider-connect__brand-name">
-                  {bundleLabel}
-                </span>
-              </div>
-            )}
+            <div className="provider-connect__brand">
+              <span className="display display--section provider-connect__brand-name">
+                {bundleLabel}
+              </span>
+              <span className="provider-connect__tagline">
+                {t(`provider.bundles.${selectedBundle.id}.tagline`)}
+              </span>
+              {compact ? <CloudEndpointHint /> : null}
+            </div>
 
             <div className="provider-connect__key-block">
               <FieldLabel htmlFor="provider-key" help={t("provider.help.apiKey")}>

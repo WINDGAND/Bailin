@@ -130,7 +130,6 @@ export type BundleFaqId = "ohmygpt" | "openai" | "deepseek";
 export interface RecommendedBundle {
   id: string;
   /** i18n key: provider.bundles.{id}.label */
-  recommended?: boolean;
   capabilities: Record<BundleFeature, boolean>;
   faqId: BundleFaqId;
   llm: {
@@ -146,7 +145,6 @@ export interface RecommendedBundle {
 export const RECOMMENDED_BUNDLES: RecommendedBundle[] = [
   {
     id: "ohmygpt",
-    recommended: true,
     faqId: "ohmygpt",
     capabilities: {
       chat: true,
@@ -201,10 +199,11 @@ export const RECOMMENDED_BUNDLES: RecommendedBundle[] = [
   }
 ];
 
+/** 云端一键的静默技术默认（单 Key 全功能示例）；UI 不标「推荐」。 */
 export const DEFAULT_BUNDLE_ID = "ohmygpt";
 
-/** 作者同款模型选型（UI 指引与快速上手展示用）。 */
-export const AUTHOR_MODEL_STACK = {
+/** 单 Key 全功能示例选型（UI 指引展示用，非品牌背书）。 */
+export const SINGLE_KEY_EXAMPLE_STACK = {
   relay: { label: "OhMyGPT", baseUrl: "https://api.ohmygpt.com/v1" },
   chat: { model: "deepseek-v4-flash", role: "chat" as const },
   vision: { model: "bytedance/doubao-seed-2.0-lite-260428", role: "vision" as const },
@@ -254,7 +253,7 @@ export const VISION_MODEL_PRESETS: VisionModelPreset[] = [
     id: "doubao-seed",
     label: "豆包 Seed",
     model: "bytedance/doubao-seed-2.0-lite-260428",
-    hint: "OhMyGPT 默认；中文 / 二次元角色识别好"
+    hint: "中文 / 二次元角色识别好"
   },
   {
     id: "gpt-4o-mini",

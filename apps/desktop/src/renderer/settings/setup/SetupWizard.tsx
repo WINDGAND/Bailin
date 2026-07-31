@@ -212,7 +212,7 @@ function ProviderStep({
   const t = useT();
   const bailin = useBailin();
   const { showToast } = useToast();
-  const [mode, setMode] = useState<ProviderMode>("ohmygpt");
+  const [mode, setMode] = useState<ProviderMode | null>(null);
   const [selectedBundleId] = useState(DEFAULT_BUNDLE_ID);
   const defaultLocal = getLocalEndpointPreset(DEFAULT_LOCAL_PRESET_ID)!;
   const [localPresetId, setLocalPresetId] = useState(DEFAULT_LOCAL_PRESET_ID);
@@ -269,6 +269,8 @@ function ProviderStep({
     if (next === "local") {
       applyLocalPreset(defaultLocal);
       setApiKey("");
+    } else if (next === "cloud") {
+      setApiKey("");
     }
   }
 
@@ -306,6 +308,7 @@ function ProviderStep({
       });
       return;
     }
+    writeProviderMode("cloud");
     setStatus({ kind: "ok", latency: chat.latencyMs });
     showToast({
       kind: "success",
@@ -374,9 +377,19 @@ function ProviderStep({
         {t("setup.stepProvider")}
       </div>
 
+      <p className="body-sm" style={{ color: "var(--ink-muted)", margin: "0 0 4px" }}>
+        {t("setup.providerIntro")}
+      </p>
+
       <ProviderModeSwitch mode={mode} onChange={handleModeChange} />
 
-      {mode === "ohmygpt" ? (
+      {mode === null ? (
+        <p className="body-sm" style={{ color: "var(--ink-muted)", margin: 0 }}>
+          {t("setup.pickProviderMode")}
+        </p>
+      ) : null}
+
+      {mode === "cloud" ? (
         <>
           <ProviderGuideSection compact />
           <QuickStartSection

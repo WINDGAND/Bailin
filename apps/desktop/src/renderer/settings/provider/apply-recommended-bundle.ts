@@ -223,7 +223,7 @@ async function runImageGenTest(
   }
 }
 
-/** OhMyGPT 一键接入：写入作者预设，仅验证 Key + 主模型。 */
+/** 云端一键接入：写入所选 bundle 预设，仅验证 Key + 主模型。 */
 export async function applyOhMyGptBundle(
   bailin: BailinProviderApis,
   bundle: RecommendedBundle,
