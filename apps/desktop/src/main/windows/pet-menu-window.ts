@@ -1,12 +1,12 @@
 import { BrowserWindow } from "electron";
 import { join } from "node:path";
-import { PET_MENU_PANEL_WIDTH, PET_MENU_WINDOW_HEIGHT } from "./pet-window.js";
+import { PET_MENU_PANEL_WIDTH, PET_MENU_ROOT_CONTENT_HEIGHT } from "./pet-window.js";
 
 /** 桌宠右键快捷菜单：独立透明窗，绝不改动桌宠窗 bounds。 */
 export function createPetMenuWindow(devUrl: string | undefined): BrowserWindow {
   const win = new BrowserWindow({
     width: PET_MENU_PANEL_WIDTH,
-    height: PET_MENU_WINDOW_HEIGHT,
+    height: PET_MENU_ROOT_CONTENT_HEIGHT,
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",

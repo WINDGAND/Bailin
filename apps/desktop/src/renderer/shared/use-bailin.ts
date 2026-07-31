@@ -130,7 +130,7 @@ interface BailinWindow {
       getRecentChanges(limit?: number): Promise<import("../../shared/ipc-contract.js").ProfileChangeRecord[]>;
       undoLastChange(): Promise<{ ok: boolean; profile?: import("../../shared/ipc-contract.js").UserProfile; reason?: string }>;
     };
-    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(tab?: import("../../shared/ipc-contract.js").SettingsTab): Promise<void>; hide(): Promise<void>; resolveContextMenuSide(): Promise<"left" | "right" | "above" | "below" | null>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | "above" | "below" | null>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
+    pet: { summon(): Promise<void>; hush(ms: number): Promise<void>; setPosition(x: number, y: number): Promise<void>; setMouseIgnore(ignore: boolean): Promise<void>; openChat(): Promise<void>; openSettings(tab?: import("../../shared/ipc-contract.js").SettingsTab): Promise<void>; hide(): Promise<void>; resolveContextMenuSide(): Promise<"left" | "right" | "above" | "below" | null>; setContextMenuOpen(open: boolean): Promise<"left" | "right" | "above" | "below" | null>; fitContextMenuSize(size: { width?: number; height: number }): Promise<void>; dragStart(): Promise<void>; dragMove(): Promise<void>; dragEnd(): Promise<void> };
     proactiveBubble: { dismiss(): Promise<void>; resize(size: { width: number; height: number }): Promise<void> };
     proactive: {
       getSettings(): Promise<ProactiveSettings>;
@@ -323,6 +323,7 @@ function makeBailinStub(): BailinWindow["bailin"] {
       hide: async () => undefined,
       resolveContextMenuSide: async () => "right",
       setContextMenuOpen: async () => null,
+      fitContextMenuSize: async () => undefined,
       dragStart: async () => undefined,
       dragMove: async () => undefined,
       dragEnd: async () => undefined
