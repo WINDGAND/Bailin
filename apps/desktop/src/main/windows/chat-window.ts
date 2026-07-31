@@ -80,7 +80,10 @@ export function positionChatNear(win: BW, anchor: ChatWindowAnchor, size: ChatWi
     width: anchor.petW,
     height: anchor.petH
   });
-  const margin = 4;
+  // 桌宠窗有透明留白：略伸入窗缘，对话视觉上更贴近精灵（与快捷菜单 tuck 同量级）。
+  const gap = 4;
+  const tuck = 36;
+  const inset = gap - tuck;
   const work = display.workArea;
   const petCenterX = anchor.petX + anchor.petW / 2;
   const distToLeft = petCenterX - work.x;
@@ -89,15 +92,15 @@ export function positionChatNear(win: BW, anchor: ChatWindowAnchor, size: ChatWi
   // 桌宠离哪侧更近，就把聊天窗放到另一侧，避免贴边溢出。
   let x =
     distToLeft <= distToRight
-      ? anchor.petX + anchor.petW + margin
-      : anchor.petX - width - margin;
+      ? anchor.petX + anchor.petW + inset
+      : anchor.petX - width - inset;
 
   // 首选侧放不下时换到另一侧，最后再 clamp 到 workArea 内。
   if (x + width > work.x + work.width) {
-    x = anchor.petX - width - margin;
+    x = anchor.petX - width - inset;
   }
   if (x < work.x) {
-    x = anchor.petX + anchor.petW + margin;
+    x = anchor.petX + anchor.petW + inset;
   }
   x = Math.max(work.x, Math.min(x, work.x + work.width - width));
 

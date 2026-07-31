@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Bailin · 快捷菜单</title>
+    <link rel="icon" type="image/png" href="./assets/logo.png" />
+    <script src="./shared/theme-init.js"></script>
+    <link rel="stylesheet" href="./styles/design-system.css" />
+    <style>
+      html,
+      body,
+      #root {
+        margin: 0;
+        padding: 0;
+        background: transparent !important;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        -webkit-app-region: no-drag;
+      }
+      .pet-menu-shell {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: flex-start;
+        justify-content: stretch;
+        pointer-events: none;
+        padding: 2px 0 4px;
+        box-sizing: border-box;
+      }
+      .pet-menu-shell > * {
+        pointer-events: auto;
+      }
+      .pet-menu-panel:focus {
+        outline: none;
+      }
+      .pet-menu-item {
+        background: transparent;
+        /* 高亮铺满圆角：首尾项跟面板半径对齐，避免粉边在角上被裁切 */
+        border-radius: 0;
+      }
+      .pet-menu-item:first-child {
+        border-radius: 13px 13px 0 0;
+      }
+      .pet-menu-item:last-child {
+        border-radius: 0 0 13px 13px;
+      }
+      .pet-menu-item:only-child {
+        border-radius: 13px;
+      }
+      .pet-menu-item:hover {
+        background: var(--magenta-tint);
+      }
+      .pet-menu-item:active {
+        background: color-mix(in srgb, var(--magenta-deep) 14%, transparent);
+      }
+      /* 不用 inset outline：会在 overflow + border-radius 下被截成直边粉条 */
+      .pet-menu-item:focus {
+        outline: none;
+      }
+      .pet-menu-item:focus-visible {
+        background: var(--magenta-tint);
+        box-shadow: inset 0 0 0 2px var(--magenta-soft);
+      }
+      .pet-menu-panel {
+        width: 100%;
+        max-height: calc(100vh - 8px);
+        overflow-x: hidden;
+        overflow-y: auto;
+        pointer-events: auto;
+        background: var(--paper);
+        border: 1px solid var(--grid-strong);
+        border-radius: 14px;
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: var(--ink);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.65),
+          0 1px 0 rgba(31, 58, 58, 0.04),
+          0 12px 28px -16px rgba(31, 58, 58, 0.28);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./pet-menu/main.tsx"></script>
+  </body>
+</html>

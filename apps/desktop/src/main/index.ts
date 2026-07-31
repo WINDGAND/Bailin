@@ -45,11 +45,12 @@ import { getMainTrayLabels, parseUiLocale } from "../shared/ui-labels.js";
 import { registerChatTurnHandlers } from "./ipc/chat-turn-handlers.js";
 import { registerChatSessionHandlers } from "./ipc/chat-session-handlers.js";
 import {
-  computePetMenuWindowBounds,
+  computePetMenuPopupBounds,
   createPetWindow,
   resolvePetMenuSide,
   type PetMenuSide
 } from "./windows/pet-window.js";
+import { createPetMenuWindow } from "./windows/pet-menu-window.js";
 import { getPetWindowSize } from "../shared/pet-display-scale.js";
 import { readProactiveSettings, getLongActiveThreshold } from "./proactive/proactive-settings.js";
 import { clampPetWindow, clampRectToDisplayBounds } from "./windows/window-bounds.js";
@@ -83,6 +84,7 @@ log.info(
 
 let tray: Tray | null = null;
 let petWin: BrowserWindow | null = null;
+let petMenuWin: BrowserWindow | null = null;
 let vaultRef: LocalVault | null = null;
 let chatWin: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
@@ -106,8 +108,6 @@ let chatWindowSize: ChatWindowSize = { ...CHAT_WINDOW_DEFAULT_SIZE };
 /** 程序化 reposition / resize 期间忽略 resized 事件，防止把漂移值写回 chatWindowSize。 */
 let chatRepositioning = false;
 let petContextMenuOpen = false;
-/** 打开右键菜单前的窗口 bounds，关闭时原样恢复。 */
-let petBoundsBeforeMenu: { x: number; y: number; width: number; height: number } | null = null;
 let proactiveBubbleHost: ProactiveBubbleHost | null = null;
 
 const devUrl = process.env.VITE_DEV_SERVER || undefined;
@@ -223,11 +223,29 @@ function ensureChatWindow(): BrowserWindow {
  */
 function getPetGeometry(pet: BrowserWindow): { x: number; y: number; width: number; height: number } {
   const { width, height } = getPetWindowSizeNow();
-  if (petContextMenuOpen && petBoundsBeforeMenu) {
-    return { x: petBoundsBeforeMenu.x, y: petBoundsBeforeMenu.y, width, height };
-  }
   const content = pet.getContentBounds();
   return { x: content.x, y: content.y, width, height };
+}
+
+function ensurePetMenuWindow(): BrowserWindow {
+  if (petMenuWin && !petMenuWin.isDestroyed()) return petMenuWin;
+  petMenuWin = createPetMenuWindow(devUrl);
+  petMenuWin.on("closed", () => {
+    petMenuWin = null;
+    petContextMenuOpen = false;
+  });
+  petMenuWin.on("blur", () => {
+    if (petContextMenuOpen) setPetContextMenuOpen(false);
+  });
+  return petMenuWin;
+}
+
+function deliverToPetMenu(menu: BrowserWindow, send: () => void): void {
+  if (menu.webContents.isLoading()) {
+    menu.webContents.once("did-finish-load", send);
+  } else {
+    send();
+  }
 }
 
 function applyPetWindowAtBase(base: { x: number; y: number }): { x: number; y: number } {
@@ -361,30 +379,11 @@ function syncChatNearPetIfVisible(): void {
   repositionChatNearPet(chatWin);
 }
 
-function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
+/** 只解析菜单应开在哪一侧，不改窗口尺寸（供渲染进程先锁布局再扩窗）。 */
+function resolvePetContextMenuSide(): PetMenuSide | null {
   const pet = petWin;
   if (!pet || pet.isDestroyed()) return null;
-  const baseSize = getPetWindowSizeNow();
-  const baseW = baseSize.width;
-  const baseH = baseSize.height;
-
-  if (!open) {
-    petContextMenuOpen = false;
-    if (petBoundsBeforeMenu) {
-      pet.setContentBounds({ ...petBoundsBeforeMenu });
-      petBoundsBeforeMenu = null;
-    } else {
-      const geo = getPetGeometry(pet);
-      pet.setContentBounds({ x: geo.x, y: geo.y, width: baseW, height: baseH });
-    }
-    clampPetWindow(pet, { width: baseW, height: baseH });
-    return null;
-  }
-
   const geo = getPetGeometry(pet);
-  petBoundsBeforeMenu = { x: geo.x, y: geo.y, width: geo.width, height: geo.height };
-  petContextMenuOpen = true;
-
   const display = screen.getDisplayMatching({
     x: geo.x,
     y: geo.y,
@@ -398,7 +397,7 @@ function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
     chatRect = { x: c.x, y: c.y, width: c.width, height: c.height };
   }
 
-  const side = resolvePetMenuSide({
+  return resolvePetMenuSide({
     petX: geo.x,
     petY: geo.y,
     petW: geo.width,
@@ -406,10 +405,60 @@ function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
     chat: chatRect,
     workArea: display.workArea
   });
+}
 
-  const bounds = computePetMenuWindowBounds(geo.x, geo.y, side, display.workArea, baseSize);
-  pet.setContentBounds(bounds);
-  pet.setIgnoreMouseEvents(false);
+function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return null;
+
+  if (!open) {
+    const wasOpen = petContextMenuOpen;
+    petContextMenuOpen = false;
+    if (wasOpen) {
+      broadcastToAllWindows(IPC.EventPetContextMenuClose, null);
+    }
+    if (petMenuWin && !petMenuWin.isDestroyed()) {
+      petMenuWin.hide();
+    }
+    return null;
+  }
+
+  const geo = getPetGeometry(pet);
+  const display = screen.getDisplayMatching({
+    x: geo.x,
+    y: geo.y,
+    width: geo.width,
+    height: geo.height
+  });
+
+  let chatRect: { x: number; y: number; width: number; height: number } | null = null;
+  if (chatWin && !chatWin.isDestroyed() && chatWin.isVisible()) {
+    const c = chatWin.getContentBounds();
+    chatRect = { x: c.x, y: c.y, width: c.width, height: c.height };
+  }
+
+  const side = resolvePetContextMenuSide() ?? "right";
+  const bounds = computePetMenuPopupBounds(
+    geo.x,
+    geo.y,
+    geo.width,
+    geo.height,
+    side,
+    display.workArea,
+    undefined,
+    chatRect
+  );
+
+  // 独立菜单窗：桌宠 bounds 完全不动，从根上消除扩窗导致的抽动与叠对话框。
+  const menu = ensurePetMenuWindow();
+  petContextMenuOpen = true;
+  menu.setContentBounds(bounds);
+  deliverToPetMenu(menu, () => {
+    broadcastToAllWindows(IPC.EventPetContextMenuOpen, { side });
+  });
+  if (!menu.isVisible()) menu.show();
+  menu.moveTop();
+  menu.focus();
   return side;
 }
 
@@ -434,6 +483,7 @@ function setChatWindowSize(width: number, height: number): ChatWindowSize {
 }
 
 function hidePet(): void {
+  setPetContextMenuOpen(false);
   proactiveBubbleHost?.hide();
   if (petWin && !petWin.isDestroyed()) petWin.hide();
 }
@@ -500,6 +550,7 @@ function ensurePetOnScreen(): void {
 function petDragStart(): void {
   const pet = petWin;
   if (!pet || pet.isDestroyed()) return;
+  setPetContextMenuOpen(false);
   const cursor = screen.getCursorScreenPoint();
   const content = pet.getContentBounds();
   dragCursorOffset = { dx: cursor.x - content.x, dy: cursor.y - content.y };
@@ -649,6 +700,7 @@ void app.whenReady().then(() => {
     hideChat,
     isChatVisible,
     hidePet,
+    resolvePetContextMenuSide,
     setPetContextMenuOpen,
     dismissProactiveBubble: () => proactiveBubbleHost?.hide(),
     resizeProactiveBubble: (size) => proactiveBubbleHost?.resize(size),

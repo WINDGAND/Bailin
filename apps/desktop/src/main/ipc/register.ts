@@ -61,6 +61,7 @@ export interface IpcDeps {
   hideChat: () => void;
   isChatVisible: () => boolean;
   hidePet: () => void;
+  resolvePetContextMenuSide: () => "left" | "right" | null;
   setPetContextMenuOpen: (open: boolean) => "left" | "right" | null;
   dismissProactiveBubble: () => void;
   resizeProactiveBubble: (size: { width: number; height: number }) => void;
@@ -853,6 +854,7 @@ export function registerIpc(deps: IpcDeps): void {
     deps.ensureSettingsWindow(tab);
   });
   ipcMain.handle(IPC.PetHide, () => deps.hidePet());
+  ipcMain.handle(IPC.PetResolveContextMenuSide, () => deps.resolvePetContextMenuSide());
   ipcMain.handle(IPC.PetSetContextMenuOpen, (_e, open: boolean) => {
     return deps.setPetContextMenuOpen(open);
   });

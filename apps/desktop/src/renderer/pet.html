@@ -20,80 +20,25 @@
         height: 100%;
         -webkit-app-region: no-drag;
       }
-      .pet-menu-item {
-        /* 默认透明背景必须在 class 里，不能写 inline style——否则 :hover 永远被覆盖 */
-        background: transparent;
-      }
-      .pet-menu-item:hover {
-        background: var(--magenta-tint);
-      }
-      .pet-menu-item:active {
-        /* 比 hover 略深的 magenta tint；用 magenta-deep 透明叠加，dark mode 自动跟随 token */
-        background: color-mix(in srgb, var(--magenta-deep) 14%, transparent);
-      }
-      .pet-menu-item:focus-visible {
-        background: var(--magenta-tint);
-        outline: 2px solid var(--magenta-soft);
-        outline-offset: -2px;
-      }
+      /*
+       * 快捷菜单已迁到独立 BrowserWindow，桌宠窗只渲染精灵。
+       * 不再为菜单扩宽 / flex 换向，从根上避免右键时左右抽动。
+       */
       .pet-root {
         position: fixed;
         inset: 0;
         display: flex;
         align-items: flex-end;
+        justify-content: center;
         pointer-events: none;
       }
-      .pet-root--menu-left {
-        flex-direction: row-reverse;
-      }
       .pet-slot {
-        flex-shrink: 0;
+        width: 100%;
+        height: 100%;
         display: flex;
         justify-content: center;
         align-items: flex-end;
         pointer-events: none;
-      }
-      .pet-menu-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 9998;
-        pointer-events: auto;
-        background: transparent;
-      }
-      .pet-menu-column {
-        position: relative;
-        z-index: 9999;
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        align-items: flex-start;
-        justify-content: flex-start;
-        padding: 2px 0 4px 0;
-        margin-left: -56px;
-        pointer-events: auto;
-      }
-      .pet-root--menu-left .pet-menu-column {
-        margin-left: 0;
-        margin-right: -56px;
-        justify-content: flex-end;
-      }
-      .pet-menu-panel {
-        width: 100%;
-        max-width: 196px;
-        max-height: calc(100vh - 20px);
-        overflow-y: auto;
-        pointer-events: auto;
-        background: var(--paper);
-        border: 1px solid var(--grid-strong);
-        border-radius: 14px;
-        font-family: var(--font-body);
-        font-size: 13px;
-        color: var(--ink);
-        /* high-end-visual-design：inset 高光 + 两层柔阴影，模拟"嵌在桌面上的玻璃片" */
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.65),
-          0 1px 0 rgba(31, 58, 58, 0.04),
-          0 12px 28px -16px rgba(31, 58, 58, 0.28);
       }
       .pet-column {
         display: flex;
@@ -114,8 +59,6 @@
       .pet-wrap {
         position: relative;
       }
-      /* 键盘焦点环：仅在 :focus-visible 时显示，鼠标点击不会触发，
-         避免拖拽时持续出现一圈洋红色描边干扰像素美术。 */
       .pet-wrap:focus {
         outline: none;
       }

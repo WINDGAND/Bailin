@@ -14,6 +14,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         pet: resolve(root, "pet.html"),
+        petMenu: resolve(root, "pet-menu.html"),
         chat: resolve(root, "chat.html"),
         settings: resolve(root, "settings.html"),
         proactiveBubble: resolve(root, "proactive-bubble.html")

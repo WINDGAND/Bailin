@@ -208,6 +208,7 @@ function injectStubScript(payload) {
         openChat: () => Promise.resolve(),
         openSettings: () => Promise.resolve(),
         hide: () => Promise.resolve(),
+        resolveContextMenuSide: () => Promise.resolve("right"),
         setContextMenuOpen: () => Promise.resolve("right"),
         dragStart: () => Promise.resolve(),
         dragMove: () => Promise.resolve(),
