@@ -6,7 +6,7 @@
   "author": "WINDGAND",
   "main": "./dist/main/main/index.js",
   "scripts": {
-    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "node ../../scripts/install/rebuild-native.mjs",
     "dev": "node ./scripts/dev.mjs",
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "tsc -p tsconfig.preload.json",

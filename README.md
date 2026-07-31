@@ -78,17 +78,21 @@
 ### 环境要求
 
 - Windows 10 / 11
-- [Node.js](https://nodejs.org/) ≥ 20.10
+- [Node.js](https://nodejs.org/) **20 LTS 或 22 LTS**（需 ≥ 20.10；不推荐 Node 24 Current，Windows 上原生模块更容易编译失败）
 - [pnpm](https://pnpm.io/) 9（`corepack enable`）
+- 源码安装若需本机编译 `better-sqlite3`：Windows 需 [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) 并勾选「使用 C++ 的桌面开发」
 
 ### 安装与运行
 
 ```bash
 git clone https://github.com/WINDGAND/Bailin.git
 cd Bailin
-pnpm install          # 自动 build packages + rebuild better-sqlite3
+pnpm run setup        # 推荐：等同 pnpm install，失败时附带中文说明；并跳过无关的 Puppeteer 浏览器下载
+# 或：pnpm install
 pnpm dev              # Vite + tsc watch + Electron
 ```
+
+> 若 `pnpm install` / `pnpm run setup` 失败：请先看终端**末尾**的「Bailin · 安装失败说明」。常见原因是 Node 过新、缺少 C++ 工具链，或预编译包因证书/代理下载失败。只想使用桌宠时可直接下 Releases 安装包，无需本地编译。
 
 首次启动会进入**首启向导**：免责声明 → 配置模型（云端 API Key **或** 本机本地模型）→ 创建或导入角色 → 桌宠上桌。
 

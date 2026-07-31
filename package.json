@@ -9,13 +9,28 @@
     "node": ">=20.10.0"
   },
   "scripts": {
+    "preinstall": "node scripts/install/preflight.mjs",
+    "setup": "node scripts/install/friendly-install.mjs",
     "build": "pnpm -r --filter=./packages/* run build && pnpm --filter=./apps/desktop run build",
     "postinstall": "pnpm -r --filter \"./packages/*\" run build",
     "dev": "pnpm --filter=./apps/desktop run dev",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
+    "test:install-help": "node --test scripts/install/diagnose-install-error.test.mjs",
     "package:win": "node apps/desktop/scripts/package-win.mjs"
+  },
+  "pnpm": {
+    "neverBuiltDependencies": [
+      "puppeteer"
+    ],
+    "packageExtensions": {
+      "better-sqlite3": {
+        "scripts": {
+          "install": "node ../../scripts/install/wrap-better-sqlite3-install.mjs"
+        }
+      }
+    }
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
