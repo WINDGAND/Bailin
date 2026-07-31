@@ -62,6 +62,7 @@ desktop.ini
 # 本地文档与导出产物（不推送远程：含大赛材料、superpowers 计划等）
 docs/
 output/
+tmp/
 
 # Local user vault (we never commit user data)
 **/AppData/
