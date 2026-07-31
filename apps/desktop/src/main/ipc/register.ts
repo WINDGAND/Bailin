@@ -63,6 +63,7 @@ export interface IpcDeps {
   hidePet: () => void;
   resolvePetContextMenuSide: () => "left" | "right" | "above" | "below" | null;
   setPetContextMenuOpen: (open: boolean) => "left" | "right" | "above" | "below" | null;
+  fitPetContextMenuSize: (size: { width?: number; height: number }) => void;
   dismissProactiveBubble: () => void;
   resizeProactiveBubble: (size: { width: number; height: number }) => void;
   movePet: (x: number, y: number) => { x: number; y: number };
@@ -857,6 +858,9 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.PetResolveContextMenuSide, () => deps.resolvePetContextMenuSide());
   ipcMain.handle(IPC.PetSetContextMenuOpen, (_e, open: boolean) => {
     return deps.setPetContextMenuOpen(open);
+  });
+  ipcMain.handle(IPC.PetFitContextMenuSize, (_e, size: { width?: number; height: number }) => {
+    deps.fitPetContextMenuSize(size);
   });
   ipcMain.handle(IPC.ProactiveBubbleDismiss, () => {
     deps.dismissProactiveBubble();

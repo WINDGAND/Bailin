@@ -7,8 +7,12 @@ import {
   type PetMenuStarter
 } from "../pet/PetContextMenu.js";
 
+/** 与主进程 PET_MENU_ROOT_CONTENT_HEIGHT / PET_MENU_WINDOW_HEIGHT 对齐。 */
+const MENU_ROOT_HEIGHT = 200;
+const MENU_EXPANDED_HEIGHT = 320;
+
 /**
- * 独立快捷菜单窗：桌宠窗不再扩宽/改锚定，从根上消除右键时的左右抽动与叠对话框。
+ * 独立快捷菜单窗：贴桌宠正左/正右；桌宠窗 bounds 不动。
  */
 export function PetMenuApp(): JSX.Element {
   const bailin = useBailin();
@@ -42,6 +46,7 @@ export function PetMenuApp(): JSX.Element {
         setHushMinutes(settings.defaultHushMinutes ?? 30);
         setSubmenu(null);
         setOpen(true);
+        void bailin.pet.fitContextMenuSize({ height: MENU_ROOT_HEIGHT });
       })();
     });
   }, [bailin, resyncLocale]);
@@ -52,6 +57,12 @@ export function PetMenuApp(): JSX.Element {
       setSubmenu(null);
     });
   }, [bailin]);
+
+  useEffect(() => {
+    if (!open) return;
+    const height = submenu === "switch" ? MENU_EXPANDED_HEIGHT : MENU_ROOT_HEIGHT;
+    void bailin.pet.fitContextMenuSize({ height });
+  }, [open, submenu, bailin]);
 
   useEffect(() => {
     if (!open) return;

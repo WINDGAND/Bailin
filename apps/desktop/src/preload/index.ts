@@ -98,6 +98,8 @@ const api = {
     hide: () => ipcRenderer.invoke(IPC.PetHide),
     resolveContextMenuSide: () => ipcRenderer.invoke(IPC.PetResolveContextMenuSide),
     setContextMenuOpen: (open: boolean) => ipcRenderer.invoke(IPC.PetSetContextMenuOpen, open),
+    fitContextMenuSize: (size: { width?: number; height: number }) =>
+      ipcRenderer.invoke(IPC.PetFitContextMenuSize, size),
     dragStart: () => ipcRenderer.invoke(IPC.PetDragStart),
     dragMove: () => ipcRenderer.invoke(IPC.PetDragMove),
     dragEnd: () => ipcRenderer.invoke(IPC.PetDragEnd)

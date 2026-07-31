@@ -45,9 +45,11 @@ import { getMainTrayLabels, parseUiLocale } from "../shared/ui-labels.js";
 import { registerChatTurnHandlers } from "./ipc/chat-turn-handlers.js";
 import { registerChatSessionHandlers } from "./ipc/chat-session-handlers.js";
 import {
-  computePetMenuPopupBounds,
+  computePetSideMenuBounds,
   createPetWindow,
-  resolvePetMenuSide,
+  PET_MENU_PANEL_WIDTH,
+  PET_MENU_ROOT_CONTENT_HEIGHT,
+  PET_MENU_WINDOW_HEIGHT,
   type PetMenuSide
 } from "./windows/pet-window.js";
 import { createPetMenuWindow } from "./windows/pet-menu-window.js";
@@ -379,7 +381,19 @@ function syncChatNearPetIfVisible(): void {
   repositionChatNearPet(chatWin);
 }
 
-/** 只解析菜单应开在哪一侧，不改窗口尺寸（供渲染进程先锁布局再扩窗）。 */
+/** 读取可见对话框矩形；不可见则 null。 */
+function getVisibleChatRect(): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null {
+  if (!chatWin || chatWin.isDestroyed() || !chatWin.isVisible()) return null;
+  const c = chatWin.getContentBounds();
+  return { x: c.x, y: c.y, width: c.width, height: c.height };
+}
+
+/** 按半屏 + 对话框对侧规则决定菜单在正左还是正右。 */
 function resolvePetContextMenuSide(): PetMenuSide | null {
   const pet = petWin;
   if (!pet || pet.isDestroyed()) return null;
@@ -390,21 +404,15 @@ function resolvePetContextMenuSide(): PetMenuSide | null {
     width: geo.width,
     height: geo.height
   });
-
-  let chatRect: { x: number; y: number; width: number; height: number } | null = null;
-  if (chatWin && !chatWin.isDestroyed() && chatWin.isVisible()) {
-    const c = chatWin.getContentBounds();
-    chatRect = { x: c.x, y: c.y, width: c.width, height: c.height };
-  }
-
-  return resolvePetMenuSide({
-    petX: geo.x,
-    petY: geo.y,
-    petW: geo.width,
-    petH: geo.height,
-    chat: chatRect,
-    workArea: display.workArea
-  });
+  return computePetSideMenuBounds(
+    geo.x,
+    geo.y,
+    geo.width,
+    geo.height,
+    display.workArea,
+    { width: PET_MENU_PANEL_WIDTH, height: PET_MENU_ROOT_CONTENT_HEIGHT },
+    getVisibleChatRect()
+  ).side;
 }
 
 function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
@@ -430,26 +438,17 @@ function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
     width: geo.width,
     height: geo.height
   });
-
-  let chatRect: { x: number; y: number; width: number; height: number } | null = null;
-  if (chatWin && !chatWin.isDestroyed() && chatWin.isVisible()) {
-    const c = chatWin.getContentBounds();
-    chatRect = { x: c.x, y: c.y, width: c.width, height: c.height };
-  }
-
-  const side = resolvePetContextMenuSide() ?? "right";
-  const bounds = computePetMenuPopupBounds(
+  const { bounds, side } = computePetSideMenuBounds(
     geo.x,
     geo.y,
     geo.width,
     geo.height,
-    side,
     display.workArea,
-    undefined,
-    chatRect
+    { width: PET_MENU_PANEL_WIDTH, height: PET_MENU_ROOT_CONTENT_HEIGHT },
+    getVisibleChatRect()
   );
 
-  // 独立菜单窗：桌宠 bounds 完全不动，从根上消除扩窗导致的抽动与叠对话框。
+  // 正左/正右；对侧够用时避开对话框，否则可盖住对话框。
   const menu = ensurePetMenuWindow();
   petContextMenuOpen = true;
   menu.setContentBounds(bounds);
@@ -460,6 +459,35 @@ function setPetContextMenuOpen(open: boolean): PetMenuSide | null {
   menu.moveTop();
   menu.focus();
   return side;
+}
+
+/** 子菜单加高后仍按桌宠正左/正右重新垂直居中。 */
+function fitPetContextMenuSize(size: { width?: number; height: number }): void {
+  if (!petContextMenuOpen || !petMenuWin || petMenuWin.isDestroyed()) return;
+  const pet = petWin;
+  if (!pet || pet.isDestroyed()) return;
+  const geo = getPetGeometry(pet);
+  const display = screen.getDisplayMatching({
+    x: geo.x,
+    y: geo.y,
+    width: geo.width,
+    height: geo.height
+  });
+  const width = Math.max(PET_MENU_PANEL_WIDTH, Math.round(size.width ?? PET_MENU_PANEL_WIDTH));
+  const height = Math.max(
+    PET_MENU_ROOT_CONTENT_HEIGHT,
+    Math.min(PET_MENU_WINDOW_HEIGHT + 200, Math.round(size.height))
+  );
+  const { bounds } = computePetSideMenuBounds(
+    geo.x,
+    geo.y,
+    geo.width,
+    geo.height,
+    display.workArea,
+    { width, height },
+    getVisibleChatRect()
+  );
+  petMenuWin.setContentBounds(bounds);
 }
 
 function getChatWindowSize(): ChatWindowSize {
@@ -702,6 +730,7 @@ void app.whenReady().then(() => {
     hidePet,
     resolvePetContextMenuSide,
     setPetContextMenuOpen,
+    fitPetContextMenuSize,
     dismissProactiveBubble: () => proactiveBubbleHost?.hide(),
     resizeProactiveBubble: (size) => proactiveBubbleHost?.resize(size),
     movePet,

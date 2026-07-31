@@ -22,6 +22,10 @@ export const PET_MENU_PANEL_WIDTH = 196;
 /** 菜单窗默认高度（内部可滚动；子菜单展开不改窗宽）。 */
 export const PET_MENU_WINDOW_HEIGHT = 320;
 /**
+ * 根菜单（约 5 项）白底面板高度；打开时用此窗高，展开「切换角色」后再加高。
+ */
+export const PET_MENU_ROOT_CONTENT_HEIGHT = 200;
+/**
  * 菜单与桌宠窗缘的「空气」间距。桌宠窗四周有大块透明留白，
  * 再配合 {@link PET_MENU_TUCK} 伸入留白，视觉上贴近精灵而不贴窗缘太远。
  */
@@ -116,6 +120,174 @@ function clampMenuY(
   return next;
 }
 
+/**
+ * 桌宠在左半屏 → 菜单开在正右；右半屏 → 正左。
+ * 中线落在桌宠中心上时算左半（菜单开右侧）。
+ */
+export function resolvePetMenuHorizontalSideByScreenHalf(
+  petX: number,
+  petW: number,
+  workArea: { x: number; width: number }
+): "left" | "right" {
+  const petCenter = petX + petW / 2;
+  const screenMid = workArea.x + workArea.width / 2;
+  return petCenter <= screenMid ? "right" : "left";
+}
+
+/** 该侧按 tuck 摆菜单时，理想 x 是否仍落在 workArea 内（不靠 clamp 硬拽回来）。 */
+export function petMenuSideFits(
+  side: "left" | "right",
+  petX: number,
+  petW: number,
+  workArea: { x: number; width: number },
+  menuW: number = PET_MENU_PANEL_WIDTH
+): boolean {
+  const inset = petMenuEdgeInset();
+  const x = side === "right" ? petX + petW + inset : petX - menuW - inset;
+  if (side === "right") {
+    return x + menuW <= workArea.x + workArea.width;
+  }
+  return x >= workArea.x;
+}
+
+/**
+ * 决定菜单在正左还是正右：
+ * 1. 默认按半屏；
+ * 2. 若对话框已开在某一侧，且对侧空间够 → 开对侧，避免叠对话框；
+ * 3. 对侧不够（贴边）→ 仍开在对话框同侧，允许盖住对话框。
+ */
+export function resolvePetMenuHorizontalSide(
+  petX: number,
+  petW: number,
+  workArea: { x: number; width: number },
+  chat: ScreenRect | null = null,
+  menuW: number = PET_MENU_PANEL_WIDTH
+): "left" | "right" {
+  const byHalf = resolvePetMenuHorizontalSideByScreenHalf(petX, petW, workArea);
+  if (!chat) return byHalf;
+
+  const petCenter = petX + petW / 2;
+  const chatCenter = chat.x + chat.width / 2;
+  const chatSide: "left" | "right" = chatCenter < petCenter ? "left" : "right";
+  const opposite: "left" | "right" = chatSide === "right" ? "left" : "right";
+
+  if (petMenuSideFits(opposite, petX, petW, workArea, menuW)) {
+    return opposite;
+  }
+  return chatSide;
+}
+
+/**
+ * 快捷菜单只出现在桌宠正左或正右（与桌宠垂直居中）。
+ * 有对话框且对侧够用时开对侧；对侧不够才与对话框同侧叠放。
+ */
+export function computePetSideMenuBounds(
+  petX: number,
+  petY: number,
+  petW: number,
+  petH: number,
+  workArea: { x: number; y: number; width: number; height: number },
+  menuSize: { width: number; height: number } = {
+    width: PET_MENU_PANEL_WIDTH,
+    height: PET_MENU_ROOT_CONTENT_HEIGHT
+  },
+  chat: ScreenRect | null = null
+): { bounds: ScreenRect; side: "left" | "right" } {
+  const side = resolvePetMenuHorizontalSide(petX, petW, workArea, chat, menuSize.width);
+  const inset = petMenuEdgeInset();
+  const { width, height } = menuSize;
+
+  let x = side === "right" ? petX + petW + inset : petX - width - inset;
+  // 仅防止整窗出屏；不改成上下。
+  x = clampMenuX(x, width, workArea);
+
+  let y = petY + (petH - height) / 2;
+  y = clampMenuY(y, height, workArea);
+
+  return {
+    bounds: {
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height)
+    },
+    side
+  };
+}
+
+/**
+ * @deprecated 已改为 {@link computePetSideMenuBounds}（贴桌宠正左/正右）。
+ * 指针旁放置：保留导出以免旧引用断裂。
+ */
+export function computeCursorMenuBounds(
+  cursorX: number,
+  cursorY: number,
+  workArea: { x: number; y: number; width: number; height: number },
+  menuSize: { width: number; height: number } = {
+    width: PET_MENU_PANEL_WIDTH,
+    height: PET_MENU_ROOT_CONTENT_HEIGHT
+  }
+): { bounds: ScreenRect; side: PetMenuSide } {
+  const offset = PET_MENU_GAP;
+  const workRight = workArea.x + workArea.width;
+  const workBottom = workArea.y + workArea.height;
+  const { width, height } = menuSize;
+
+  let x = cursorX + offset;
+  let side: PetMenuSide = "right";
+  if (x + width > workRight) {
+    x = cursorX - width - offset;
+    side = "left";
+  }
+
+  let y = cursorY + offset;
+  let flippedUp = false;
+  if (y + height > workBottom) {
+    y = cursorY - height - offset;
+    flippedUp = true;
+  }
+
+  x = clampMenuX(x, width, workArea);
+  y = Math.max(workArea.y, Math.min(y, workBottom - height));
+  if (flippedUp) side = "above";
+
+  return {
+    bounds: {
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height)
+    },
+    side
+  };
+}
+
+/**
+ * 子菜单展开时加高：尽量保持当前顶边，底溢出则上移；不横向挪到「空地」。
+ */
+export function resizeMenuBoundsInWorkArea(
+  current: ScreenRect,
+  nextSize: { width: number; height: number },
+  workArea: { x: number; y: number; width: number; height: number }
+): ScreenRect {
+  const width = Math.max(1, Math.round(nextSize.width));
+  const height = Math.max(1, Math.round(nextSize.height));
+  const workRight = workArea.x + workArea.width;
+  const workBottom = workArea.y + workArea.height;
+  let x = current.x;
+  let y = current.y;
+  if (x + width > workRight) x = workRight - width;
+  if (y + height > workBottom) y = workBottom - height;
+  if (x < workArea.x) x = workArea.x;
+  if (y < workArea.y) y = workArea.y;
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width,
+    height
+  };
+}
+
 function horizontalGap(a: ScreenRect, b: ScreenRect): number {
   if (a.x + a.width <= b.x) return b.x - (a.x + a.width);
   if (b.x + b.width <= a.x) return a.x - (b.x + b.width);
@@ -159,8 +331,8 @@ export function petMenuPlacementViable(
 }
 
 /**
+ * @deprecated 快捷菜单已改为 {@link computePetSideMenuBounds}（贴桌宠正左/正右）；保留供对照测试。
  * 根据聊天窗位置与屏幕可用空间决定菜单锚点方向。
- * 优先左右（有聊天时先对侧）；左右都不可行时回退上下，绝不强制夹到盖住精灵。
  */
 export function resolvePetMenuSide(input: PetMenuPlacementInput): PetMenuSide {
   const { petX, petY, petW, petH, chat, workArea } = input;
@@ -212,8 +384,8 @@ export function resolvePetMenuSide(input: PetMenuPlacementInput): PetMenuSide {
 }
 
 /**
- * 独立菜单窗的屏幕 bounds。
- * 不修改桌宠窗几何：桌宠屏幕位置恒定；左右可 tuck 进透明留白，上下用正 gap。
+ * @deprecated 快捷菜单已改为 {@link computePetSideMenuBounds}（贴桌宠正左/正右）；保留供对照测试。
+ * 独立菜单窗的屏幕 bounds（相对桌宠四向 + 避对话框）。
  */
 export function computePetMenuPopupBounds(
   petX: number,
@@ -274,7 +446,12 @@ export function computePetMenuPopupBounds(
         ? petX + petW + inset
         : petX - menuSize.width - inset;
     x = clampMenuX(x, menuSize.width, workArea);
-    y = clampMenuY(petY, menuSize.height, workArea);
+    // 按根菜单白底高度居中：窗体更高，透明区在面板下方留给子菜单。
+    y = clampMenuY(
+      petY + (petH - PET_MENU_ROOT_CONTENT_HEIGHT) / 2,
+      menuSize.height,
+      workArea
+    );
 
     let candidate: ScreenRect = {
       x,

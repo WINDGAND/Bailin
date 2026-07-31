@@ -17,6 +17,7 @@ const {
   PET_MENU_GAP,
   PET_MENU_TUCK,
   PET_MENU_PANEL_WIDTH,
+  PET_MENU_ROOT_CONTENT_HEIGHT,
   computePetMenuPopupBounds,
   petMenuEdgeInset,
   petCoreRect,
@@ -105,6 +106,30 @@ assert(
   "menu right tucked by expected inset",
   menuRight.x - (pet.x + pet.width) === inset
 );
+
+// 用屏幕中部宠物测垂直居中，避免贴底时 clamp 干扰
+const midPet = { x: 800, y: 400, width: 216, height: 234 };
+const menuMid = computePetMenuPopupBounds(
+  midPet.x,
+  midPet.y,
+  midPet.width,
+  midPet.height,
+  "right",
+  workArea
+);
+const expectedCenterY = Math.round(
+  midPet.y + (midPet.height - PET_MENU_ROOT_CONTENT_HEIGHT) / 2
+);
+assert("menu right vertically centered on pet", menuMid.y === expectedCenterY);
+const menuMidLeft = computePetMenuPopupBounds(
+  midPet.x,
+  midPet.y,
+  midPet.width,
+  midPet.height,
+  "left",
+  workArea
+);
+assert("menu left vertically centered on pet", menuMidLeft.y === expectedCenterY);
 
 // 贴左缘 + 对话在右：左侧夹紧会盖精灵，右侧贴宠会叠对话 → 回退 above/below
 const edgePet = { x: 8, y: 700, width: 216, height: 234 };
