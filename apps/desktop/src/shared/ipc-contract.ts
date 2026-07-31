@@ -236,9 +236,9 @@ export interface BailinApi {
     openSettings(tab?: SettingsTab): Promise<void>;
     hide(): Promise<void>;
     /** 解析右键菜单应开在左/右侧（独立菜单窗定位用，不改桌宠窗尺寸）。 */
-    resolveContextMenuSide(): Promise<"left" | "right" | null>;
+    resolveContextMenuSide(): Promise<"left" | "right" | "above" | "below" | null>;
     /** 打开/关闭独立快捷菜单窗；打开时桌宠窗 bounds 保持不变。 */
-    setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>;
+    setContextMenuOpen(open: boolean): Promise<"left" | "right" | "above" | "below" | null>;
     /** 拖动开始：主进程记录光标相对窗口的偏移（全在主进程物理坐标系内）。*/
     dragStart(): Promise<void>;
     /** 拖动移动：主进程用 getCursorScreenPoint() 算出新位置并 clamp。*/

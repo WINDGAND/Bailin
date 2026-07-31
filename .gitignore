@@ -59,8 +59,9 @@ desktop.ini
 # Agent skills（本地安装缓存，锁文件见 skills-lock.json）
 .agents/
 
-# Superpowers 本地计划/设计文档（不推送远程）
-docs/superpowers/
+# 本地文档与导出产物（不推送远程：含大赛材料、superpowers 计划等）
+docs/
+output/
 
 # Local user vault (we never commit user data)
 **/AppData/

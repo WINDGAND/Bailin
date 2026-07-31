@@ -61,8 +61,8 @@ export interface IpcDeps {
   hideChat: () => void;
   isChatVisible: () => boolean;
   hidePet: () => void;
-  resolvePetContextMenuSide: () => "left" | "right" | null;
-  setPetContextMenuOpen: (open: boolean) => "left" | "right" | null;
+  resolvePetContextMenuSide: () => "left" | "right" | "above" | "below" | null;
+  setPetContextMenuOpen: (open: boolean) => "left" | "right" | "above" | "below" | null;
   dismissProactiveBubble: () => void;
   resizeProactiveBubble: (size: { width: number; height: number }) => void;
   movePet: (x: number, y: number) => { x: number; y: number };

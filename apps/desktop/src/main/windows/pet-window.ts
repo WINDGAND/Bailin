@@ -35,7 +35,9 @@ export const PET_MENU_TUCK = 40;
 /** @deprecated 使用 {@link PET_MENU_PANEL_WIDTH}；保留别名以免外部引用断裂。 */
 export const PET_MENU_EXTRA_WIDTH = PET_MENU_PANEL_WIDTH;
 
-export type PetMenuSide = "left" | "right";
+export type PetMenuSide = "left" | "right" | "above" | "below";
+/** @deprecated 旧扩窗布局仅支持左右。 */
+export type PetMenuHorizontalSide = "left" | "right";
 
 export interface ScreenRect {
   x: number;
@@ -70,59 +72,148 @@ export function petMenuEdgeInset(
   return gap - tuck;
 }
 
-function menuCandidateRect(
+/**
+ * 桌宠窗内精灵「核心区」：四周内缩 tuck（透明留白预算）。
+ * 菜单可叠进留白，但不得与核心区重叠（否则盖住像素本体）。
+ */
+export function petCoreRect(
   petX: number,
   petY: number,
   petW: number,
   petH: number,
-  side: PetMenuSide,
-  menuW: number = PET_MENU_PANEL_WIDTH,
-  inset: number = petMenuEdgeInset()
+  tuck: number = PET_MENU_TUCK
 ): ScreenRect {
-  return side === "right"
-    ? { x: petX + petW + inset, y: petY, width: menuW, height: petH }
-    : { x: petX - menuW - inset, y: petY, width: menuW, height: petH };
+  const maxInset = Math.max(0, Math.min(tuck, Math.floor(petW / 2) - 1, Math.floor(petH / 2) - 1));
+  return {
+    x: petX + maxInset,
+    y: petY + maxInset,
+    width: Math.max(1, petW - 2 * maxInset),
+    height: Math.max(1, petH - 2 * maxInset)
+  };
 }
 
-/** 根据聊天窗位置与屏幕可用空间，决定菜单出现在桌宠左侧还是右侧。 */
+function clampMenuX(
+  x: number,
+  menuW: number,
+  workArea: { x: number; y: number; width: number; height: number }
+): number {
+  const workRight = workArea.x + workArea.width;
+  return Math.max(workArea.x, Math.min(x, workRight - menuW));
+}
+
+function clampMenuY(
+  y: number,
+  menuH: number,
+  workArea: { x: number; y: number; width: number; height: number },
+  margin: number = 8
+): number {
+  const workBottom = workArea.y + workArea.height;
+  let next = y;
+  if (next + menuH > workBottom - margin) {
+    next = workBottom - menuH - margin;
+  }
+  if (next < workArea.y + margin) next = workArea.y + margin;
+  return next;
+}
+
+function horizontalGap(a: ScreenRect, b: ScreenRect): number {
+  if (a.x + a.width <= b.x) return b.x - (a.x + a.width);
+  if (b.x + b.width <= a.x) return a.x - (b.x + b.width);
+  return 0;
+}
+
+/**
+ * 菜单须锚在桌宠附近。
+ * - 左右：与桌宠窗水平间距 ≤ gap（允许 tuck 重叠）；被推到对话外侧则判失败。
+ * - 上下：菜单中心落在桌宠水平范围内（避开对话时垂直间距可变大）。
+ */
+export function menuAnchoredNearPet(
+  menu: ScreenRect,
+  pet: ScreenRect,
+  side: PetMenuSide
+): boolean {
+  if (side === "left" || side === "right") {
+    return horizontalGap(pet, menu) <= PET_MENU_GAP;
+  }
+  const menuCx = menu.x + menu.width / 2;
+  return menuCx >= pet.x && menuCx <= pet.x + pet.width;
+}
+
+/** 菜单 bounds 是否避开精灵核心、聊天，且落在 workArea 内。 */
+export function petMenuPlacementViable(
+  menu: ScreenRect,
+  petCore: ScreenRect,
+  chat: ScreenRect | null,
+  workArea: { x: number; y: number; width: number; height: number },
+  petWindow?: ScreenRect,
+  side?: PetMenuSide
+): boolean {
+  const workRight = workArea.x + workArea.width;
+  const workBottom = workArea.y + workArea.height;
+  if (menu.x < workArea.x || menu.y < workArea.y) return false;
+  if (menu.x + menu.width > workRight || menu.y + menu.height > workBottom) return false;
+  if (rectsOverlap(menu, petCore, PET_MENU_GAP)) return false;
+  if (chat && rectsOverlap(menu, chat, PET_MENU_GAP)) return false;
+  if (petWindow && side && !menuAnchoredNearPet(menu, petWindow, side)) return false;
+  return true;
+}
+
+/**
+ * 根据聊天窗位置与屏幕可用空间决定菜单锚点方向。
+ * 优先左右（有聊天时先对侧）；左右都不可行时回退上下，绝不强制夹到盖住精灵。
+ */
 export function resolvePetMenuSide(input: PetMenuPlacementInput): PetMenuSide {
   const { petX, petY, petW, petH, chat, workArea } = input;
-  const menuW = PET_MENU_PANEL_WIDTH;
-  const inset = petMenuEdgeInset();
-  const workRight = workArea.x + workArea.width;
+  const menuSize = {
+    width: PET_MENU_PANEL_WIDTH,
+    height: PET_MENU_WINDOW_HEIGHT
+  };
+  const core = petCoreRect(petX, petY, petW, petH);
 
-  const rightMenu = menuCandidateRect(petX, petY, petW, petH, "right", menuW, inset);
-  const leftMenu = menuCandidateRect(petX, petY, petW, petH, "left", menuW, inset);
+  const petWindow: ScreenRect = { x: petX, y: petY, width: petW, height: petH };
 
-  const canPlaceRight = rightMenu.x + rightMenu.width <= workRight;
-  const canPlaceLeft = leftMenu.x >= workArea.x;
+  const trySide = (side: PetMenuSide): boolean => {
+    const bounds = computePetMenuPopupBounds(
+      petX,
+      petY,
+      petW,
+      petH,
+      side,
+      workArea,
+      menuSize,
+      chat
+    );
+    return petMenuPlacementViable(bounds, core, chat, workArea, petWindow, side);
+  };
 
-  const rightOverlapsChat = chat ? rectsOverlap(rightMenu, chat, PET_MENU_GAP) : false;
-  const leftOverlapsChat = chat ? rectsOverlap(leftMenu, chat, PET_MENU_GAP) : false;
-
+  let horizontalOrder: PetMenuSide[];
   if (chat) {
-    const chatCenter = chat.x + chat.width / 2;
-    const petCenter = petX + petW / 2;
-    const chatOnRight = chatCenter >= petCenter;
-
-    if (chatOnRight) {
-      if (canPlaceLeft && !leftOverlapsChat) return "left";
-      if (canPlaceRight && !rightOverlapsChat) return "right";
-      return "left";
-    }
-    if (canPlaceRight && !rightOverlapsChat) return "right";
-    if (canPlaceLeft && !leftOverlapsChat) return "left";
-    return "right";
+    const chatOnRight = chat.x + chat.width / 2 >= petX + petW / 2;
+    horizontalOrder = chatOnRight ? ["left", "right"] : ["right", "left"];
+  } else {
+    horizontalOrder = ["right", "left"];
   }
 
-  if (canPlaceRight) return "right";
-  if (canPlaceLeft) return "left";
-  return "right";
+  for (const side of horizontalOrder) {
+    if (trySide(side)) return side;
+  }
+
+  const spaceAbove = petY - workArea.y;
+  const spaceBelow = workArea.y + workArea.height - (petY + petH);
+  const verticalOrder: PetMenuSide[] =
+    spaceAbove >= spaceBelow ? ["above", "below"] : ["below", "above"];
+
+  for (const side of verticalOrder) {
+    if (trySide(side)) return side;
+  }
+
+  // 极端空间：仍选上下中空间更大的一侧，避免强制左右 + clamp 盖精灵。
+  return verticalOrder[0]!;
 }
 
 /**
  * 独立菜单窗的屏幕 bounds。
- * 不修改桌宠窗几何：桌宠屏幕位置恒定，菜单开在其左/右侧并与桌宠、聊天保持 gap。
+ * 不修改桌宠窗几何：桌宠屏幕位置恒定；左右可 tuck 进透明留白，上下用正 gap。
  */
 export function computePetMenuPopupBounds(
   petX: number,
@@ -138,32 +229,79 @@ export function computePetMenuPopupBounds(
   chat: ScreenRect | null = null
 ): ScreenRect {
   const gap = PET_MENU_GAP;
-  const inset = petMenuEdgeInset();
-  const workRight = workArea.x + workArea.width;
-  const workBottom = workArea.y + workArea.height;
+  const core = petCoreRect(petX, petY, petW, petH);
 
-  // inset 可为负：菜单伸入桌宠窗透明留白，视觉上更贴精灵。
-  let x =
-    side === "right" ? petX + petW + inset : petX - menuSize.width - inset;
+  let x: number;
+  let y: number;
 
-  if (x < workArea.x) x = workArea.x;
-  if (x + menuSize.width > workRight) x = workRight - menuSize.width;
+  if (side === "above" || side === "below") {
+    x = petX + petW / 2 - menuSize.width / 2;
+    x = clampMenuX(x, menuSize.width, workArea);
+    y =
+      side === "above"
+        ? petY - menuSize.height - gap
+        : petY + petH + gap;
 
-  // 与聊天重叠时沿外侧让开（不撤销对桌宠留白的 tuck）。
-  if (chat && rectsOverlap({ x, y: petY, width: menuSize.width, height: menuSize.height }, chat, gap)) {
-    if (side === "left") {
-      x = Math.min(x, chat.x - menuSize.width - gap);
-    } else {
-      x = Math.max(x, chat.x + chat.width + gap);
+    let candidate: ScreenRect = {
+      x,
+      y,
+      width: menuSize.width,
+      height: menuSize.height
+    };
+    if (chat && rectsOverlap(candidate, chat, gap)) {
+      if (side === "above") {
+        y = Math.min(y, chat.y - menuSize.height - gap);
+      } else {
+        y = Math.max(y, chat.y + chat.height + gap);
+      }
+      candidate = { ...candidate, y };
+      if (rectsOverlap(candidate, chat, gap)) {
+        const chatCenter = chat.x + chat.width / 2;
+        const petCenter = petX + petW / 2;
+        x =
+          petCenter <= chatCenter
+            ? chat.x - menuSize.width - gap
+            : chat.x + chat.width + gap;
+        x = clampMenuX(x, menuSize.width, workArea);
+      }
     }
-    x = Math.max(workArea.x, Math.min(x, workRight - menuSize.width));
-  }
 
-  let y = petY;
-  if (y + menuSize.height > workBottom - 8) {
-    y = workBottom - menuSize.height - 8;
+    y = clampMenuY(y, menuSize.height, workArea);
+  } else {
+    const inset = petMenuEdgeInset();
+    x =
+      side === "right"
+        ? petX + petW + inset
+        : petX - menuSize.width - inset;
+    x = clampMenuX(x, menuSize.width, workArea);
+    y = clampMenuY(petY, menuSize.height, workArea);
+
+    let candidate: ScreenRect = {
+      x,
+      y,
+      width: menuSize.width,
+      height: menuSize.height
+    };
+
+    // clamp 后若盖住精灵核心：撤销 tuck，改用正 gap 再算一次。
+    if (rectsOverlap(candidate, core, gap)) {
+      x =
+        side === "right"
+          ? petX + petW + gap
+          : petX - menuSize.width - gap;
+      x = clampMenuX(x, menuSize.width, workArea);
+      candidate = { ...candidate, x };
+    }
+
+    if (chat && rectsOverlap(candidate, chat, gap)) {
+      if (side === "left") {
+        x = Math.min(x, chat.x - menuSize.width - gap);
+      } else {
+        x = Math.max(x, chat.x + chat.width + gap);
+      }
+      x = clampMenuX(x, menuSize.width, workArea);
+    }
   }
-  if (y < workArea.y + 8) y = workArea.y + 8;
 
   return {
     x: Math.round(x),
@@ -180,7 +318,7 @@ export function computePetMenuPopupBounds(
 export function computePetMenuWindowBounds(
   petX: number,
   petY: number,
-  side: PetMenuSide,
+  side: PetMenuHorizontalSide,
   workArea: { x: number; y: number; width: number; height: number },
   petSize: { width: number; height: number } = PET_WINDOW_BASE_SIZE
 ): { x: number; y: number; width: number; height: number } {
