@@ -235,6 +235,9 @@ export interface BailinApi {
     openChat(): Promise<void>;
     openSettings(tab?: SettingsTab): Promise<void>;
     hide(): Promise<void>;
+    /** 解析右键菜单应开在左/右侧（独立菜单窗定位用，不改桌宠窗尺寸）。 */
+    resolveContextMenuSide(): Promise<"left" | "right" | null>;
+    /** 打开/关闭独立快捷菜单窗；打开时桌宠窗 bounds 保持不变。 */
     setContextMenuOpen(open: boolean): Promise<"left" | "right" | null>;
     /** 拖动开始：主进程记录光标相对窗口的偏移（全在主进程物理坐标系内）。*/
     dragStart(): Promise<void>;
@@ -789,6 +792,7 @@ export const IPC = {
   PetOpenChat: "bailin.pet.openChat",
   PetOpenSettings: "bailin.pet.openSettings",
   PetHide: "bailin.pet.hide",
+  PetResolveContextMenuSide: "bailin.pet.resolveContextMenuSide",
   PetSetContextMenuOpen: "bailin.pet.setContextMenuOpen",
   PetDragStart: "bailin.pet.dragStart",
   PetDragMove: "bailin.pet.dragMove",
@@ -807,6 +811,8 @@ export const IPC = {
   EventChatVisibility: "bailin.event.chatVisibility",
   EventActiveCharacterChanged: "bailin.event.activeCharacterChanged",
   EventPetSummon: "bailin.event.petSummon",
+  EventPetContextMenuOpen: "bailin.event.petContextMenuOpen",
+  EventPetContextMenuClose: "bailin.event.petContextMenuClose",
   EventProactiveWhisper: "bailin.event.proactiveWhisper",
   EventProactiveBubblePlacement: "bailin.event.proactiveBubblePlacement",
   EventAmbientSignal: "bailin.event.ambientSignal",

@@ -4,33 +4,14 @@ import { useActiveCharacter, useBailin } from "../shared/use-bailin.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import {
   PET_DISPLAY_SCALE_DEFAULT,
-  PET_WINDOW_BASE_SIZE,
   resolveAtlasPetPixelSize,
   resolveDslPetPixelSize
 } from "../../shared/pet-display-scale.js";
-import { useT, useI18n } from "../shared/i18n/index.js";
+import { useT } from "../shared/i18n/index.js";
 import { useRafThrottle } from "../shared/use-raf-throttle.js";
 import { useReducedMotion } from "../shared/use-reduced-motion.js";
 import { Icon } from "../shared/icon.js";
-import { usePlatformModKey } from "../shared/use-platform-mod-key.js";
 import { usePetSpriteEvents } from "./use-pet-sprite-events.js";
-
-interface Starter {
-  id: string;
-  name: string;
-  sourceName: string;
-  track: "utility" | "companion";
-  blurb: string;
-}
-
-interface MyCharacter {
-  id: string;
-  name: string;
-  sourceName?: string;
-  track: "utility" | "companion";
-  isSkeleton: boolean;
-  isActive: boolean;
-}
 
 const HATCH_SS_KEY_PREFIX = "bailin.hatched.";
 /** 判定为「拖动」的最小位移（px）；略大于 0，避免手抖误触。 */
@@ -38,27 +19,20 @@ const DRAG_START_PX = 3;
 
 export function PetApp(): JSX.Element | null {
   const t = useT();
-  const { resyncLocale } = useI18n();
   const { bundle } = useActiveCharacter();
   const bailin = useBailin();
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const menuLayerRef = useRef<HTMLDivElement | null>(null);
 
   const [petDisplayScale, setPetDisplayScale] = useState(PET_DISPLAY_SCALE_DEFAULT);
-  const [defaultHushMinutes, setDefaultHushMinutes] = useState(30);
 
   useEffect(() => {
     void bailin.proactive.getSettings().then((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
-      setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
     });
     return bailin.on.proactiveSettingsChanged((s) => {
       setPetDisplayScale(s.petDisplayScale ?? PET_DISPLAY_SCALE_DEFAULT);
-      setDefaultHushMinutes(s.defaultHushMinutes ?? 30);
     });
   }, [bailin]);
-
-  const petSlotWidth = Math.round(PET_WINDOW_BASE_SIZE.width * petDisplayScale);
 
   const petPixelSize = useMemo(() => {
     if (!bundle?.sprite) return undefined;
@@ -103,25 +77,18 @@ export function PetApp(): JSX.Element | null {
   // ===== 鼠标穿透（仅在桌宠像素 BBox 内才接收事件） =====
   // 用 rAF 节流：每帧最多 1 次 getBoundingClientRect + setMouseIgnore IPC，
   // 避免高频 mousemove（每秒 60+ 次）压主进程。
-  //
-  // 注意：rAF 节流只在 mouse 真在动时 fire 下一帧。如果鼠标静止 (如菜单展开后
-  // hover 在某菜单项上不动)，纠正逻辑不会触发。所以菜单 / 拖拽这类「全局可点击」
-  // 状态必须由下面的 useEffect 显式强制 setMouseIgnore(false)。
+  // 快捷菜单已是独立窗，不再需要「菜单展开期间强制整窗可点」。
   const draggingRef = useRef(false);
-  const menuOpenRef = useRef(false);
-  const closingMenuRef = useRef(false);
   const checkMouseIgnore = useRafThrottle((clientX: number, clientY: number) => {
-    if (draggingRef.current || menuOpenRef.current) return;
-    const hitTargets = [wrapRef.current, menuLayerRef.current].filter(Boolean) as HTMLElement[];
-    const inside = hitTargets.some((el) => {
-      const rect = el.getBoundingClientRect();
-      return (
-        clientX >= rect.left &&
-        clientX <= rect.right &&
-        clientY >= rect.top &&
-        clientY <= rect.bottom
-      );
-    });
+    if (draggingRef.current) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const inside =
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom;
     if (inside !== mouseInsideRef.current) {
       mouseInsideRef.current = inside;
       const nextIgnored = !inside;
@@ -252,17 +219,13 @@ export function PetApp(): JSX.Element | null {
     });
   }, [bailin, sendSpriteEvent]);
 
-  // ===== 右键菜单 =====
-  const [menu, setMenu] = useState<{ chatOpen: boolean; side: "left" | "right" } | null>(null);
-  const [characters, setCharacters] = useState<MyCharacter[]>([]);
-  const [starters, setStarters] = useState<Starter[]>([]);
-  const [submenu, setSubmenu] = useState<null | "switch">(null);
+  // ===== 右键菜单（独立窗，不改桌宠 bounds） =====
+  const [menuOpen, setMenuOpen] = useState(false);
   const [libraryCount, setLibraryCount] = useState<number | null>(null);
 
   const refreshLibraryCount = useCallback(async () => {
     const list = await bailin.characters.list();
     setLibraryCount(list.length);
-    setCharacters(list);
   }, [bailin]);
 
   useEffect(() => {
@@ -276,31 +239,29 @@ export function PetApp(): JSX.Element | null {
     };
   }, [bailin, refreshLibraryCount]);
 
-  const openContextMenu = useCallback(async () => {
-    await resyncLocale();
-    const [list, st, chatOpen] = await Promise.all([
-      bailin.characters.list(),
-      bailin.characters.listStarters(),
-      bailin.chat.isVisible()
-    ]);
-    const side = await bailin.pet.setContextMenuOpen(true);
-    setMenu({ chatOpen, side: side ?? "right" });
-    setSubmenu(null);
-    setCharacters(list);
-    setStarters(st);
-  }, [bailin, resyncLocale]);
+  useEffect(() => {
+    const offOpen = bailin.on.petContextMenuOpen(() => setMenuOpen(true));
+    const offClose = bailin.on.petContextMenuClose(() => setMenuOpen(false));
+    return () => {
+      offOpen();
+      offClose();
+    };
+  }, [bailin]);
+
+  const openContextMenu = useCallback(() => {
+    void bailin.pet.setContextMenuOpen(true);
+  }, [bailin]);
 
   const onPetContextMenu = useCallback(
     (e: React.MouseEvent | React.KeyboardEvent) => {
       e.preventDefault();
-      void openContextMenu();
+      openContextMenu();
     },
     [openContextMenu]
   );
 
   const onPetKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // 拖拽工程是鼠标语义；键盘等价：Enter / Space 唤起聊天。
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         sendSpriteEvent("click");
@@ -310,56 +271,13 @@ export function PetApp(): JSX.Element | null {
         }, 420);
         return;
       }
-      // Shift+F10 / ContextMenu 键：a11y 标准的右键替代触发。
       if ((e.key === "F10" && e.shiftKey) || e.key === "ContextMenu") {
         e.preventDefault();
-        void openContextMenu();
+        openContextMenu();
       }
     },
     [bailin, sendSpriteEvent, openContextMenu]
   );
-
-  const closeMenu = useCallback(() => {
-    if (closingMenuRef.current) return;
-    closingMenuRef.current = true;
-    setSubmenu(null);
-    // 必须先缩回窗口，再卸菜单：否则 pet-slot 先变成 100% 宽，
-    // 在仍加宽的窗口里居中一帧，桌宠会左右抽一下。
-    void (async () => {
-      try {
-        await bailin.pet.setContextMenuOpen(false);
-        setMenu(null);
-        window.setTimeout(() => wrapRef.current?.focus(), 0);
-      } finally {
-        closingMenuRef.current = false;
-      }
-    })();
-  }, [bailin]);
-
-  // 菜单展开期间强制整窗接收 mouse events（设 ignore=false）。否则当 mouse
-  // 从桌宠移到菜单时，桌宠的 onPointerLeave 会先把 ignore 设回 true，菜单上
-  // hover/cursor 还是 CSS 视觉响应（因为 forward:true），但 click 全部被穿透
-  // 到下面的桌面 → 点不动菜单项。菜单关闭后 ignore 恢复默认 true，下一次
-  // mouse 移到桌宠区域时 checkMouseIgnore 会再把它设回 false。
-  useEffect(() => {
-    menuOpenRef.current = menu !== null;
-    if (menu) {
-      ignoredRef.current = false;
-      mouseInsideRef.current = true;
-      void bailin.pet.setMouseIgnore(false);
-    } else {
-      ignoredRef.current = true;
-      mouseInsideRef.current = false;
-      void bailin.pet.setMouseIgnore(true);
-    }
-  }, [menu, bailin]);
-
-  useEffect(() => {
-    if (!menu) return;
-    const onBlur = () => closeMenu();
-    window.addEventListener("blur", onBlur);
-    return () => window.removeEventListener("blur", onBlur);
-  }, [menu, closeMenu]);
 
   if (!bundle) {
     if (libraryCount === 0) {
@@ -374,11 +292,8 @@ export function PetApp(): JSX.Element | null {
   }
 
   return (
-    <div className={`pet-root${menu?.side === "left" ? " pet-root--menu-left" : ""}`}>
-      <div
-        className="pet-slot"
-        style={{ width: menu ? petSlotWidth : "100%" }}
-      >
+    <div className="pet-root">
+      <div className="pet-slot">
         <div className="pet-column">
           <div className="pet-wrap-zone">
             <div
@@ -391,7 +306,7 @@ export function PetApp(): JSX.Element | null {
                 bundle ? t("pet.ariaLabel", { name: bundle.card.meta.name }) : t("pet.dragHint")
               }
               aria-haspopup="menu"
-              aria-expanded={menu !== null}
+              aria-expanded={menuOpen}
               style={{
                 pointerEvents: "auto",
                 padding: 4,
@@ -402,9 +317,7 @@ export function PetApp(): JSX.Element | null {
               onPointerDown={onPetPointerDown}
               onPointerEnter={() => void bailin.pet.setMouseIgnore(false)}
               onPointerLeave={() => {
-                // 菜单展开 / 拖拽中时，整窗都需要可点击；不要在这里 ignore，
-                // 否则鼠标从桌宠移到菜单的瞬间会让菜单 click 失效。
-                if (draggingRef.current || menu) return;
+                if (draggingRef.current) return;
                 void bailin.pet.setMouseIgnore(true);
               }}
               onPointerMove={onPetPointerMove}
@@ -428,42 +341,6 @@ export function PetApp(): JSX.Element | null {
           </div>
         </div>
       </div>
-
-      {menu ? (
-        <>
-          <div className="pet-menu-backdrop" aria-hidden onMouseDown={closeMenu} />
-          <div ref={menuLayerRef} className="pet-menu-column">
-            <PetContextMenu
-              chatOpen={menu.chatOpen}
-              characters={characters}
-              starters={starters}
-              submenu={submenu}
-              hushMinutes={defaultHushMinutes}
-              onSubmenu={(s) => setSubmenu(s)}
-              onSummon={() => {
-                void bailin.pet.summon();
-                closeMenu();
-              }}
-              onHush={() => {
-                void bailin.pet.hush(defaultHushMinutes * 60 * 1000);
-                void bailin.chat.hide();
-                closeMenu();
-              }}
-              onOpenSettings={() => void bailin.pet.openSettings()}
-              onHide={() => void bailin.pet.hide()}
-              onActivate={async (id) => {
-                await bailin.characters.activate(id);
-                closeMenu();
-              }}
-              onImportStarter={async (id) => {
-                await bailin.characters.importStarter(id);
-                closeMenu();
-              }}
-              onClose={closeMenu}
-            />
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }
@@ -512,257 +389,5 @@ function EmptyPet({
         </button>
       </div>
     </div>
-  );
-}
-
-interface MenuProps {
-  chatOpen: boolean;
-  characters: MyCharacter[];
-  starters: Starter[];
-  submenu: null | "switch";
-  hushMinutes: number;
-  onSubmenu: (s: null | "switch") => void;
-  onSummon: () => void;
-  onHush: () => void;
-  onOpenSettings: () => void;
-  onHide: () => void;
-  onActivate: (id: string) => void;
-  onImportStarter: (id: string) => void;
-  onClose: () => void;
-}
-
-function PetContextMenu(props: MenuProps): JSX.Element {
-  const t = useT();
-  const modKey = usePlatformModKey();
-  const {
-    chatOpen,
-    characters,
-    starters,
-    submenu,
-    onSubmenu,
-    onSummon,
-    onHush,
-    hushMinutes,
-    onOpenSettings,
-    onHide,
-    onActivate,
-    onImportStarter,
-    onClose
-  } = props;
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // 实时查询当前可见的 menuitem（submenu 展开 / 收起会变）。
-  const getMenuItems = useCallback((): HTMLElement[] => {
-    if (!menuRef.current) return [];
-    return Array.from(
-      menuRef.current.querySelectorAll<HTMLElement>('[role="menuitem"]')
-    );
-  }, []);
-
-  // 打开时把焦点移入首项；setTimeout 0 让 DOM 渲染稳定后再 focus。
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      const items = getMenuItems();
-      items[0]?.focus();
-    }, 0);
-    return () => window.clearTimeout(id);
-  }, [getMenuItems]);
-
-  // 键盘导航：Esc 关闭；Arrow / Home / End 在 menuitem 间环形移动；
-  // Tab / Shift+Tab 当作方向键（即焦点 trap 在 menu 内）。
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      const items = getMenuItems();
-      if (items.length === 0) return;
-      const activeIdx = items.indexOf(document.activeElement as HTMLElement);
-
-      const focusAt = (next: number): void => {
-        e.preventDefault();
-        items[next]?.focus();
-      };
-
-      if (e.key === "ArrowDown") {
-        focusAt(activeIdx < 0 ? 0 : (activeIdx + 1) % items.length);
-      } else if (e.key === "ArrowUp") {
-        focusAt(activeIdx < 0 ? items.length - 1 : (activeIdx - 1 + items.length) % items.length);
-      } else if (e.key === "Home") {
-        focusAt(0);
-      } else if (e.key === "End") {
-        focusAt(items.length - 1);
-      } else if (e.key === "Tab") {
-        const dir = e.shiftKey ? -1 : 1;
-        focusAt(activeIdx < 0 ? 0 : (activeIdx + dir + items.length) % items.length);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, getMenuItems]);
-
-  return (
-    <div
-      ref={menuRef}
-      onMouseDown={(e) => e.stopPropagation()}
-      role="menu"
-      aria-orientation="vertical"
-      className="pet-menu-panel fade-in-up"
-    >
-      <MenuItem
-        label={chatOpen ? t("pet.menuCloseChat") : t("pet.menuOpenChat")}
-        hint={t("pet.summonShortcut", { mod: modKey })}
-        onClick={onSummon}
-        delay={0}
-      />
-      <MenuItem
-        label={t("pet.menuHush", { minutes: hushMinutes })}
-        onClick={onHush}
-        delay={20}
-      />
-      <MenuItem
-        label={t("pet.menuSwitchCharacter")}
-        hasSubmenu
-        onClick={() => onSubmenu(submenu === "switch" ? null : "switch")}
-        delay={30}
-      />
-      {submenu === "switch" ? (
-        <div
-          className="fade-in"
-          style={{
-            borderTop: "1px solid var(--grid)",
-            borderBottom: "1px solid var(--grid)",
-            background: "var(--paper-deep)",
-            maxHeight: 280,
-            overflowY: "auto"
-          }}
-        >
-          {characters.length === 0 ? (
-            <div style={{ padding: "8px 14px", color: "var(--ink-faint)" }}>
-              {t("pet.menuLibraryEmpty")}
-            </div>
-          ) : (
-            characters.map((c, i) => (
-              <MenuItem
-                key={c.id}
-                label={c.name}
-                active={c.isActive}
-                sub={
-                  c.track === "utility" ? t("chat.trackUtility") : t("chat.trackCompanion")
-                }
-                onClick={() => onActivate(c.id)}
-                delay={i * 24}
-              />
-            ))
-          )}
-          {starters.length > 0 ? (
-            <>
-              <div
-                className="eyebrow"
-                style={{
-                  // 复用 .eyebrow 排版（mono + uppercase + tracking），但菜单上下文里
-                  // 用 --ink-faint 替代默认 --magenta：避免与 active 角色的 magenta dot
-                  // 视觉撞色（一个菜单不该出现两个 magenta 焦点）。
-                  padding: "6px 14px 2px",
-                  color: "var(--ink-faint)",
-                  fontSize: 10
-                }}
-              >
-                {t("pet.menuBuiltInStarters")}
-              </div>
-              {starters.map((s, i) => (
-                <MenuItem
-                  key={s.id}
-                  label={`+ ${s.name}`}
-                  sub={
-                    s.track === "utility" ? t("chat.trackUtility") : t("chat.trackCompanion")
-                  }
-                  onClick={() => onImportStarter(s.id)}
-                  delay={(characters.length + i) * 24}
-                />
-              ))}
-            </>
-          ) : null}
-        </div>
-      ) : null}
-      <MenuItem label={t("pet.menuOpenSettings")} onClick={onOpenSettings} delay={60} />
-      <MenuItem label={t("pet.menuHideToTray")} onClick={onHide} delay={90} />
-    </div>
-  );
-}
-
-function MenuItem({
-  label,
-  sub,
-  hint,
-  hasSubmenu,
-  active,
-  onClick,
-  delay = 0
-}: {
-  label: string;
-  sub?: string;
-  hint?: string;
-  hasSubmenu?: boolean;
-  /** 标记当前 active（替代原来的 "● " 前导字符 + 空白对齐 hack）。 */
-  active?: boolean;
-  onClick: () => void;
-  delay?: number;
-}): JSX.Element {
-  return (
-    <button
-      role="menuitem"
-      type="button"
-      onClick={onClick}
-      onMouseDown={(e) => e.stopPropagation()}
-      aria-current={active ? "true" : undefined}
-      className="fade-in-up pet-menu-item"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        width: "100%",
-        padding: "9px 14px",
-        border: "none",
-        fontFamily: "inherit",
-        fontSize: "inherit",
-        color: "inherit",
-        cursor: "pointer",
-        textAlign: "left",
-        transition: "background 120ms var(--ease-out)",
-        animationDelay: `${delay}ms`
-      }}
-    >
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-        {/* active 小圆点；inactive 也占位（统一对齐，不再依赖空白字符 hack）。 */}
-        <span
-          aria-hidden="true"
-          style={{
-            display: "inline-flex",
-            width: 8,
-            justifyContent: "center",
-            color: "var(--magenta)"
-          }}
-        >
-          {active ? <Icon name="dot" size={6} /> : null}
-        </span>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {label}
-        </span>
-      </span>
-      <span
-        style={{
-          color: "var(--ink-faint)",
-          fontSize: 11,
-          marginLeft: 12,
-          display: "inline-flex",
-          alignItems: "center"
-        }}
-      >
-        {hint ?? sub ?? (hasSubmenu ? <Icon name="chevron-right" size={12} /> : null)}
-      </span>
-    </button>
   );
 }

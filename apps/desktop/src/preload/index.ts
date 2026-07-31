@@ -96,6 +96,7 @@ const api = {
     openChat: () => ipcRenderer.invoke(IPC.PetOpenChat),
     openSettings: (tab?: unknown) => ipcRenderer.invoke(IPC.PetOpenSettings, tab),
     hide: () => ipcRenderer.invoke(IPC.PetHide),
+    resolveContextMenuSide: () => ipcRenderer.invoke(IPC.PetResolveContextMenuSide),
     setContextMenuOpen: (open: boolean) => ipcRenderer.invoke(IPC.PetSetContextMenuOpen, open),
     dragStart: () => ipcRenderer.invoke(IPC.PetDragStart),
     dragMove: () => ipcRenderer.invoke(IPC.PetDragMove),
@@ -134,6 +135,16 @@ const api = {
       const listener = () => handler();
       ipcRenderer.on(IPC.EventPetSummon, listener);
       return () => ipcRenderer.removeListener(IPC.EventPetSummon, listener);
+    },
+    petContextMenuOpen(handler: (evt: unknown) => void) {
+      const listener = (_e: unknown, p: unknown) => handler(p);
+      ipcRenderer.on(IPC.EventPetContextMenuOpen, listener);
+      return () => ipcRenderer.removeListener(IPC.EventPetContextMenuOpen, listener);
+    },
+    petContextMenuClose(handler: () => void) {
+      const listener = () => handler();
+      ipcRenderer.on(IPC.EventPetContextMenuClose, listener);
+      return () => ipcRenderer.removeListener(IPC.EventPetContextMenuClose, listener);
     },
     proactiveWhisper(handler: (evt: unknown) => void) {
       const listener = (_e: unknown, p: unknown) => handler(p);
