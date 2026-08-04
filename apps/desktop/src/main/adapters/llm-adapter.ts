@@ -148,22 +148,64 @@ const VISION_MODEL_KEYWORDS = [
   // ByteDance Doubao（OhMyGPT 等多模态读图）
   "doubao",
   "seed-2",
-  "bytedance"
+  "bytedance",
+  // 通义千问多模态（qwen3.7-plus 支持 Image；专用 VL 系列）
+  "qwen-vl",
+  "qwen2.5-vl",
+  "qwen2-vl",
+  "qwen3."
 ];
 
 /** 参考图 vision 读图 / 自检专用模型（与主模型分离，主模型可为 DeepSeek 等纯文本模型）。 */
 export const DEFAULT_VISION_MODEL = "bytedance/doubao-seed-2.0-lite-260428";
 export const DEFAULT_WEB_SEARCH_MODEL = "gpt-4o-mini-search-preview";
 
+/** 通义用户常误填 `qwen-plus-search`；去掉末尾 -search，保留 OpenAI search-preview 原名。 */
+export function normalizeQwenModelId(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed || !isQwenLikeModel(trimmed)) return trimmed;
+  return trimmed.replace(/-search$/i, "");
+}
+
+export function isQwenLikeModel(model: string): boolean {
+  return model.toLowerCase().includes("qwen");
+}
+
+export function isDashScopeBaseUrl(baseUrl: string): boolean {
+  const u = baseUrl.toLowerCase();
+  return u.includes("dashscope") || u.includes("compatible-mode");
+}
+
+/** 通义侧可走 enable_search 的 provider / 模型。 */
+export function usesQwenEnableSearch(
+  baseUrl: string,
+  model: string,
+  mainModel?: string
+): boolean {
+  return (
+    isDashScopeBaseUrl(baseUrl) ||
+    isQwenLikeModel(model) ||
+    (!!mainModel && isQwenLikeModel(mainModel))
+  );
+}
+
 export function resolveVisionModel(
   provider: LLMProviderConfig | null | undefined,
   modelOverride?: string
 ): string {
-  const trimmed = modelOverride?.trim();
-  if (trimmed) return trimmed;
-  const fromProvider = provider?.visionModel?.trim();
-  if (fromProvider) return fromProvider;
-  return DEFAULT_VISION_MODEL;
+  const raw =
+    modelOverride?.trim() ||
+    provider?.visionModel?.trim() ||
+    DEFAULT_VISION_MODEL;
+  const normalized = normalizeQwenModelId(raw);
+  if (matchesVisionModel(normalized)) return normalized;
+  const mainRaw = provider?.model?.trim();
+  if (mainRaw) {
+    const main = normalizeQwenModelId(mainRaw);
+    // 用户把非 VL 的 qwen-plus(-search) 填进识图时，回落到多模态主模型（如 qwen3.7-plus）
+    if (matchesVisionModel(main)) return main;
+  }
+  return normalized;
 }
 
 export function resolveWebSearchModel(
@@ -171,9 +213,9 @@ export function resolveWebSearchModel(
   modelOverride?: string
 ): string {
   const trimmed = modelOverride?.trim();
-  if (trimmed) return trimmed;
+  if (trimmed) return normalizeQwenModelId(trimmed);
   const fromProvider = provider?.webSearchModel?.trim();
-  if (fromProvider) return fromProvider;
+  if (fromProvider) return normalizeQwenModelId(fromProvider);
   return DEFAULT_WEB_SEARCH_MODEL;
 }
 
@@ -181,7 +223,7 @@ export function resolveWebSearchModel(
 const TINY_PROBE_PNG_DATA_URI =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
-function matchesVisionModel(model: string): boolean {
+export function matchesVisionModel(model: string): boolean {
   const lower = model.toLowerCase();
   return VISION_MODEL_KEYWORDS.some((k) => lower.includes(k));
 }
@@ -199,6 +241,7 @@ function isSearchRelayBaseUrl(baseUrl: string): boolean {
  * OpenAI 兼容协议：走 /v1/chat/completions。
  *   - 普通模型：常规 chat
  *   - search-preview / search-api 系列：附加 web_search_options，回包带 annotations.url_citation
+ *   - 通义 / Qwen：附加 enable_search（兼容模式通常无结构化来源，靠正文 URL 兜底）
  *
  * Anthropic 兼容协议：走 /v1/messages。
  *   - 已知支持 server-side web_search 的模型：附加 tools = [{ type: "web_search_20250305" }]
@@ -226,16 +269,18 @@ export class LLMAdapter {
   detectCapabilities(modelOverride?: string): { webSearch: boolean; reason: string } {
     const p = this.provider();
     if (!p) return { webSearch: false, reason: "未配置 LLM 提供商" };
-    const model = (
-      modelOverride ??
-      p.webSearchModel?.trim() ??
-      p.model ??
-      ""
-    ).toLowerCase();
+    const rawModel = modelOverride ?? p.webSearchModel?.trim() ?? p.model ?? "";
+    const model = normalizeQwenModelId(rawModel).toLowerCase();
 
     if (p.kind === "openai-compatible") {
       if (matchesSearchModel(model)) {
         return { webSearch: true, reason: `${model} 自带联网检索能力` };
+      }
+      if (usesQwenEnableSearch(p.baseUrl, rawModel, p.model)) {
+        return {
+          webSearch: true,
+          reason: `通义/Qwen（${model || p.model}）可通过 enable_search 联网检索`
+        };
       }
       if (isSearchRelayBaseUrl(p.baseUrl)) {
         const mainNote = model.includes("deepseek")
@@ -309,7 +354,7 @@ export class LLMAdapter {
     }
     return {
       vision: false,
-      reason: `读图模型 ${visionModel} 不在已知 vision 白名单（doubao-seed / gpt-4o / claude-3+ 等）`,
+      reason: `读图模型 ${visionModel} 不在已知 vision 白名单（doubao-seed / gpt-4o / claude-3+ / qwen3. 等）`,
       visionModel,
       mainModel
     };
@@ -369,6 +414,7 @@ export class LLMAdapter {
    * 返回：
    *   - ok=true + citations.length > 0 → 真支持
    *   - ok=true + citations.length === 0 → 代理静默吞掉 annotations，UI 应当警告
+   *   - 通义 enable_search：兼容模式常无结构化来源；非空正文也视为 realWebSearch
    *   - ok=false → 网络 / 鉴权问题
    */
   async probeWebSearch(modelOverride?: string): Promise<{
@@ -380,7 +426,7 @@ export class LLMAdapter {
   }> {
     const p = this.provider();
     if (!p) return { ok: false, realWebSearch: false, citations: 0, reason: "未配置 LLM 提供商" };
-    // 只对 openai-compatible 支持，因为我们只有 search-preview 模型走 web_search_options。
+    // 只对 openai-compatible 支持，因为我们只有 search-preview / enable_search 走该探测。
     // Anthropic 路径用 server-side tool，已经在 chatWithTools 里通过 tool_use 块判定。
     if (p.kind !== "openai-compatible") {
       return {
@@ -391,6 +437,9 @@ export class LLMAdapter {
       };
     }
     const model = modelOverride ?? this.getWebSearchModel();
+    const normalized = normalizeQwenModelId(model);
+    const qwenPath =
+      !matchesSearchModel(normalized) && usesQwenEnableSearch(p.baseUrl, normalized, p.model);
     const startedAt = Date.now();
     const r = await this.chatWithTools({
       systemPrompt: "回答时必须引用至少一个 URL 来源。",
@@ -410,9 +459,10 @@ export class LLMAdapter {
     if (r.kind === "error") {
       return { ok: false, realWebSearch: false, citations: 0, latencyMs, reason: r.message };
     }
+    const hasText = r.text.trim().length > 0;
     return {
       ok: true,
-      realWebSearch: r.citations.length > 0,
+      realWebSearch: r.citations.length > 0 || (qwenPath && hasText),
       citations: r.citations.length,
       latencyMs
     };
@@ -479,7 +529,7 @@ export class LLMAdapter {
 
   private async *callOpenAI(p: LLMProviderConfig, req: ChatRequest): AsyncGenerator<ChatChunk> {
     const url = chatCompletionsUrl(p);
-    const model = req.modelOverride ?? p.model;
+    const model = normalizeQwenModelId(req.modelOverride ?? p.model);
     const isSearch = matchesSearchModel(model);
     const body: Record<string, unknown> = {
       model,
@@ -634,8 +684,9 @@ export class LLMAdapter {
    * 路由规则：
    *   1) enableWebSearch=false → 普通 chatOnce
    *   2) modelOverride / provider.model 命中 search 关键字 → OpenAI search-preview 路径
-   *   3) Anthropic + 已知 web_search 模型 → server-side web_search tool
-   *   4) 其他 → error。联网调研不能静默降级为普通 chat。
+   *   3) 通义 / Qwen → enable_search 路径
+   *   4) Anthropic + 已知 web_search 模型 → server-side web_search tool
+   *   5) 其他 → error。联网调研不能静默降级为普通 chat。
    */
   async chatWithTools(req: ChatWithToolsRequest): Promise<ChatWithToolsResult | ChatWithToolsError> {
     const provider = this.provider();
@@ -649,16 +700,20 @@ export class LLMAdapter {
     }
 
     if (provider.kind === "openai-compatible") {
-      const model = req.modelOverride ?? provider.model;
+      const model = normalizeQwenModelId(req.modelOverride ?? provider.model);
       if (matchesSearchModel(model)) {
         return this.openAISearchPreview(provider, model, req);
+      }
+      if (usesQwenEnableSearch(provider.baseUrl, model, provider.model)) {
+        return this.dashScopeEnableSearch(provider, model, req);
       }
       return {
         kind: "error",
         code: "WEB_SEARCH_UNSUPPORTED_MODEL",
         message:
-          `已要求联网搜索，但模型 ${model} 不是 search-preview/search-api 系列。` +
+          `已要求联网搜索，但模型 ${model} 不是 search-preview/search-api 系列，也不是通义/Qwen enable_search 路径。` +
           `请把调研模型改为 gpt-4o-mini-search-preview / gpt-4o-search-preview，` +
+          `或使用通义 qwen-plus / qwen3.7-plus 等，` +
           `或换支持 server-side web_search 的 Anthropic 模型。`,
         toolEvents: []
       };
@@ -702,6 +757,101 @@ export class LLMAdapter {
       return { kind: "error", code: r.code, message: r.message, toolEvents: [] };
     }
     return { kind: "done", text: r.text, finishReason: r.finishReason, toolEvents: [], citations: [] };
+  }
+
+  /**
+   * 通义百炼 OpenAI 兼容：body 加 enable_search（+ forced_search）。
+   * 兼容模式通常不返回结构化 search_info，靠正文 URL 与 toolEvents 标记真实联网意图。
+   */
+  private async dashScopeEnableSearch(
+    p: LLMProviderConfig,
+    model: string,
+    req: ChatWithToolsRequest
+  ): Promise<ChatWithToolsResult | ChatWithToolsError> {
+    const url = chatCompletionsUrl(p);
+    const body: Record<string, unknown> = {
+      model,
+      messages: [
+        { role: "system", content: req.systemPrompt },
+        ...req.messages.map((m) => ({
+          role: m.role,
+          content: toOpenAIContent(m.content)
+        }))
+      ],
+      max_tokens: req.maxTokens ?? p.defaultMaxTokens ?? 3500,
+      stream: false,
+      temperature: req.temperature ?? p.defaultTemperature ?? 0.7,
+      enable_search: true,
+      search_options: {
+        forced_search: true
+      }
+    };
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${p.apiKey}`
+        },
+        body: JSON.stringify(body),
+        signal: mergeChatFetchSignal(req.signal)
+      });
+    } catch (e) {
+      const isTimeout =
+        e instanceof Error && (e.name === "TimeoutError" || e.message.includes("timeout"));
+      return {
+        kind: "error",
+        code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
+        message: fetchErrorMessage(e),
+        toolEvents: []
+      };
+    }
+
+    const rawText = await res.text().catch(() => "");
+    if (!res.ok) {
+      return {
+        kind: "error",
+        code: mapHttpToCode(res.status),
+        message: rawText.slice(0, 800) || `HTTP ${res.status}`,
+        toolEvents: []
+      };
+    }
+
+    let json: {
+      choices?: Array<{
+        message?: { content?: string };
+        finish_reason?: string;
+      }>;
+    } | null = null;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      return {
+        kind: "error",
+        code: "BAD_RESPONSE",
+        message: "通义 enable_search 响应不可解析",
+        toolEvents: []
+      };
+    }
+
+    const choice = json?.choices?.[0];
+    const text = choice?.message?.content ?? "";
+    const finishReason = mapFinishReason(choice?.finish_reason);
+    const citations = extractInlineUrls(text);
+    // 强制搜成功后即使无 URL，也标记 tool 事件，避免上层把深度调研当成未联网。
+    const toolEvents: ToolEvent[] = [
+      { kind: "tool_start", tool: "web_search" },
+      { kind: "tool_end", tool: "web_search", sources: citations }
+    ];
+    return {
+      kind: "done",
+      text,
+      finishReason,
+      toolEvents,
+      citations
+    };
   }
 
   /**
@@ -903,13 +1053,7 @@ export class LLMAdapter {
     // 部分中转完全不给 annotations，但模型在正文里用 Markdown 链接形式写了 URL。
     // 兜底：把正文里裸露的 http(s)://... 也收为引用，让 webSearchUsed 不至于错判为 false。
     if (citations.size === 0 && text.length > 0) {
-      const urlRegex = /https?:\/\/[^\s)\]\u4e00-\u9fff，。；：、！？]+/g;
-      const matches = text.match(urlRegex) ?? [];
-      for (const u of matches) {
-        const cleaned = u.replace(/[\]\)\.，。；：、]+$/, "");
-        if (cleaned.length > 8) citations.add(cleaned);
-        if (citations.size >= 6) break;
-      }
+      for (const u of extractInlineUrls(text)) citations.add(u);
     }
     const citationsFromInline = citations.size - citationsFromAnnotations;
     const toolEvents: ToolEvent[] = [];
@@ -1076,6 +1220,23 @@ export class LLMAdapter {
 function matchesSearchModel(model: string): boolean {
   const lower = model.toLowerCase();
   return OPENAI_SEARCH_MODEL_KEYWORDS.some((k) => lower.includes(k));
+}
+
+/** 从正文捞 http(s) URL，最多 6 条。 */
+function extractInlineUrls(text: string): string[] {
+  if (!text) return [];
+  const urlRegex = /https?:\/\/[^\s)\]\u4e00-\u9fff，。；：、！？]+/g;
+  const matches = text.match(urlRegex) ?? [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const u of matches) {
+    const cleaned = u.replace(/[\]\)\.，。；：、]+$/, "");
+    if (cleaned.length <= 8 || seen.has(cleaned)) continue;
+    seen.add(cleaned);
+    out.push(cleaned);
+    if (out.length >= 6) break;
+  }
+  return out;
 }
 
 /**

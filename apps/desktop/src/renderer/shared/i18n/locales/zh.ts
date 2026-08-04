@@ -830,8 +830,10 @@ export const zh = {
         "百灵目前仅支持以上两种。多数中转站（OhMyGPT、DeepSeek、Moonshot 等）及 OpenAI 格式接口请选「OpenAI 兼容」；仅当服务商文档明确要求 Anthropic / Claude 接口格式时才选「Anthropic 兼容」。不确定时保持 OpenAI 兼容即可。",
       baseUrl: "API 服务的基础地址（通常含 /v1 等版本路径）。",
       mainModel: "用于与桌宠日常对话的模型 ID。",
-      visionModel: "用于读取上传参考图的模型 ID；需支持图像输入。",
-      webSearchModel: "深度创建角色时用于联网检索的模型 ID；通常为 search-preview 系列。",
+      visionModel:
+        "用于读取上传参考图的模型 ID；需支持图像输入。通义可用 qwen3.7-plus / qwen-vl-*；误填非视觉模型时会尝试回落主模型。",
+      webSearchModel:
+        "深度创建角色时用于联网检索的模型 ID；通常为 search-preview 系列。通义请填普通模型名（如 qwen-plus、qwen3.7-plus），勿加 -search；产品会自动兼容误填的 qwen-*-search。",
       webSearch: "深度创建角色时用于联网检索；是否可用取决于所选模型与服务商。",
       imageGen: "用于生成像素桌宠外观的图像模型与相关参数。",
       imageTiers:

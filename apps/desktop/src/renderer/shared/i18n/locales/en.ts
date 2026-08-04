@@ -836,9 +836,10 @@ export const en: TranslationTree = {
         "Bailin supports only these two. Choose OpenAI compatible for most relays (OhMyGPT, DeepSeek, Moonshot, etc.) and OpenAI-format endpoints; choose Anthropic compatible only when your provider's docs specify Anthropic / Claude Messages API. When unsure, keep OpenAI compatible.",
       baseUrl: "Base URL of the API service (often includes a version path such as /v1).",
       mainModel: "Model ID used for daily chat with your desktop pet.",
-      visionModel: "Model ID used to read uploaded reference images; must accept image input.",
+      visionModel:
+        "Model ID used to read uploaded reference images; must accept image input. For Qwen use qwen3.7-plus / qwen-vl-*; non-vision IDs fall back to the main multimodal model when possible.",
       webSearchModel:
-        "Model ID used for web research during deep character creation; usually a search-preview series.",
+        "Model ID used for web research during deep character creation; usually a search-preview series. For Qwen/DashScope use a normal model ID (e.g. qwen-plus, qwen3.7-plus)—do not append -search; mistaken qwen-*-search names are auto-normalized.",
       webSearch: "Web retrieval used during deep character creation; availability depends on model and provider.",
       imageGen: "Image model and parameters used to generate pixel pet sprites.",
       imageTiers:
