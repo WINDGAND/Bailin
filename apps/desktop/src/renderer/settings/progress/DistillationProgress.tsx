@@ -56,7 +56,8 @@ export function DistillationProgress({
     bannerStatus,
     failureReason,
     isSkeleton,
-    researchSummary
+    researchSummary,
+    timing
   } = useDistillationJobs();
   const {
     agents,
@@ -109,6 +110,7 @@ export function DistillationProgress({
         resynthesisRound={stageDisplay.resynthesisRound}
         forceAllDone={finalState?.kind === "done"}
         activityHint={running ? t(ACTIVITY_HINT_KEYS[hintIndex]!) : null}
+        timing={timing}
       />
 
       <ResearchAgentsSection agents={agents} researchSummary={researchSummary} />

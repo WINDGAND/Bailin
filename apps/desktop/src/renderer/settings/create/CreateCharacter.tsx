@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBailin } from "../../shared/use-bailin.js";
 import { DistillationProgress } from "../progress/DistillationProgress.js";
-import { useToast } from "../../shared/feedback.js";
+import { useConfirm, useToast } from "../../shared/feedback.js";
+import { ensureLlmConfigured } from "../../shared/ensure-llm-configured.js";
 import { useT } from "../../shared/i18n/index.js";
 import { OptionGroup } from "../../shared/option-group.js";
 import { useDistillationJobs } from "../app/distillation-job-context.js";
@@ -33,6 +34,7 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const t = useT();
   const bailin = useBailin();
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const { activeJob, startJob, clearJob, cancelJob } = useDistillationJobs();
 
   const [name, setName] = useState("");
@@ -165,6 +167,9 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
     (userMaterial.trim().length > 0 ? 1 : 0);
 
   async function submitDeep(): Promise<void> {
+    const ready = await ensureLlmConfigured({ bailin, confirm, t });
+    if (!ready) return;
+
     setBusy(true);
     const resolvedMode = effectiveMaterialMode;
     const localOnly = resolvedMode === "local-only";

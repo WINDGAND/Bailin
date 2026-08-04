@@ -189,7 +189,13 @@ function makeBailinStub(): BailinWindow["bailin"] {
   }
   return {
     app: {
-      isFirstRun: async () => false,
+      isFirstRun: async () => {
+        try {
+          return new URLSearchParams(window.location.search).get("firstRun") === "1";
+        } catch {
+          return false;
+        }
+      },
       completeFirstRun: async () => undefined,
       quit: async () => undefined,
       getLocale: async () => {

@@ -80,7 +80,7 @@ interface ConfirmInput {
   requireText?: string;
 }
 
-type ConfirmFn = (input: ConfirmInput) => Promise<boolean>;
+export type ConfirmFn = (input: ConfirmInput) => Promise<boolean>;
 
 const ConfirmContext = createContext<ConfirmFn | null>(null);
 

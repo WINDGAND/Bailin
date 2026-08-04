@@ -1494,6 +1494,39 @@ body.settings-window #root {
   padding-top: env(titlebar-area-height, 36px);
 }
 
+/* 首启引导：窗口变小时右侧出现滚动条，避免内容被裁切 */
+.setup-wizard {
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  background: var(--paper);
+  -webkit-app-region: no-drag;
+}
+
+.setup-wizard__grid {
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.setup-wizard__brand {
+  padding: 56px 56px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.setup-wizard__panel {
+  padding: 56px 48px;
+  background: var(--paper-deep);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border-left: 1px solid var(--grid-strong);
+}
+
 .settings-titlebar-drag {
   position: fixed;
   top: env(titlebar-area-y, 0px);
@@ -4307,7 +4340,180 @@ body.settings-window #root {
   word-break: break-word;
 }
 
-/* Character motto / quote — 角色座右铭（编辑式引语，无额外色块） */
+/* Character signature — 编辑式座右铭：引语 + 状态徽标 + 动作，无卡片堆叠 */
+.char-signature {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: var(--space-6);
+  padding: 4px 0 2px;
+}
+
+.char-signature__quote {
+  position: relative;
+  margin: 0;
+  padding: 2px 0 2px 18px;
+  border: none;
+  border-left: 2px solid var(--grid-strong);
+  background: transparent;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 17.5px;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
+.char-signature[data-status="provisional"] .char-signature__quote {
+  border-left-color: color-mix(in srgb, var(--amber) 55%, var(--grid-strong));
+  color: color-mix(in srgb, var(--ink-soft) 88%, var(--amber));
+}
+
+.char-signature[data-status="verified"] .char-signature__quote {
+  border-left-color: color-mix(in srgb, var(--emerald) 45%, var(--grid-strong));
+}
+
+.char-signature__quote--missing {
+  font-style: normal;
+  font-size: 14px;
+  color: var(--ink-caption);
+  border-left-color: var(--hairline, var(--grid));
+}
+
+.char-signature__mark {
+  color: var(--ink-ghost);
+  font-style: normal;
+  font-weight: 500;
+}
+
+.char-signature__text {
+  margin: 0 1px;
+}
+
+.char-signature__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding-left: 18px;
+  min-height: 28px;
+}
+
+.char-signature__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--ink-caption);
+}
+
+.char-signature__badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-ghost);
+  flex-shrink: 0;
+}
+
+.char-signature__badge.is-provisional {
+  color: var(--amber);
+}
+
+.char-signature__badge.is-provisional .char-signature__badge-dot {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-tint);
+}
+
+.char-signature__badge.is-verified {
+  color: var(--emerald);
+}
+
+.char-signature__badge.is-verified .char-signature__badge-dot {
+  background: var(--emerald);
+}
+
+.char-signature__badge.is-missing {
+  color: var(--ink-ghost);
+}
+
+.char-signature__retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink-soft) 28%, transparent);
+  transition:
+    color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+
+.char-signature__retry:hover:not(:disabled) {
+  color: var(--ink);
+  border-bottom-color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.char-signature__retry:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.char-signature__retry:disabled {
+  opacity: 0.55;
+  cursor: progress;
+  border-bottom-color: transparent;
+}
+
+.char-signature[data-retrying="true"] .char-signature__badge-dot {
+  animation: pulse-dot 1.2s var(--ease-in-out) infinite;
+}
+
+.char-signature__note {
+  margin: 0;
+  padding: 8px 12px 8px 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-caption);
+  border-left: 2px solid var(--grid-strong);
+  animation: fade-in 220ms var(--ease-out) both;
+  text-wrap: pretty;
+}
+
+.char-signature__note.is-ok {
+  color: var(--emerald);
+  border-left-color: color-mix(in srgb, var(--emerald) 50%, var(--grid-strong));
+}
+
+.char-signature__note.is-warn {
+  color: color-mix(in srgb, var(--amber) 75%, var(--ink));
+  border-left-color: color-mix(in srgb, var(--amber) 55%, var(--grid-strong));
+  background: linear-gradient(
+    90deg,
+    var(--amber-tint) 0%,
+    transparent 72%
+  );
+}
+
+.char-signature__note.is-error {
+  color: var(--magenta);
+  border-left-color: color-mix(in srgb, var(--magenta) 45%, var(--grid-strong));
+}
+
+/* 兼容旧 class（若其它入口仍引用） */
 .char-quote {
   font-family: var(--font-display);
   font-style: italic;
@@ -4322,56 +4528,18 @@ body.settings-window #root {
   border-radius: 0;
 }
 
-.char-quote-block {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-}
-
-.stack--lg > .char-quote-block {
-  margin-top: var(--space-6);
-}
-
-.char-quote--provisional {
-  opacity: 0.92;
-}
-
-.char-quote--missing {
-  font-style: normal;
-  color: var(--ink-caption);
-}
-
-.char-quote-retry {
-  padding: 0;
-  min-height: auto;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--ink-caption);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  opacity: 0.85;
-}
-
-.char-quote-retry:hover:not(:disabled) {
-  color: var(--ink);
-  opacity: 1;
-}
-
-.char-quote-retry:disabled {
-  opacity: 0.5;
-  text-decoration: none;
-}
-
-/* 与上方角色头像/名称区块拉开距离（stack--lg 默认 26px 仍偏紧） */
 .stack--lg > .char-quote {
   margin-top: var(--space-6);
 }
 
+[data-theme="dark"] .char-signature__quote,
 [data-theme="dark"] .char-quote {
   color: var(--ink-soft);
   border-left-color: var(--hairline-strong);
+}
+
+[data-theme="dark"] .char-signature[data-status="provisional"] .char-signature__quote {
+  border-left-color: color-mix(in srgb, var(--amber) 60%, var(--hairline-strong));
 }
 
 /* ---------- Status strip：左 4px 实色竖条 + 主文 + 副文 + action ---------- */
@@ -5955,12 +6123,39 @@ body.settings-window #root {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
   padding: 14px 20px 16px;
+  overflow: visible;
 }
 
 .distill-stage-rail__meta {
   display: flex;
-  justify-content: flex-end;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 10px;
+}
+
+.distill-stage-rail__elapsed {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.distill-stage-rail__elapsed-value {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+
+.distill-stage-rail__elapsed-value--empty {
+  visibility: hidden;
+}
+
+.distill-stage-rail__elapsed-paused {
+  font-size: 11px;
+  color: var(--ink-ghost);
 }
 
 .distill-stage-rail__step-count {
@@ -5969,16 +6164,18 @@ body.settings-window #root {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--ink-faint);
+  flex-shrink: 0;
 }
 
 .distill-stage-rail {
   display: flex;
   align-items: flex-start;
-  padding: 0;
+  padding: 4px 0 2px;
   background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
+  overflow: visible;
 }
 
 .distill-stage-rail__caption {
@@ -6001,8 +6198,8 @@ body.settings-window #root {
   margin-top: 0.45em;
   border-radius: 50%;
   background: var(--amber);
-  box-shadow: 0 0 0 0 var(--amber-tint);
-  animation: distill-stage-caption-pulse 1.8s var(--ease-in-out) infinite;
+  box-shadow: 0 0 0 0 rgba(217, 154, 58, 0.35);
+  animation: distill-stage-caption-pulse 1.4s var(--ease-in-out) infinite;
 }
 
 .distill-stage-rail__caption-text {
@@ -6012,12 +6209,14 @@ body.settings-window #root {
 @keyframes distill-stage-caption-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 var(--amber-tint);
+    box-shadow: 0 0 0 0 rgba(217, 154, 58, 0.35);
     opacity: 1;
+    transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 0 5px transparent;
-    opacity: 0.72;
+    box-shadow: 0 0 0 6px transparent;
+    opacity: 0.55;
+    transform: scale(0.85);
   }
 }
 
@@ -6029,6 +6228,7 @@ body.settings-window #root {
   align-items: center;
   min-width: 0;
   padding: 0 2px;
+  overflow: visible;
 }
 
 .distill-stage-rail__connector {
@@ -6072,13 +6272,28 @@ body.settings-window #root {
 }
 
 .distill-stage-rail__node.is-active {
-  /* 必须是不透明色——之前用半透明的 --amber-tint 当背景，节点后面 z-index 更低
-     的连接线会从半透明处透出来，看起来像一条线戳穿了数字。color-mix 在这里
-     算出一个不透明的浅琥珀色，视觉上还是"淡琥珀底"，但完全遮住背后的线。 */
-  background: color-mix(in srgb, var(--amber) 16%, var(--paper));
+  /* 实心琥珀 = 一眼可读的「正在进行」；背后连接线被完全遮住。 */
+  background: var(--amber);
   border: 1.5px solid var(--amber);
-  color: var(--amber);
-  animation: distill-stage-node-pulse 1.8s var(--ease-in-out) infinite;
+  color: var(--paper);
+  box-shadow: 0 0 0 3px rgba(217, 154, 58, 0.18);
+  animation: distill-stage-node-breathe 1.6s var(--ease-in-out) infinite;
+}
+
+/* 双环声纳：两圈错开扩散，远看也能确认「还在跑」。 */
+.distill-stage-rail__node.is-active::before,
+.distill-stage-rail__node.is-active::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--amber);
+  pointer-events: none;
+  animation: distill-stage-node-ring 1.8s var(--ease-out) infinite;
+}
+
+.distill-stage-rail__node.is-active::after {
+  animation-delay: 0.9s;
 }
 
 .distill-stage-rail__node.is-done {
@@ -6087,9 +6302,28 @@ body.settings-window #root {
   color: var(--paper);
 }
 
-@keyframes distill-stage-node-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px var(--amber-tint); }
-  50% { box-shadow: 0 0 0 6px transparent; }
+@keyframes distill-stage-node-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes distill-stage-node-ring {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.55;
+  }
+  70% {
+    opacity: 0.12;
+  }
+  100% {
+    transform: scale(1.75);
+    opacity: 0;
+  }
 }
 
 .distill-stage-rail__label {
@@ -6102,10 +6336,33 @@ body.settings-window #root {
   transition: color var(--motion-base) var(--ease-out);
 }
 
-.distill-stage-rail__label.is-active,
 .distill-stage-rail__label.is-done {
   color: var(--ink-soft);
   font-weight: 600;
+}
+
+.distill-stage-rail__label.is-active {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.distill-stage-rail__stage-time {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink-ghost);
+}
+
+.distill-stage-rail__stage-time.is-active {
+  color: var(--amber);
+}
+
+.distill-stage-rail__stage-time.is-done {
+  color: var(--ink-faint);
 }
 
 .distill-stage-rail__badge {
@@ -6148,9 +6405,19 @@ body.settings-window #root {
 @media (prefers-reduced-motion: reduce) {
   .distill-stage-rail__node.is-active {
     animation: none;
+    /* 静态光晕仍标明「进行中」，但不做位移/扩散。 */
+    box-shadow: 0 0 0 5px rgba(217, 154, 58, 0.22);
+  }
+  .distill-stage-rail__node.is-active::before,
+  .distill-stage-rail__node.is-active::after {
+    animation: none;
+    opacity: 0.28;
+    transform: scale(1.2);
   }
   .distill-stage-rail__caption-dot {
     animation: none;
+    opacity: 1;
+    transform: none;
   }
 }
 

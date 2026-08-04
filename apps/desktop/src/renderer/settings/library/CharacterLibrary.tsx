@@ -22,6 +22,7 @@ import { ChatMarkdown } from "../../shared/chat-markdown.js";
 import { Icon } from "../../shared/icon.js";
 import { useVisualJobs } from "../app/visual-job-context.js";
 import { resolveCharacterSignature } from "./character-signature.js";
+import { interpretQuoteRetryResult } from "./quote-retry-feedback.js";
 import { runDetailTransition } from "./detail-transition.js";
 
 interface LibraryItem {
@@ -87,6 +88,11 @@ export function CharacterLibrary({
   const [openedAgentId, setOpenedAgentId] = useState<number | null>(null);
   const [appearanceMenuOpen, setAppearanceMenuOpen] = useState(false);
   const [quoteRetrying, setQuoteRetrying] = useState(false);
+  /** 座右铭重试后的内联反馈（不依赖角落 toast，避免「加载完签名没变」像坏掉）。 */
+  const [quoteRetryNote, setQuoteRetryNote] = useState<{
+    kind: "ok" | "warn" | "error";
+    text: string;
+  } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [listPage, setListPage] = useState(1);
   const [pageMotion, setPageMotion] = useState<{ nonce: number; direction: PageDirection }>({
@@ -103,6 +109,7 @@ export function CharacterLibrary({
     setSelectedId(id);
     setOpenedAgentId(null);
     setAppearanceMenuOpen(false);
+    setQuoteRetryNote(null);
 
     try {
       const [b, extra] = await Promise.all([
@@ -308,27 +315,33 @@ export function CharacterLibrary({
     if (!selected || quoteRetrying) return;
     const id = selected.card.id;
     setQuoteRetrying(true);
+    setQuoteRetryNote(null);
     try {
       const r = await bailin.characters.regenerateQuote(id);
-      if (r.ok) {
-        showToast({ kind: "success", text: t("library.toastQuoteVerified") });
-      } else if (r.quoteStatus === "provisional" || r.quoteStatus === "missing") {
-        showToast({ kind: "warn", text: t("library.toastQuoteStillMissing") });
-      } else {
-        showToast({
-          kind: "warn",
-          text: t("library.toastQuoteRetryFailed", { error: r.error ?? "unknown" })
-        });
-      }
       const b = await bailin.characters.get(id);
       if (b) setSelected(b);
+      void refreshList(true);
+
+      const outcome = interpretQuoteRetryResult(r);
+      if (outcome.kind === "verified") {
+        const text = t("library.toastQuoteVerified");
+        setQuoteRetryNote({ kind: "ok", text });
+        showToast({ kind: "success", text, ttlMs: 5200 });
+      } else if (outcome.kind === "unverified") {
+        const text = t("library.toastQuoteStillMissing");
+        setQuoteRetryNote({ kind: "warn", text });
+        showToast({ kind: "warn", text, ttlMs: 6500 });
+      } else {
+        const text = t("library.toastQuoteRetryFailed", { error: outcome.error });
+        setQuoteRetryNote({ kind: "error", text });
+        showToast({ kind: "error", text, ttlMs: 9000 });
+      }
     } catch (e) {
-      showToast({
-        kind: "warn",
-        text: t("library.toastQuoteRetryFailed", {
-          error: e instanceof Error ? e.message : String(e)
-        })
+      const text = t("library.toastQuoteRetryFailed", {
+        error: e instanceof Error ? e.message : String(e)
       });
+      setQuoteRetryNote({ kind: "error", text });
+      showToast({ kind: "error", text, ttlMs: 9000 });
     } finally {
       setQuoteRetrying(false);
     }
@@ -676,40 +689,67 @@ export function CharacterLibrary({
                 </div>
               ) : null}
 
-              {selectedSignature && selectedSignature.status === "missing" ? (
-                <div className="char-quote-block">
-                  <p className="char-quote char-quote--missing">{t("library.quoteMissing")}</p>
-                  <button
-                    type="button"
-                    className="btn btn--ghost char-quote-retry"
-                    disabled={anyBusy}
-                    onClick={() => void retryQuote()}
-                  >
-                    {quoteRetrying ? t("library.quoteRetrying") : t("library.quoteRetry")}
-                  </button>
-                </div>
-              ) : selectedSignature?.text ? (
-                <div className="char-quote-block">
-                  <blockquote
-                    className={
-                      selectedSignature.status === "provisional"
-                        ? "char-quote char-quote--provisional"
-                        : "char-quote"
-                    }
-                  >
-                    「{selectedSignature.text}」
-                  </blockquote>
-                  {selectedSignature.canRetry ? (
-                    <button
-                      type="button"
-                      className="btn btn--ghost char-quote-retry"
-                      disabled={anyBusy}
-                      onClick={() => void retryQuote()}
+              {selectedSignature &&
+              (selectedSignature.status === "missing" || selectedSignature.text) ? (
+                <div
+                  className="char-signature"
+                  data-status={selectedSignature.status}
+                  data-retrying={quoteRetrying ? "true" : "false"}
+                >
+                  {selectedSignature.status === "missing" ? (
+                    <p className="char-signature__quote char-signature__quote--missing">
+                      {t("library.quoteMissing")}
+                    </p>
+                  ) : (
+                    <blockquote className="char-signature__quote">
+                      <span className="char-signature__mark" aria-hidden="true">
+                        「
+                      </span>
+                      <span className="char-signature__text">{selectedSignature.text}</span>
+                      <span className="char-signature__mark" aria-hidden="true">
+                        」
+                      </span>
+                    </blockquote>
+                  )}
+
+                  <div className="char-signature__meta">
+                    <span
+                      className={`char-signature__badge is-${selectedSignature.status}`}
                     >
-                      {quoteRetrying
-                        ? t("library.quoteRetrying")
-                        : t("library.quoteUnverifiedRetry")}
-                    </button>
+                      <span className="char-signature__badge-dot" aria-hidden="true" />
+                      {selectedSignature.status === "verified"
+                        ? t("library.quoteVerified")
+                        : selectedSignature.status === "missing"
+                          ? t("library.quoteMissingShort")
+                          : t("library.quoteUnverified")}
+                    </span>
+                    {selectedSignature.canRetry ? (
+                      <button
+                        type="button"
+                        className="char-signature__retry"
+                        disabled={anyBusy}
+                        onClick={() => void retryQuote()}
+                      >
+                        {quoteRetrying ? (
+                          <>
+                            <Spinner />
+                            <span>{t("library.quoteRetrying")}</span>
+                          </>
+                        ) : (
+                          t("library.quoteRetryAction")
+                        )}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {quoteRetryNote ? (
+                    <p
+                      className={`char-signature__note is-${quoteRetryNote.kind}`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {quoteRetryNote.text}
+                    </p>
                   ) : null}
                 </div>
               ) : null}
