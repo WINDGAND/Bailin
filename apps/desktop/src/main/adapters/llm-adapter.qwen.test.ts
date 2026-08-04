@@ -6,6 +6,7 @@ import {
   normalizeQwenModelId,
   resolveVisionModel,
   resolveWebSearchModel,
+  rewriteUnusableVisionModel,
   usesQwenEnableSearch
 } from "./llm-adapter.js";
 
@@ -74,7 +75,7 @@ describe("vision probe image size", () => {
     const buf = Buffer.from(b64, "base64");
     const w = buf.readUInt32BE(16);
     const h = buf.readUInt32BE(20);
-    assert.ok(w > 10 && h > 10, `expected >10px probe, got ${w}x${h}`);
+    assert.ok(w >= 16 && h >= 16, `expected >=16px probe, got ${w}x${h}`);
   });
 });
 
@@ -99,6 +100,28 @@ describe("resolveVisionModel qwen fallback", () => {
       visionModel: "qwen-vl-plus"
     });
     assert.equal(resolved, "qwen-vl-plus");
+  });
+
+  it("rewrites embedding vision models to usable VL", () => {
+    assert.equal(
+      rewriteUnusableVisionModel("qwen3-vl-embedding", {
+        kind: "openai-compatible",
+        baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        apiKey: "sk-test",
+        model: "qwen-plus"
+      }),
+      "qwen-vl-plus"
+    );
+    assert.equal(
+      resolveVisionModel({
+        kind: "openai-compatible",
+        baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        apiKey: "sk-test",
+        model: "qwen3.7-plus",
+        visionModel: "qwen3-vl-embedding"
+      }),
+      "qwen3.7-plus"
+    );
   });
 });
 

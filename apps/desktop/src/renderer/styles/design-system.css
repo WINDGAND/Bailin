@@ -1494,24 +1494,38 @@ body.settings-window #root {
   padding-top: env(titlebar-area-height, 36px);
 }
 
-/* 首启引导：窗口变小时右侧出现滚动条，避免内容被裁切 */
-.setup-wizard {
+/* 首启引导宿主：保证引导页吃满 #root 可用高度，滚动发生在面板内 */
+.setup-wizard-host {
+  box-sizing: border-box;
   height: 100%;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
+}
+
+/* 首启引导：整窗不裁切；右侧面板独立纵向滚动（小窗也能看完） */
+.setup-wizard {
+  box-sizing: border-box;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: var(--paper);
   -webkit-app-region: no-drag;
 }
 
 .setup-wizard__grid {
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  align-items: stretch;
 }
 
 .setup-wizard__brand {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 56px 56px 40px;
   display: flex;
   flex-direction: column;
@@ -1519,12 +1533,49 @@ body.settings-window #root {
 }
 
 .setup-wizard__panel {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 56px 48px;
   background: var(--paper-deep);
   display: flex;
   flex-direction: column;
   gap: 18px;
   border-left: 1px solid var(--grid-strong);
+  /* 右侧滚动条更易辨认（用户明确反馈需要） */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-faint) var(--paper-sink);
+}
+
+.setup-wizard__panel::-webkit-scrollbar {
+  width: 10px;
+}
+.setup-wizard__panel::-webkit-scrollbar-track {
+  background: var(--paper-sink);
+}
+.setup-wizard__panel::-webkit-scrollbar-thumb {
+  background: var(--ink-ghost);
+  border-radius: 999px;
+  border: 2px solid var(--paper-sink);
+}
+.setup-wizard__panel::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint);
+}
+
+@media (max-width: 900px) {
+  .setup-wizard__grid {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+  .setup-wizard__brand {
+    max-height: none;
+    overflow: visible;
+    border-bottom: 1px solid var(--grid-strong);
+  }
+  .setup-wizard__panel {
+    border-left: none;
+  }
 }
 
 .settings-titlebar-drag {

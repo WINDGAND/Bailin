@@ -970,7 +970,7 @@ export const zh = {
     probeWeb: "实测联网",
     retest: "重测",
     visionTestingTitle: "正在测试视觉能力…",
-    visionTestingDetail: "发一张 16×16 PNG 给 {{model}}",
+    visionTestingDetail: "发一张 32×32 PNG 给 {{model}}",
     visionOkTitle: "视觉验证通过",
     visionRejectedTitle: "视觉模型拒绝多模态请求",
     visionOkDetail: "模型可读图 · {{latency}} ms",

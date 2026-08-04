@@ -222,12 +222,14 @@ export function SettingsApp(): JSX.Element {
     return (
       <>
         <div className="settings-titlebar-drag" aria-hidden="true" />
-        <SetupWizard
-          onDone={async () => {
-            await bailin.app.completeFirstRun();
-            setFirstRun(false);
-          }}
-        />
+        <div className="setup-wizard-host">
+          <SetupWizard
+            onDone={async () => {
+              await bailin.app.completeFirstRun();
+              setFirstRun(false);
+            }}
+          />
+        </div>
       </>
     );
   }

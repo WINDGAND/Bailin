@@ -187,7 +187,7 @@ export class ImageGenerationAdapter {
     const tierName = req.tier ?? config.defaultTier;
     const tier = config.tiers[tierName];
     // 通义百炼无 OpenAI Images；走原生 multimodal-generation，并把 qwen-vl-* 映射为生图模型。
-    if (isDashScopeImageBaseUrl(resolved.baseUrl)) {
+    if (shouldUseDashScopeImagePath(resolved.baseUrl, tier.model)) {
       return this.generateViaDashScope(resolved, tier, tierName, req, startedAt);
     }
     const supportsTransparent = modelSupportsTransparent(tier.model);
@@ -226,6 +226,15 @@ export class ImageGenerationAdapter {
         ),
       logCtx
     );
+    // 地址像通义但未命中首段路由时：OpenAI Images 404 再回退原生端点。
+    if (
+      first.kind === "error" &&
+      (first.code === "HTTP_404" || /HTTP 404/i.test(first.message)) &&
+      isDashScopeImageBaseUrl(resolved.baseUrl) &&
+      looksLikeDashScopeImageModel(tier.model)
+    ) {
+      return this.generateViaDashScope(resolved, tier, tierName, req, startedAt);
+    }
 
     // 关键 fallback：gpt-image-2 不支持 background:transparent，碰到 400 自动去掉重试。
     // 我们提前用 modelSupportsTransparent 拦掉了大部分；这里兜底拦运行时新出限制。
@@ -279,7 +288,7 @@ export class ImageGenerationAdapter {
     const config = this.config();
     const tierName = req.tier ?? config.defaultTier;
     const tier = config.tiers[tierName];
-    if (isDashScopeImageBaseUrl(resolved.baseUrl)) {
+    if (shouldUseDashScopeImagePath(resolved.baseUrl, tier.model)) {
       return this.editViaDashScope(resolved, tier, tierName, req, startedAt);
     }
     const supportsTransparent = modelSupportsTransparent(tier.model);
@@ -907,8 +916,25 @@ export function isDashScopeImageBaseUrl(baseUrl: string): boolean {
   return (
     u.includes("dashscope") ||
     u.includes("compatible-mode") ||
-    u.includes("maas.aliyuncs.com")
+    u.includes("maas.aliyuncs.com") ||
+    u.includes("aliyuncs.com")
   );
+}
+
+export function looksLikeDashScopeImageModel(model: string): boolean {
+  const lower = model.toLowerCase();
+  return (
+    lower.includes("qwen-image") ||
+    lower.includes("qwen-vl") ||
+    lower.startsWith("wan") ||
+    lower.includes("wanx") ||
+    lower.includes("z-image")
+  );
+}
+
+export function shouldUseDashScopeImagePath(baseUrl: string, _model?: string): boolean {
+  // 必须以地址判定：仅凭模型名会在 OhMyGPT 等中转上误拼原生 URL。
+  return isDashScopeImageBaseUrl(baseUrl);
 }
 
 /**

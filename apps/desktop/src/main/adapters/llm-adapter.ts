@@ -153,6 +153,7 @@ const VISION_MODEL_KEYWORDS = [
   "qwen-vl",
   "qwen2.5-vl",
   "qwen2-vl",
+  "qwen3-vl",
   "qwen3."
 ];
 
@@ -197,7 +198,7 @@ export function resolveVisionModel(
     modelOverride?.trim() ||
     provider?.visionModel?.trim() ||
     DEFAULT_VISION_MODEL;
-  const normalized = normalizeQwenModelId(raw);
+  const normalized = rewriteUnusableVisionModel(normalizeQwenModelId(raw), provider);
   if (matchesVisionModel(normalized)) return normalized;
   const mainRaw = provider?.model?.trim();
   if (mainRaw) {
@@ -206,6 +207,22 @@ export function resolveVisionModel(
     if (matchesVisionModel(main)) return main;
   }
   return normalized;
+}
+
+/** embedding / rerank 不能做聊天识图；通义误填时改到可用 VL。 */
+export function rewriteUnusableVisionModel(
+  model: string,
+  provider?: LLMProviderConfig | null
+): string {
+  const lower = model.toLowerCase();
+  if (!lower.includes("embedding") && !lower.includes("rerank")) return model;
+  const main = provider?.model?.trim();
+  if (main) {
+    const mainNorm = normalizeQwenModelId(main);
+    if (matchesVisionModel(mainNorm)) return mainNorm;
+  }
+  if (isQwenLikeModel(model) || lower.includes("-vl")) return "qwen-vl-plus";
+  return model;
 }
 
 export function resolveWebSearchModel(
@@ -220,11 +237,11 @@ export function resolveWebSearchModel(
 }
 
 /**
- * 16×16 透明 PNG 的 data URI；用于 vision probe。
+ * 32×32 透明 PNG 的 data URI；用于 vision probe。
  * 通义 VL 要求宽高均 > 10，1×1 会被拒（InternalError.Algo.InvalidParameter）。
  */
 const TINY_PROBE_PNG_DATA_URI =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAEklEQVR4nGNgGAWjYBSMAggAAAQQAAFVN1rQAAAAAElFTkSuQmCC";
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAGklEQVR4nO3BAQEAAACCIP+vbkhAAQAAAO8GECAAARlDNO4AAAAASUVORK5CYII=";
 
 export function matchesVisionModel(model: string): boolean {
   const lower = model.toLowerCase();
@@ -364,7 +381,7 @@ export class LLMAdapter {
   }
 
   /**
-   * 实测探测：发一张 16×16 透明 PNG + 「only reply 'ok'」请求，验证当前 provider/代理是否真能吃图。
+   * 实测探测：发一张 32×32 透明 PNG + 「only reply 'ok'」请求，验证当前 provider/代理是否真能吃图。
    * 用于发现「声明支持 vision 但中转 strip 了 image_url」的代理。
    *
    * 返回：
