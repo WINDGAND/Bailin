@@ -270,14 +270,12 @@ function ProviderStep({
         selectedBundle,
         apiKey.trim(),
         (key, state) => {
-          if (!mountedRef.current) return;
           if (state.status === "running" && key === "chat") {
             setOneClickProgress(t("provider.oneClickProgressChat"));
           }
           setReadiness((prev) => ({ ...prev, [key]: state }));
         }
       );
-      if (!mountedRef.current) return;
 
       if (!result.saveOk) {
         reportVerifyFailure(result.saveError ?? t("provider.toastSaveFailed"));
@@ -298,17 +296,14 @@ function ProviderStep({
         kind: "success",
         text: t("provider.toastChatReady", { latency: chat.latencyMs ?? "?" })
       });
-      scheduleNext();
+      if (mountedRef.current) scheduleNext();
     } catch (e) {
-      if (!mountedRef.current) return;
       reportVerifyFailure(
         e instanceof Error ? e.message : t("provider.toastTestFailed", { error: t("setup.testFailed") })
       );
     } finally {
-      if (mountedRef.current) {
-        setBusy(false);
-        setOneClickProgress(null);
-      }
+      setBusy(false);
+      setOneClickProgress(null);
     }
   }
 
@@ -332,14 +327,12 @@ function ProviderStep({
           imageConfig: EMPTY_IMAGE_CONFIG
         },
         (key, state) => {
-          if (!mountedRef.current) return;
           if (state.status === "running" && key === "chat") {
             setOneClickProgress(t("provider.oneClickProgressChat"));
           }
           setReadiness((prev) => ({ ...prev, [key]: state }));
         }
       );
-      if (!mountedRef.current) return;
 
       if (!result.saveOk) {
         reportVerifyFailure(result.saveError ?? t("provider.toastSaveFailed"));
@@ -360,17 +353,14 @@ function ProviderStep({
         kind: "success",
         text: t("provider.toastLocalReady", { latency: chat.latencyMs ?? "?" })
       });
-      scheduleNext();
+      if (mountedRef.current) scheduleNext();
     } catch (e) {
-      if (!mountedRef.current) return;
       reportVerifyFailure(
         e instanceof Error ? e.message : t("provider.toastTestFailed", { error: t("setup.testFailed") })
       );
     } finally {
-      if (mountedRef.current) {
-        setBusy(false);
-        setOneClickProgress(null);
-      }
+      setBusy(false);
+      setOneClickProgress(null);
     }
   }
 
