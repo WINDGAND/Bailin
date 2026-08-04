@@ -31,6 +31,11 @@ import {
   type ProgressContentState
 } from "../progress/progress-content-model.js";
 import {
+  INITIAL_TIMING,
+  reduceTiming,
+  type TimingState
+} from "../progress/distillation-timing.js";
+import {
   submitSpriteCheckpointAction,
   type SpriteCheckpointAction
 } from "./sprite-checkpoint-action.js";
@@ -67,6 +72,8 @@ interface DistillationJobContextValue {
    * 必须挂在不随 tab 卸载的 Provider 上，否则切走再回来会丢步骤 4/5。
    */
   progressContent: ProgressContentState;
+  /** 总用时 + 分步用时（调研/形象确认等待时暂停）。 */
+  timing: TimingState;
   failureReason?: string;
   isSkeleton?: boolean;
   researchSummary: ResearchSummaryPayload | null;
@@ -101,6 +108,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
   const [spriteTotalCostUsd, setSpriteTotalCostUsd] = useState(0);
   const [spriteActionPending, setSpriteActionPending] =
     useState<SpriteCheckpointAction | null>(null);
+  const [timing, setTiming] = useState(INITIAL_TIMING);
   const activeJobRef = useRef<ActiveDistillationJob | null>(null);
   const bannerStatusRef = useRef<DistillationBannerStatus | null>(null);
   /** 用户已点取消：立刻切终态，并忽略后续 phase/done，避免后台晚到事件把 UI 拉回去。 */
@@ -114,12 +122,38 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     bannerStatusRef.current = bannerStatus;
   }, [bannerStatus]);
 
+  /** 确认等待暂停；回到 running 恢复；终态冻结。 */
+  useEffect(() => {
+    if (!bannerStatus) return;
+    const now = Date.now();
+    if (bannerStatus === "awaiting_research" || bannerStatus === "awaiting_sprite") {
+      setTiming((prev) => reduceTiming(prev, { kind: "pause", now }));
+    } else if (bannerStatus === "running") {
+      setTiming((prev) => reduceTiming(prev, { kind: "resume", now }));
+    } else if (TERMINAL.includes(bannerStatus)) {
+      setTiming((prev) => reduceTiming(prev, { kind: "freeze", now }));
+    }
+  }, [bannerStatus]);
+
+  /** 阶段前进时落账上一步；重提炼不后退故为 no-op，第 6 步继续计时。 */
+  useEffect(() => {
+    if (!activeJob) return;
+    setTiming((prev) =>
+      reduceTiming(prev, {
+        kind: "setActiveIndex",
+        now: Date.now(),
+        activeIndex: stageDisplay.activeIndex
+      })
+    );
+  }, [activeJob, stageDisplay.activeIndex]);
+
   const resetJobState = useCallback(() => {
     userCancelledRef.current = false;
     setActiveJob(null);
     setBannerStatus(null);
     setStageDisplay(INITIAL_STAGE_DISPLAY);
     setProgressContent(INITIAL_PROGRESS_CONTENT);
+    setTiming(INITIAL_TIMING);
     setPhaseLabel("启动中…");
     setFailureReason(undefined);
     setIsSkeleton(false);
@@ -138,6 +172,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     setBannerStatus("running");
     setStageDisplay(INITIAL_STAGE_DISPLAY);
     setProgressContent(INITIAL_PROGRESS_CONTENT);
+    setTiming(reduceTiming(INITIAL_TIMING, { kind: "start", now: Date.now() }));
     setPhaseLabel("启动中…");
     setFailureReason(undefined);
     setIsSkeleton(false);
@@ -325,6 +360,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
       totalSteps: STAGE_COUNT,
       stageDisplay,
       progressContent,
+      timing,
       phaseLabel,
       failureReason,
       isSkeleton,
@@ -340,6 +376,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
       currentStep,
       stageDisplay,
       progressContent,
+      timing,
       phaseLabel,
       failureReason,
       isSkeleton,

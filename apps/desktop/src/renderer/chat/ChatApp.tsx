@@ -10,6 +10,7 @@ import type { CharacterBundle } from "@bailin/character-protocol";
 import { useActiveCharacter, useBailin } from "../shared/use-bailin.js";
 import { PetRenderer } from "../shared/pet-renderer.js";
 import { useConfirm, useToast } from "../shared/feedback.js";
+import { ensureLlmConfigured } from "../shared/ensure-llm-configured.js";
 import { ChatBubble } from "../shared/chat-bubble.js";
 import { useChatSession } from "../shared/use-chat-session.js";
 import { useChatScroll } from "../shared/use-chat-scroll.js";
@@ -153,11 +154,13 @@ export function ChatApp(): JSX.Element {
   // ===== 发送 =====
   const submit = useCallback(
     async (text: string) => {
+      const ready = await ensureLlmConfigured({ bailin, confirm, t });
+      if (!ready) return;
       forceScrollOnNextUpdate();
       setInput("");
       await chat.submit(text);
     },
-    [chat, forceScrollOnNextUpdate]
+    [bailin, confirm, t, chat, forceScrollOnNextUpdate]
   );
 
   // ===== 新对话 =====

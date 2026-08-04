@@ -394,16 +394,24 @@ export function registerIpc(deps: IpcDeps): void {
       if (!bundle) return { ok: false, error: "角色不存在" };
       const result = await orchestrator.regenerateQuote({ card: bundle.card });
       if (!result.card) {
-        return { ok: false, error: result.error ?? "座右铭核实失败", warnings: result.warnings };
+        return {
+          ok: false,
+          quoteStatus: result.quoteStatus,
+          error: result.error ?? "座右铭核实失败",
+          warnings: result.warnings
+        };
       }
       const newBundle: CharacterBundle = {
         ...bundle,
         card: result.card
       };
+      // 只重跑座右铭：保留原 isSkeleton，避免「核实失败」被误标成已完善。
+      const priorSkeleton =
+        vault.listCharacters().find((c) => c.id === characterId)?.isSkeleton ?? false;
       vault.upsertCharacter({
         id: characterId,
         bundle: newBundle,
-        isSkeleton: false,
+        isSkeleton: priorSkeleton,
         now: Date.now()
       });
       if (deps.getActiveCharacterId() === characterId) {

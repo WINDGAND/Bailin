@@ -66,100 +66,79 @@ export function SetupWizard({ onDone }: SetupWizardProps): JSX.Element {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        background: "var(--paper)"
-      }}
-    >
-      <section
-        style={{
-          padding: "56px 56px 40px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 22
-        }}
-      >
-        <BrandLogo size={44} className="brand-logo brand-logo--hero" />
-        <div className="eyebrow">{t("setup.eyebrow")}</div>
-        <h1 className="display display--hero">
-          {t("setup.heroLine1")}
-          <br />
-          {t("setup.heroLine2")}
-        </h1>
-        <p className="body-md" style={{ maxWidth: 420 }}>
-          {HAS_STARTERS ? t("setup.introWithStarters") : t("setup.introWithoutStarters")}
-        </p>
-        <div className="row gap-1 body-sm">
-          <span className="kbd">{modKeyLabel}</span>
-          <span className="kbd">Shift</span>
-          <span className="kbd">P</span>
-          <span style={{ marginLeft: 6 }}>{t("setup.shortcutHint")}</span>
-        </div>
+    <div className="setup-wizard">
+      <div className="setup-wizard__grid">
+        <section className="setup-wizard__brand">
+          <BrandLogo size={44} className="brand-logo brand-logo--hero" />
+          <div className="eyebrow">{t("setup.eyebrow")}</div>
+          <h1 className="display display--hero">
+            {t("setup.heroLine1")}
+            <br />
+            {t("setup.heroLine2")}
+          </h1>
+          <p className="body-md" style={{ maxWidth: 420 }}>
+            {HAS_STARTERS ? t("setup.introWithStarters") : t("setup.introWithoutStarters")}
+          </p>
+          <div className="row gap-1 body-sm">
+            <span className="kbd">{modKeyLabel}</span>
+            <span className="kbd">Shift</span>
+            <span className="kbd">P</span>
+            <span style={{ marginLeft: 6 }}>{t("setup.shortcutHint")}</span>
+          </div>
 
-        <div style={{ marginTop: "auto" }}>
-          <div
-            className="row row--between"
-            style={{ marginBottom: 8, fontSize: 12, color: "var(--ink-faint)" }}
-          >
-            <span className="mono">
-              {t("setup.stepCounter", { current: stepIndex + 1, total: STEP_ORDER.length })}
-            </span>
-            <span>{stepTitle}</span>
+          <div style={{ marginTop: "auto" }}>
+            <div
+              className="row row--between"
+              style={{ marginBottom: 8, fontSize: 12, color: "var(--ink-faint)" }}
+            >
+              <span className="mono">
+                {t("setup.stepCounter", { current: stepIndex + 1, total: STEP_ORDER.length })}
+              </span>
+              <span>{stepTitle}</span>
+            </div>
+            <div className="steps">
+              {STEP_ORDER.map((s, i) => (
+                <div
+                  key={s}
+                  className={`steps__dot ${
+                    i < stepIndex
+                      ? "steps__dot--done"
+                      : i === stepIndex
+                        ? "steps__dot--active"
+                        : ""
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-          <div className="steps">
-            {STEP_ORDER.map((s, i) => (
-              <div
-                key={s}
-                className={`steps__dot ${
-                  i < stepIndex
-                    ? "steps__dot--done"
-                    : i === stepIndex
-                      ? "steps__dot--active"
-                      : ""
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-      <section
-        style={{
-          padding: "56px 48px",
-          background: "var(--paper-deep)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 18,
-          borderLeft: "1px solid var(--grid-strong)"
-        }}
-      >
-        {step === "welcome" ? (
-          <SimpleStep
-            title={t("setup.stepWelcome")}
-            body={t("setup.welcomeBody")}
-            cta={t("setup.welcomeCta")}
-            onNext={next}
-          />
-        ) : null}
-        {step === "disclaimer" ? (
-          <SimpleStep
-            title={t("setup.stepDisclaimer")}
-            body={t("setup.disclaimerBody")}
-            cta={t("setup.disclaimerCta")}
-            onNext={next}
-            onBack={back}
-          />
-        ) : null}
-        {step === "provider" ? (
-          <ProviderStep
-            onNext={HAS_STARTERS ? next : () => void onDone()}
-            onBack={back}
-          />
-        ) : null}
-        {step === "starter" ? <StarterStep onDone={onDone} onBack={back} /> : null}
-      </section>
+        </section>
+        <section className="setup-wizard__panel">
+          {step === "welcome" ? (
+            <SimpleStep
+              title={t("setup.stepWelcome")}
+              body={t("setup.welcomeBody")}
+              cta={t("setup.welcomeCta")}
+              onNext={next}
+            />
+          ) : null}
+          {step === "disclaimer" ? (
+            <SimpleStep
+              title={t("setup.stepDisclaimer")}
+              body={t("setup.disclaimerBody")}
+              cta={t("setup.disclaimerCta")}
+              onNext={next}
+              onBack={back}
+            />
+          ) : null}
+          {step === "provider" ? (
+            <ProviderStep
+              onNext={HAS_STARTERS ? next : () => void onDone()}
+              onBack={back}
+            />
+          ) : null}
+          {step === "starter" ? <StarterStep onDone={onDone} onBack={back} /> : null}
+        </section>
+      </div>
     </div>
   );
 }
@@ -274,47 +253,63 @@ function ProviderStep({
     }
   }
 
+  function reportVerifyFailure(message: string): void {
+    setStatus({ kind: "error", message });
+    showToast({ kind: "error", text: message });
+  }
+
   async function connect(): Promise<void> {
     if (!apiKey.trim()) return;
     setBusy(true);
     setStatus({ kind: "running" });
     setReadiness(IDLE_READINESS);
 
-    const result = await applyOhMyGptBundle(
-      bailin,
-      selectedBundle,
-      apiKey.trim(),
-      (key, state) => {
-        if (!mountedRef.current) return;
-        if (state.status === "running" && key === "chat") {
-          setOneClickProgress(t("provider.oneClickProgressChat"));
+    try {
+      const result = await applyOhMyGptBundle(
+        bailin,
+        selectedBundle,
+        apiKey.trim(),
+        (key, state) => {
+          if (!mountedRef.current) return;
+          if (state.status === "running" && key === "chat") {
+            setOneClickProgress(t("provider.oneClickProgressChat"));
+          }
+          setReadiness((prev) => ({ ...prev, [key]: state }));
         }
-        setReadiness((prev) => ({ ...prev, [key]: state }));
-      }
-    );
-    if (!mountedRef.current) return;
-    setBusy(false);
-    setOneClickProgress(null);
+      );
+      if (!mountedRef.current) return;
 
-    if (!result.saveOk) {
-      setStatus({ kind: "error", message: result.saveError ?? t("provider.toastSaveFailed") });
-      return;
-    }
-    const chat = result.readiness.chat;
-    if (chat.status !== "ok") {
-      setStatus({
-        kind: "error",
-        message: chat.status === "fail" ? chat.reason : t("setup.testFailed")
+      if (!result.saveOk) {
+        reportVerifyFailure(result.saveError ?? t("provider.toastSaveFailed"));
+        return;
+      }
+      const chat = result.readiness.chat;
+      if (chat.status !== "ok") {
+        reportVerifyFailure(
+          chat.status === "fail" && chat.reason
+            ? chat.reason
+            : t("provider.toastTestFailed", { error: t("setup.testFailed") })
+        );
+        return;
+      }
+      writeProviderMode("cloud");
+      setStatus({ kind: "ok", latency: chat.latencyMs });
+      showToast({
+        kind: "success",
+        text: t("provider.toastChatReady", { latency: chat.latencyMs ?? "?" })
       });
-      return;
+      scheduleNext();
+    } catch (e) {
+      if (!mountedRef.current) return;
+      reportVerifyFailure(
+        e instanceof Error ? e.message : t("provider.toastTestFailed", { error: t("setup.testFailed") })
+      );
+    } finally {
+      if (mountedRef.current) {
+        setBusy(false);
+        setOneClickProgress(null);
+      }
     }
-    writeProviderMode("cloud");
-    setStatus({ kind: "ok", latency: chat.latencyMs });
-    showToast({
-      kind: "success",
-      text: t("provider.toastChatReady", { latency: chat.latencyMs ?? "?" })
-    });
-    scheduleNext();
   }
 
   async function connectLocal(): Promise<void> {
@@ -324,48 +319,59 @@ function ProviderStep({
     setReadiness(IDLE_READINESS);
     setOneClickProgress(t("provider.oneClickProgressSave"));
 
-    const result = await verifyLocalProvider(
-      bailin,
-      {
-        kind: "openai-compatible",
-        baseUrl: baseUrl.trim(),
-        model: model.trim(),
-        visionModel: "",
-        webSearchModel: "",
-        apiKey: apiKey.trim() || LOCAL_PLACEHOLDER_API_KEY,
-        imageConfig: EMPTY_IMAGE_CONFIG
-      },
-      (key, state) => {
-        if (!mountedRef.current) return;
-        if (state.status === "running" && key === "chat") {
-          setOneClickProgress(t("provider.oneClickProgressChat"));
+    try {
+      const result = await verifyLocalProvider(
+        bailin,
+        {
+          kind: "openai-compatible",
+          baseUrl: baseUrl.trim(),
+          model: model.trim(),
+          visionModel: "",
+          webSearchModel: "",
+          apiKey: apiKey.trim() || LOCAL_PLACEHOLDER_API_KEY,
+          imageConfig: EMPTY_IMAGE_CONFIG
+        },
+        (key, state) => {
+          if (!mountedRef.current) return;
+          if (state.status === "running" && key === "chat") {
+            setOneClickProgress(t("provider.oneClickProgressChat"));
+          }
+          setReadiness((prev) => ({ ...prev, [key]: state }));
         }
-        setReadiness((prev) => ({ ...prev, [key]: state }));
-      }
-    );
-    if (!mountedRef.current) return;
-    setBusy(false);
-    setOneClickProgress(null);
+      );
+      if (!mountedRef.current) return;
 
-    if (!result.saveOk) {
-      setStatus({ kind: "error", message: result.saveError ?? t("provider.toastSaveFailed") });
-      return;
-    }
-    const chat = result.readiness.chat;
-    if (chat.status !== "ok") {
-      setStatus({
-        kind: "error",
-        message: chat.status === "fail" ? chat.reason : t("setup.testFailed")
+      if (!result.saveOk) {
+        reportVerifyFailure(result.saveError ?? t("provider.toastSaveFailed"));
+        return;
+      }
+      const chat = result.readiness.chat;
+      if (chat.status !== "ok") {
+        reportVerifyFailure(
+          chat.status === "fail" && chat.reason
+            ? chat.reason
+            : t("provider.toastTestFailed", { error: t("setup.testFailed") })
+        );
+        return;
+      }
+      writeProviderMode("local");
+      setStatus({ kind: "ok", latency: chat.latencyMs });
+      showToast({
+        kind: "success",
+        text: t("provider.toastLocalReady", { latency: chat.latencyMs ?? "?" })
       });
-      return;
+      scheduleNext();
+    } catch (e) {
+      if (!mountedRef.current) return;
+      reportVerifyFailure(
+        e instanceof Error ? e.message : t("provider.toastTestFailed", { error: t("setup.testFailed") })
+      );
+    } finally {
+      if (mountedRef.current) {
+        setBusy(false);
+        setOneClickProgress(null);
+      }
     }
-    writeProviderMode("local");
-    setStatus({ kind: "ok", latency: chat.latencyMs });
-    showToast({
-      kind: "success",
-      text: t("provider.toastLocalReady", { latency: chat.latencyMs ?? "?" })
-    });
-    scheduleNext();
   }
 
   return (
@@ -435,29 +441,49 @@ function ProviderStep({
         </p>
       ) : null}
 
-      {status.kind !== "idle" ? (
+      {status.kind === "running" ? (
         <div className="row gap-2" style={{ minHeight: 22, marginTop: 8 }}>
-          {status.kind === "running" ? (
-            <>
-              <Spinner magenta />
-              <span className="body-sm">{t("provider.oneClickRunning")}</span>
-            </>
-          ) : null}
-          {status.kind === "ok" ? (
-            <StatusDot
-              kind="ok"
-              label={t("setup.statusOk", { latency: status.latency ?? "?" })}
-            />
-          ) : null}
-          {status.kind === "error" ? (
-            <StatusDot kind="error" label={status.message} />
-          ) : null}
+          <Spinner magenta />
+          <span className="body-sm">{t("provider.oneClickRunning")}</span>
         </div>
       ) : null}
+      {status.kind === "ok" ? (
+        <div className="row gap-2" style={{ minHeight: 22, marginTop: 8 }}>
+          <StatusDot
+            kind="ok"
+            label={t("setup.statusOk", { latency: status.latency ?? "?" })}
+          />
+        </div>
+      ) : null}
+      {status.kind === "error" ? (
+        <div className="bl-status-strip is-error" role="alert" style={{ marginTop: 8 }}>
+          <div className="bl-status-strip__body">
+            <div className="bl-status-strip__title">{t("setup.testFailed")}</div>
+            <div className="bl-status-strip__detail">{status.message}</div>
+          </div>
+        </div>
+      ) : null}
+
+      <p className="body-sm" style={{ color: "var(--ink-faint)", margin: "4px 0 0" }}>
+        {t("setup.providerSkipHint")}
+      </p>
 
       <div className="row row--between gap-2" style={{ marginTop: 12 }}>
         <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}>
           {t("setup.back")}
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={() => {
+            if (nextTimerRef.current !== null) {
+              window.clearTimeout(nextTimerRef.current);
+              nextTimerRef.current = null;
+            }
+            onNext();
+          }}
+        >
+          {t("setup.providerSkip")}
         </button>
       </div>
     </div>

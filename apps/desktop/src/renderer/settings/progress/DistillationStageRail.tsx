@@ -1,5 +1,13 @@
+import { useEffect, useState } from "react";
 import { useT } from "../../shared/i18n/index.js";
 import { STAGE_KEYS, STAGE_COUNT, type StageKey } from "./stage-model.js";
+import {
+  formatDuration,
+  isTimingPaused,
+  selectStageElapsedMs,
+  selectTotalElapsedMs,
+  type TimingState
+} from "./distillation-timing.js";
 
 const STAGE_LABEL_KEYS: Record<StageKey, string> = {
   researching: "distill.stageResearching",
@@ -25,31 +33,67 @@ interface Props {
    * 与步骤轨合为一块，不再单独挂「正在工作」状态条。
    */
   activityHint?: string | null;
+  /** 总用时 + 分步用时；由 DistillationJobProvider 维护。 */
+  timing: TimingState;
 }
 
 /**
- * 深度创建页顶部的阶段步骤条（含可选进行中提示）。
+ * 深度创建页顶部的阶段步骤条（含可选进行中提示与用时）。
  *
  * 设计要点：
  *   1. 「不知道进行到第几步」——6 个带编号的节点 + 「步骤 X/6」。
  *   2. activeIndex 只前进不后退；重提炼在质量自检节点挂角标。
  *   3. 不显示百分比；进行中用底部一行 caption，避免再叠一张状态卡片。
+ *   4. meta 左侧总用时、步骤下分步用时；确认等待时暂停跳动。
  */
 export function DistillationStageRail({
   activeIndex,
   isResynthesizing,
   resynthesisRound,
   forceAllDone = false,
-  activityHint = null
+  activityHint = null,
+  timing
 }: Props): JSX.Element {
   const t = useT();
   const effectiveActive = forceAllDone ? STAGE_COUNT : activeIndex;
   const currentStepNumber = Math.min(effectiveActive + 1, STAGE_COUNT);
+  const paused = isTimingPaused(timing);
+  const live = timing.startedAt != null && !timing.frozen && !paused;
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!live) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [live]);
+
+  // 暂停/终态时用状态内时间点，避免墙钟继续走。
+  const displayNow = live ? now : (timing.pausedAt ?? now);
+  const totalMs = selectTotalElapsedMs(timing, displayNow);
+  const showElapsed = timing.startedAt != null;
 
   return (
     <div className="distill-stage-rail__wrap">
       <div className="distill-stage-rail__panel">
         <div className="distill-stage-rail__meta">
+          <div className="distill-stage-rail__elapsed">
+            {showElapsed ? (
+              <>
+                <span className="distill-stage-rail__elapsed-value">
+                  {t("distill.stageElapsed", { time: formatDuration(totalMs) })}
+                </span>
+                {paused ? (
+                  <span className="distill-stage-rail__elapsed-paused">
+                    {t("distill.stageElapsedPaused")}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="distill-stage-rail__elapsed-value distill-stage-rail__elapsed-value--empty">
+                {"\u00a0"}
+              </span>
+            )}
+          </div>
           <span className="distill-stage-rail__step-count">
             {t("distill.stageStepOf", { current: currentStepNumber, total: STAGE_COUNT })}
           </span>
@@ -65,11 +109,16 @@ export function DistillationStageRail({
                 : status === "active"
                   ? t("distill.stageStatusActive")
                   : t("distill.stageStatusPending");
+            const stageMs = selectStageElapsedMs(timing, i, displayNow);
+            const stageTimeLabel =
+              stageMs != null ? formatDuration(stageMs) : null;
             return (
               <div
                 className="distill-stage-rail__item"
                 role="listitem"
-                aria-label={`${t(STAGE_LABEL_KEYS[key])} — ${statusLabel}`}
+                aria-label={`${t(STAGE_LABEL_KEYS[key])} — ${statusLabel}${
+                  stageTimeLabel ? ` — ${stageTimeLabel}` : ""
+                }`}
                 key={key}
               >
                 {!isLast ? (
@@ -85,6 +134,14 @@ export function DistillationStageRail({
                   {status === "active" && isResynthesizing && key === "quality_check" ? (
                     <span className="distill-stage-rail__badge">
                       {t("distill.stageOptimizing", { round: resynthesisRound ?? 1 })}
+                    </span>
+                  ) : null}
+                  {stageTimeLabel ? (
+                    <span
+                      className={`distill-stage-rail__stage-time is-${status}`}
+                      aria-hidden
+                    >
+                      {stageTimeLabel}
                     </span>
                   ) : null}
                 </div>
