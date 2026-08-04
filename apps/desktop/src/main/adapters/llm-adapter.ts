@@ -219,9 +219,12 @@ export function resolveWebSearchModel(
   return DEFAULT_WEB_SEARCH_MODEL;
 }
 
-/** 1×1 透明 PNG 的 data URI；用于 vision probe。 */
+/**
+ * 16×16 透明 PNG 的 data URI；用于 vision probe。
+ * 通义 VL 要求宽高均 > 10，1×1 会被拒（InternalError.Algo.InvalidParameter）。
+ */
 const TINY_PROBE_PNG_DATA_URI =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAEklEQVR4nGNgGAWjYBSMAggAAAQQAAFVN1rQAAAAAElFTkSuQmCC";
 
 export function matchesVisionModel(model: string): boolean {
   const lower = model.toLowerCase();
@@ -361,7 +364,7 @@ export class LLMAdapter {
   }
 
   /**
-   * 实测探测：发一张 1×1 透明 PNG + 「only reply 'ok'」请求，验证当前 provider/代理是否真能吃图。
+   * 实测探测：发一张 16×16 透明 PNG + 「only reply 'ok'」请求，验证当前 provider/代理是否真能吃图。
    * 用于发现「声明支持 vision 但中转 strip 了 image_url」的代理。
    *
    * 返回：
@@ -396,7 +399,7 @@ export class LLMAdapter {
       if (r.kind === "error") {
         return { ok: false, latencyMs, reason: r.message };
       }
-      // 只要能回个非空字符串就当作真支持；个别模型对 1×1 图回 'unknown' / 'blank' 也都算 ok。
+      // 只要能回个非空字符串就当作真支持；个别模型对小图回 'unknown' / 'blank' 也都算 ok。
       return { ok: (r.text ?? "").length > 0, latencyMs };
     } catch (e) {
       return {

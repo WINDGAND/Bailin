@@ -73,7 +73,7 @@
 ## 快速开始
 
 > [!NOTE]
-> 推荐从 [Releases](https://github.com/WINDGAND/Bailin/releases/latest) 下载最新 **Bailin-Setup-x.y.z.exe**（当前为 `0.0.11`，Windows x64）。亦可按下方步骤源码构建。
+> 推荐从 [Releases](https://github.com/WINDGAND/Bailin/releases/latest) 下载最新 **Bailin-Setup-x.y.z.exe**（当前为 `0.0.12`，Windows x64）。亦可按下方步骤源码构建。
 
 ### 环境要求
 
@@ -382,7 +382,7 @@ node ./scripts/a11y-scan.mjs
 
 | 阶段 | 主题 | 代表能力 |
 | --- | --- | --- |
-| **v0.x**（现在 · `0.0.11`） | MVP 闭环 | 深度造人、桌宠、本地记忆、更新日志 / 版本检查、Windows、自带 Key |
+| **v0.x**（现在 · `0.0.12`） | MVP 闭环 | 深度造人、桌宠、本地记忆、更新日志 / 版本检查、Windows、自带 Key |
 | **v1.0** | 体验提升 | 深度造人完善、对话 UX、可选静默安装更新（opt-in） |
 | **v1.1** | 多角色 | 多只桌宠同时在桌 |
 | **v1.2+** | 养成 / 陪伴 | 关系记忆、主动气泡增强 |
@@ -393,7 +393,7 @@ node ./scripts/a11y-scan.mjs
 
 ## 参与贡献
 
-仓库处于早期 **v0.0.x**（当前 `0.0.11`），欢迎：
+仓库处于早期 **v0.0.x**（当前 `0.0.12`），欢迎：
 
 - 像素 sprite 风格 / 调色板扩展
 - 新的 perspective skill（**仅原创 / 公共领域人物**）

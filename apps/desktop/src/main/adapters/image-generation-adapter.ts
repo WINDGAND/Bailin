@@ -186,6 +186,10 @@ export class ImageGenerationAdapter {
     const config = this.config();
     const tierName = req.tier ?? config.defaultTier;
     const tier = config.tiers[tierName];
+    // 通义百炼无 OpenAI Images；走原生 multimodal-generation，并把 qwen-vl-* 映射为生图模型。
+    if (isDashScopeImageBaseUrl(resolved.baseUrl)) {
+      return this.generateViaDashScope(resolved, tier, tierName, req, startedAt);
+    }
     const supportsTransparent = modelSupportsTransparent(tier.model);
     const transparent = req.transparentBackground === true && supportsTransparent;
     const body = buildTierRequestBody(
@@ -275,6 +279,9 @@ export class ImageGenerationAdapter {
     const config = this.config();
     const tierName = req.tier ?? config.defaultTier;
     const tier = config.tiers[tierName];
+    if (isDashScopeImageBaseUrl(resolved.baseUrl)) {
+      return this.editViaDashScope(resolved, tier, tierName, req, startedAt);
+    }
     const supportsTransparent = modelSupportsTransparent(tier.model);
     const wantTransparent = req.transparentBackground === true && supportsTransparent;
 
@@ -378,6 +385,232 @@ export class ImageGenerationAdapter {
       );
     }
     return first;
+  }
+
+  /**
+   * 通义百炼原生文生图（同步 multimodal-generation）。
+   * OpenAI 兼容 baseUrl 上没有 /images/generations，会 404。
+   */
+  private async generateViaDashScope(
+    resolved: { baseUrl: string; apiKey: string },
+    tier: ImageTierConfig,
+    tierName: ImageTierName,
+    req: ImageGenerationRequest,
+    startedAt: number
+  ): Promise<ImageGenerationResponse> {
+    const model = normalizeDashScopeImageModel(tier.model, "generate");
+    const size = toDashScopeSize(req.size ?? tier.size, model);
+    const url = dashScopeMultimodalGenerationUrl(resolved.baseUrl);
+    const body = {
+      model,
+      input: {
+        messages: [
+          {
+            role: "user",
+            content: [{ text: req.prompt }]
+          }
+        ]
+      },
+      parameters: {
+        prompt_extend: false,
+        watermark: false,
+        size,
+        n: 1
+      }
+    };
+    const requestId = `gen-ds#${Math.random().toString(36).slice(2, 7)}`;
+    const logCtx: ImageLogCtx = {
+      requestId,
+      label: req.requestLabel ?? "anon",
+      endpoint: "generations",
+      url,
+      model,
+      tier: tierName,
+      bodyKeys: Object.keys(body),
+      supportsTransparent: false,
+      transparentWanted: req.transparentBackground === true
+    };
+    return this.requestWithTransientRetry(
+      (phase) =>
+        this.postDashScopeAndDecodeImage(
+          url,
+          resolved.apiKey,
+          body,
+          tierName,
+          { ...tier, model },
+          req.timeoutMs ?? 120_000,
+          startedAt,
+          { ...logCtx, phase: phase ?? "first" }
+        ),
+      logCtx
+    );
+  }
+
+  /**
+   * 通义图像编辑：同一 multimodal-generation 端点，content 带 image + text。
+   * 仅文生图的 max/plus 会改用支持编辑的 qwen-image-2.0。
+   */
+  private async editViaDashScope(
+    resolved: { baseUrl: string; apiKey: string },
+    tier: ImageTierConfig,
+    tierName: ImageTierName,
+    req: ImageEditRequest,
+    startedAt: number
+  ): Promise<ImageGenerationResponse> {
+    const model = normalizeDashScopeImageModel(tier.model, "edit");
+    const size = toDashScopeSize(req.size ?? tier.size, model);
+    const url = dashScopeMultimodalGenerationUrl(resolved.baseUrl);
+    const content: Array<Record<string, string>> = [];
+    for (const img of req.images.slice(0, 3)) {
+      content.push({ image: img });
+    }
+    content.push({ text: req.prompt });
+    const body = {
+      model,
+      input: {
+        messages: [{ role: "user", content }]
+      },
+      parameters: {
+        prompt_extend: false,
+        watermark: false,
+        size,
+        n: 1
+      }
+    };
+    const requestId = `edit-ds#${Math.random().toString(36).slice(2, 7)}`;
+    const logCtx: ImageLogCtx = {
+      requestId,
+      label: req.requestLabel ?? "anon",
+      endpoint: "edits",
+      url,
+      model,
+      tier: tierName,
+      bodyKeys: ["model", "input", "parameters", `images(${req.images.length})`],
+      supportsTransparent: false,
+      transparentWanted: req.transparentBackground === true
+    };
+    return this.requestWithTransientRetry(
+      (phase) =>
+        this.postDashScopeAndDecodeImage(
+          url,
+          resolved.apiKey,
+          body,
+          tierName,
+          { ...tier, model },
+          req.timeoutMs ?? 180_000,
+          startedAt,
+          { ...logCtx, phase: phase ?? "first" }
+        ),
+      logCtx
+    );
+  }
+
+  private async postDashScopeAndDecodeImage(
+    url: string,
+    apiKey: string,
+    body: Record<string, unknown>,
+    tier: ImageTierName,
+    tierCfg: ImageTierConfig,
+    timeoutMs: number,
+    startedAt: number,
+    logCtx: ImageLogCtx
+  ): Promise<ImageGenerationResponse> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      const httpDt = Date.now() - startedAt;
+      const rawText = await safeReadText(res);
+      if (!res.ok) {
+        logImageCall({
+          ...logCtx,
+          phase: logCtx.phase ?? "first",
+          ok: false,
+          httpStatus: res.status,
+          httpDt,
+          errorPreview: rawText.slice(0, 300)
+        });
+        return errorResult(
+          mapStatusToCode(res.status),
+          `HTTP ${res.status}: ${truncate(rawText, 600)}`,
+          startedAt
+        );
+      }
+      let json: {
+        code?: string;
+        message?: string;
+        output?: {
+          choices?: Array<{
+            message?: { content?: Array<{ image?: string; text?: string }> };
+          }>;
+        };
+      };
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        return errorResult("BAD_RESPONSE", "通义生图响应不可解析", startedAt);
+      }
+      if (json.code && json.code !== "Success") {
+        return errorResult(
+          json.code,
+          json.message ?? "DashScope image generation failed",
+          startedAt
+        );
+      }
+      const imageUrl = json.output?.choices?.[0]?.message?.content?.find(
+        (c) => typeof c.image === "string" && c.image.length > 0
+      )?.image;
+      if (!imageUrl) {
+        logImageCall({
+          ...logCtx,
+          phase: logCtx.phase ?? "first",
+          ok: false,
+          httpStatus: res.status,
+          httpDt,
+          errorPreview: "missing output.choices[0].message.content[].image"
+        });
+        return errorResult("DECODE_FAILED", "通义生图未返回 image URL", startedAt);
+      }
+      const buf = await fetchUrlBuffer(imageUrl);
+      if (!buf) {
+        return errorResult("DECODE_FAILED", "通义生图 URL 下载失败", startedAt);
+      }
+      logImageCall({
+        ...logCtx,
+        phase: logCtx.phase ?? "first",
+        ok: true,
+        httpStatus: res.status,
+        httpDt,
+        bytes: buf.length,
+        mime: "dashscope.image.url"
+      });
+      return {
+        kind: "done",
+        buffer: buf,
+        mimeType: detectMime(buf),
+        tier,
+        model: tierCfg.model,
+        durationMs: Date.now() - startedAt,
+        estimatedCostUsd: tierCfg.estimatedCostUsd
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return errorResult(
+        controller.signal.aborted ? "TIMEOUT" : "NETWORK_ERROR",
+        msg,
+        startedAt
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
@@ -667,6 +900,96 @@ export class ImageGenerationAdapter {
 }
 
 // ===== helpers =====
+
+/** 百炼 / DashScope：LLM 常用 compatible-mode，生图需改走原生 multimodal API。 */
+export function isDashScopeImageBaseUrl(baseUrl: string): boolean {
+  const u = baseUrl.toLowerCase();
+  return (
+    u.includes("dashscope") ||
+    u.includes("compatible-mode") ||
+    u.includes("maas.aliyuncs.com")
+  );
+}
+
+/**
+ * 用户常把识图模型（qwen-vl-*）误填进生图档位。
+ * generate：映射到文生图模型；edit：优先支持编辑的 qwen-image-2.0。
+ */
+export function normalizeDashScopeImageModel(
+  model: string,
+  mode: "generate" | "edit"
+): string {
+  const raw = model.trim();
+  const lower = raw.toLowerCase();
+  if (!lower) return mode === "edit" ? "qwen-image-2.0" : "qwen-image-plus";
+
+  // 已是生图 / 万相 / z-image
+  if (
+    lower.includes("qwen-image") ||
+    lower.startsWith("wan") ||
+    lower.includes("z-image") ||
+    lower.includes("wanx")
+  ) {
+    if (mode === "edit" && (lower.includes("qwen-image-max") || /qwen-image(-plus)?$/.test(lower))) {
+      // max / plus / qwen-image 官方不支持编辑
+      return "qwen-image-2.0";
+    }
+    return raw;
+  }
+
+  // 识图 VL → 生图
+  if (lower.includes("qwen-vl") || lower.includes("-vl-") || lower.includes("-vl.")) {
+    if (mode === "edit") return "qwen-image-2.0";
+    if (lower.includes("max")) return "qwen-image-max";
+    if (lower.includes("plus")) return "qwen-image-plus";
+    return "qwen-image-plus";
+  }
+
+  // 默认 OpenAI 档位名在通义上无效
+  if (lower.includes("gpt-image") || lower.includes("dall-e")) {
+    return mode === "edit" ? "qwen-image-2.0" : "qwen-image-plus";
+  }
+
+  return mode === "edit" ? "qwen-image-2.0" : raw;
+}
+
+/** OpenAI `1024x1024` → 通义 `宽*高`；按模型选合法预设。 */
+export function toDashScopeSize(size: string | undefined, model: string): string {
+  const lower = model.toLowerCase();
+  const parsed = parseOpenAiSize(size);
+  if (lower.includes("qwen-image-2.") || lower.includes("qwen-image-3.")) {
+    if (!parsed) return "1024*1024";
+    const px = parsed.w * parsed.h;
+    if (px < 512 * 512 || px > 2048 * 2048) return "1024*1024";
+    return `${parsed.w}*${parsed.h}`;
+  }
+  // max / plus / qwen-image：固定档位
+  if (!parsed) return "1328*1328";
+  const ratio = parsed.w / parsed.h;
+  if (Math.abs(ratio - 1) < 0.15) return "1328*1328";
+  if (ratio > 1.3) return "1664*928";
+  if (ratio < 0.75) return "928*1664";
+  if (ratio > 1) return "1472*1104";
+  return "1104*1472";
+}
+
+function parseOpenAiSize(size: string | undefined): { w: number; h: number } | null {
+  if (!size) return null;
+  const m = /^(\d+)\s*[xX*×]\s*(\d+)$/.exec(size.trim());
+  if (!m) return null;
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return { w, h };
+}
+
+export function dashScopeMultimodalGenerationUrl(baseUrl: string): string {
+  let root = baseUrl.replace(/\/+$/, "");
+  root = root.replace(/\/compatible-mode\/v\d+$/i, "");
+  root = root.replace(/\/api\/v\d+$/i, "");
+  root = root.replace(/\/v\d+$/i, "");
+  return `${root}/api/v1/services/aigc/multimodal-generation/generation`;
+}
 
 function joinUrl(baseUrl: string, suffix: string): string {
   const trimmed = baseUrl.replace(/\/+$/, "");

@@ -37,6 +37,47 @@ describe("matchesVisionModel qwen", () => {
   });
 });
 
+describe("vision probe image size", () => {
+  it("sends PNG larger than 10px for DashScope VL limits", async () => {
+    let imageUrl = "";
+    let probeError = "";
+    globalThis.fetch = (async (_url, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{
+          role?: string;
+          content?: Array<{ type?: string; image_url?: { url?: string } }> | string;
+        }>;
+      };
+      const user = body.messages?.find((m) => m.role === "user");
+      const parts = Array.isArray(user?.content) ? user.content : [];
+      imageUrl = parts.find((p) => p.type === "image_url")?.image_url?.url ?? "";
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "ok" }, finish_reason: "stop" }]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }) as typeof fetch;
+
+    const adapter = new LLMAdapter(() => ({
+      kind: "openai-compatible",
+      baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      apiKey: "sk-test",
+      model: "qwen3.7-plus",
+      visionModel: "qwen-vl-plus"
+    }));
+    const r = await adapter.probeVision();
+    if (!r.ok) probeError = r.reason ?? "unknown";
+    assert.equal(r.ok, true, probeError);
+    assert.ok(imageUrl.startsWith("data:image/png;base64,"), `imageUrl=${imageUrl.slice(0, 80)}`);
+    const b64 = imageUrl.split(",")[1] ?? "";
+    const buf = Buffer.from(b64, "base64");
+    const w = buf.readUInt32BE(16);
+    const h = buf.readUInt32BE(20);
+    assert.ok(w > 10 && h > 10, `expected >10px probe, got ${w}x${h}`);
+  });
+});
+
 describe("resolveVisionModel qwen fallback", () => {
   it("falls back from qwen-plus-search to multimodal main model", () => {
     const resolved = resolveVisionModel({

@@ -978,7 +978,7 @@ export const en: TranslationTree = {
     probeWeb: "Test web search",
     retest: "Retest",
     visionTestingTitle: "Testing vision capability…",
-    visionTestingDetail: "Sending a 1×1 PNG to {{model}}",
+    visionTestingDetail: "Sending a 16×16 PNG to {{model}}",
     visionOkTitle: "Vision verified",
     visionRejectedTitle: "Vision model rejected multimodal request",
     visionOkDetail: "Model can read images · {{latency}} ms",
