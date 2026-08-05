@@ -11,6 +11,10 @@ import type {
 import { RESEARCH_AGENT_LABELS, mergeAtlasRuntimeDefaults } from "@bailin/character-protocol";
 import type { ProfileChangeRecord, UserProfile } from "../../shared/ipc-contract.js";
 import { emptyProfile, normalizeProfile } from "../../shared/profile.js";
+import {
+  buildSortOrderBackfill,
+  validateCharacterReorderIds
+} from "./character-sort-order.js";
 
 const USER_DATA_DIR = "Bailin";
 const LEGACY_USER_DATA_DIR = "NuwaPet";
@@ -129,7 +133,8 @@ export class LocalVault {
         is_skeleton INTEGER NOT NULL DEFAULT 0,
         bundle_json TEXT NOT NULL,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS user_profile (
         id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -197,7 +202,30 @@ export class LocalVault {
       );
       CREATE INDEX IF NOT EXISTS idx_profile_changelog_at ON profile_changelog(applied_at DESC);
     `);
+    this.ensureCharacterSortOrderColumn();
     this.backfillChatSessions();
+  }
+
+  /** 旧库补 sort_order，并按当时的 updated_at DESC 回填，保持迁移瞬间顺序不变。 */
+  private ensureCharacterSortOrderColumn(): void {
+    const cols = this.db.prepare("PRAGMA table_info(characters)").all() as Array<{ name: string }>;
+    if (cols.some((c) => c.name === "sort_order")) return;
+    this.db.exec(
+      "ALTER TABLE characters ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
+    );
+    const rows = this.db
+      .prepare("SELECT id, updated_at FROM characters")
+      .all() as Array<{ id: string; updated_at: number }>;
+    const backfill = buildSortOrderBackfill(rows);
+    const update = this.db.prepare(
+      "UPDATE characters SET sort_order = ? WHERE id = ?"
+    );
+    const tx = this.db.transaction(
+      (items: Array<{ id: string; sort_order: number }>) => {
+        for (const item of items) update.run(item.sort_order, item.id);
+      }
+    );
+    tx(backfill);
   }
 
   private backfillChatSessions(): void {
@@ -283,10 +311,15 @@ export class LocalVault {
     now: number;
   }): void {
     const { id, bundle, isSkeleton, now } = input;
+    const nextSortOrder = (
+      this.db
+        .prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM characters")
+        .get() as { n: number }
+    ).n;
     this.db
       .prepare(
-        `INSERT INTO characters (id, name, source_name, source_type, track, is_skeleton, bundle_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO characters (id, name, source_name, source_type, track, is_skeleton, bundle_json, created_at, updated_at, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            name = excluded.name,
            source_name = excluded.source_name,
@@ -305,7 +338,8 @@ export class LocalVault {
         isSkeleton ? 1 : 0,
         JSON.stringify(bundle),
         bundle.card.createdAt || now,
-        now
+        now,
+        nextSortOrder
       );
   }
 
@@ -318,7 +352,8 @@ export class LocalVault {
   }> {
     const rows = this.db
       .prepare(
-        `SELECT id, name, source_name, track, is_skeleton FROM characters ORDER BY updated_at DESC`
+        `SELECT id, name, source_name, track, is_skeleton FROM characters
+         ORDER BY sort_order ASC, updated_at DESC`
       )
       .all() as Array<{
       id: string;
@@ -334,6 +369,21 @@ export class LocalVault {
       track: r.track,
       isSkeleton: r.is_skeleton === 1
     }));
+  }
+
+  /** 按完整 id 列表重写 sort_order（0..n-1）。集合必须与库内一致。 */
+  reorderCharacters(orderedIds: string[]): void {
+    const existing = (
+      this.db.prepare("SELECT id FROM characters").all() as Array<{ id: string }>
+    ).map((r) => r.id);
+    validateCharacterReorderIds(existing, orderedIds);
+    const update = this.db.prepare(
+      "UPDATE characters SET sort_order = ? WHERE id = ?"
+    );
+    const tx = this.db.transaction((ids: string[]) => {
+      ids.forEach((id, index) => update.run(index, id));
+    });
+    tx(orderedIds);
   }
 
   getCharacter(id: string): CharacterBundle | null {

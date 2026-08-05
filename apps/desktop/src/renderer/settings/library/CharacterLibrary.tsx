@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useBailin } from "../../shared/use-bailin.js";
 import { getCharacterDisplayNames } from "../../shared/character-display-name.js";
@@ -24,6 +24,10 @@ import { useVisualJobs } from "../app/visual-job-context.js";
 import { resolveCharacterSignature } from "./character-signature.js";
 import { interpretQuoteRetryResult } from "./quote-retry-feedback.js";
 import { runDetailTransition } from "./detail-transition.js";
+import {
+  CharacterReorderList,
+  ReorderShellSkeleton
+} from "./character-reorder-list.js";
 
 interface LibraryItem {
   id: string;
@@ -95,6 +99,9 @@ export function CharacterLibrary({
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [listPage, setListPage] = useState(1);
+  const [reordering, setReordering] = useState(false);
+  /** false：已进调整模式但只显示骨架；true：真实可拖列表已就绪。 */
+  const [reorderHydrated, setReorderHydrated] = useState(false);
   const [pageMotion, setPageMotion] = useState<{ nonce: number; direction: PageDirection }>({
     nonce: 0,
     direction: "forward"
@@ -408,41 +415,166 @@ export function CharacterLibrary({
     setListPage(nextPage);
   }
 
+  function enterReorderMode(): void {
+    // 1) 同步画出骨架，点击立刻有反馈
+    flushSync(() => {
+      setSearchQuery("");
+      setReordering(true);
+      setReorderHydrated(false);
+    });
+    // 2) 低优先级挂载真实列表；骨架会一直显示到这次渲染完成
+    startTransition(() => {
+      setReorderHydrated(true);
+    });
+  }
+
+  function exitReorderMode(): void {
+    flushSync(() => {
+      setReordering(false);
+      setReorderHydrated(false);
+      if (!items || !selectedId) return;
+      const idx = items.findIndex((c) => c.id === selectedId);
+      if (idx < 0) return;
+      setListPage(Math.floor(idx / LIBRARY_PAGE_SIZE) + 1);
+    });
+  }
+
+  async function persistReorder(orderedIds: string[]): Promise<void> {
+    if (!items) return;
+    const byId = new Map(items.map((c) => [c.id, c]));
+    const next = orderedIds
+      .map((id) => byId.get(id))
+      .filter((c): c is LibraryItem => Boolean(c));
+    if (next.length !== items.length) return;
+    setItems(next);
+    try {
+      const result = await bailin.characters.reorder(orderedIds);
+      if (!result.ok) {
+        showToast({
+          kind: "error",
+          text: t("library.toastReorderFailed", {
+            error: result.error ?? t("common.unknownError")
+          })
+        });
+        await refreshList(true);
+      }
+    } catch (e) {
+      showToast({
+        kind: "error",
+        text: t("library.toastReorderFailed", {
+          error: e instanceof Error ? e.message : t("common.unknownError")
+        })
+      });
+      await refreshList(true);
+    }
+  }
+
+  useEffect(() => {
+    if (!reordering) return;
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        exitReorderMode();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [reordering, items, selectedId]);
+
+  // 调整模式下锁定设置页主滚动，只允许左侧角色列表滚动，避免双滚动条一起跑
+  useEffect(() => {
+    if (!reordering) return;
+    const main = document.querySelector(".settings-main");
+    if (!(main instanceof HTMLElement)) return;
+    const prevOverflow = main.style.overflow;
+    const prevScrollTop = main.scrollTop;
+    main.style.overflow = "hidden";
+    main.classList.add("is-library-reordering");
+
+    function blockOuterWheel(e: WheelEvent): void {
+      const list = (e.target as Element | null)?.closest?.(".library-reorder-scroll");
+      if (list) return; // 列表内滚轮留给列表自己
+      e.preventDefault();
+    }
+    main.addEventListener("wheel", blockOuterWheel, { passive: false });
+
+    return () => {
+      main.removeEventListener("wheel", blockOuterWheel);
+      main.style.overflow = prevOverflow;
+      main.classList.remove("is-library-reordering");
+      // 若拖拽期间被带偏，恢复进入调整模式时的滚动位置
+      main.scrollTop = prevScrollTop;
+    };
+  }, [reordering]);
+
   return (
-    <div>
+    <div data-library-reordering={reordering ? "true" : "false"}>
       <div className="row row--between" style={{ marginBottom: 26 }}>
         <div>
           <div className="eyebrow">{t("library.eyebrow")}</div>
           <div className="display display--page">{t("library.title")}</div>
           <p className="apple-page-subtitle">{t("library.subtitle")}</p>
         </div>
-        <button className="btn btn--magenta" onClick={onNewClick}>
+        <button
+          className="btn btn--magenta"
+          onClick={onNewClick}
+          disabled={reordering}
+        >
           {t("library.newCharacter")}
         </button>
       </div>
       <div className="apple-two-column">
         {/* —————— 列表 —————— */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 0 }}>
+        <div
+          className={
+            reordering
+              ? "library-list-pane library-list-pane--reordering"
+              : "library-list-pane"
+          }
+          style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 0 }}
+        >
           {items && items.length > 0 ? (
-            <div style={{ padding: "0 0 12px" }}>
-              <div className="input-group">
-                <span className="input-group__prefix" aria-hidden="true">
-                  <SearchIcon size={16} />
-                </span>
-                <input
-                  type="search"
-                  className="input input--with-prefix"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t("library.searchPlaceholder")}
-                  aria-label={t("library.searchAria")}
-                />
-              </div>
+            <div className="library-list-toolbar">
+              {reordering ? (
+                <>
+                  <p className="body-sm library-reorder-hint">{t("library.reorderHint")}</p>
+                  <button
+                    type="button"
+                    className="library-mode-btn"
+                    onClick={exitReorderMode}
+                  >
+                    {t("library.reorderDone")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="input-group" style={{ flex: 1, minWidth: 0 }}>
+                    <span className="input-group__prefix" aria-hidden="true">
+                      <SearchIcon size={16} />
+                    </span>
+                    <input
+                      type="search"
+                      className="input input--with-prefix"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={t("library.searchPlaceholder")}
+                      aria-label={t("library.searchAria")}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="library-mode-btn"
+                    onClick={enterReorderMode}
+                  >
+                    <Icon name="grip-vertical" size={13} />
+                    <span>{t("library.reorder")}</span>
+                  </button>
+                </>
+              )}
             </div>
           ) : null}
-          <div className="plain-list">
           {items === null ? (
-            <>
+            <div className="plain-list">
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
@@ -459,127 +591,69 @@ export function CharacterLibrary({
                   </div>
                 </div>
               ))}
-            </>
+            </div>
           ) : items.length === 0 ? (
-            <EmptyLibrary onNew={onNewClick} t={t} />
-          ) : filteredItems!.length === 0 ? (
-            <div
-              className="plain-list__item"
-              style={{
-                padding: "24px 16px",
-                textAlign: "center",
-                cursor: "default"
-              }}
-            >
-              <p className="body-sm" style={{ color: "var(--ink-soft)", margin: 0 }}>
-                {t("library.searchNoResults")}
-              </p>
+            <div className="plain-list">
+              <EmptyLibrary onNew={onNewClick} t={t} />
+            </div>
+          ) : filteredItems!.length === 0 && !reordering ? (
+            <div className="plain-list">
+              <div
+                className="plain-list__item"
+                style={{
+                  padding: "24px 16px",
+                  textAlign: "center",
+                  cursor: "default"
+                }}
+              >
+                <p className="body-sm" style={{ color: "var(--ink-soft)", margin: 0 }}>
+                  {t("library.searchNoResults")}
+                </p>
+              </div>
             </div>
           ) : (
-            paginatedItems!.map((c, i) => {
-              const displayName = getCharacterDisplayNames({
-                name: c.name,
-                sourceName: c.sourceName
-              });
-              const itemJob = getJob(c.id);
-              const itemBusy = itemJob?.status === "running";
-              return (
-                <button
-                  key={`${pageMotion.nonce}-${c.id}`}
-                  type="button"
+            <div
+              className={
+                reordering ? "library-reorder-scroll" : "library-browse-scroll"
+              }
+            >
+              {reordering && !reorderHydrated ? (
+                <ReorderShellSkeleton
+                  count={items.length}
+                  label={t("library.reorderLoadingAria")}
+                />
+              ) : (
+                <div
                   className={
-                    selectedId === c.id
-                      ? `plain-list__item is-selected library-list-item--page-in library-list-item--${pageMotion.direction}`
-                      : `plain-list__item library-list-item--page-in library-list-item--${pageMotion.direction}`
+                    reordering ? "library-reorder-ready" : undefined
                   }
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    alignItems: "center",
-                    animationDelay: `${Math.min(i * 24, 120)}ms`
-                  }}
-                  onClick={() => void pick(c.id)}
                 >
-                  <div
-                    className={`library-item__thumb${c.isActive ? " is-active-pet" : ""}`}
-                  >
-                    {thumbnails[c.id] ? (
-                      <PetPreview
-                        program={thumbnails[c.id]!}
-                        width={44}
-                        height={44}
-                      />
-                    ) : (
-                      <Skeleton width={44} height={44} radius={10} />
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="row gap-2">
-                      <span
-                        className="display display--section"
-                        style={{
-                          fontSize: 14,
-                          lineHeight: 1.2,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          flex: 1,
-                          minWidth: 0
-                        }}
-                      >
-                        {displayName.chineseName}
-                      </span>
-                      {c.isActive ? (
-                        <span className="bl-tag bl-tag--sm bl-tag--active">
-                          <span className="bl-tag__dot" />
-                          {t("library.current")}
-                        </span>
-                      ) : null}
-                      {itemBusy ? (
-                        <span className="bl-tag bl-tag--sm">
-                          <Spinner />
-                          {t("library.processing")}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="row gap-2" style={{ marginTop: 6 }}>
-                      <span
-                        className="body-sm"
-                        style={{
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          minWidth: 0
-                        }}
-                      >
-                        {displayName.englishName || t("library.noEnglishName")}
-                      </span>
-                      <span
-                        className={
-                          c.track === "utility"
-                            ? "bl-tag bl-tag--utility"
-                            : "bl-tag bl-tag--companion"
-                        }
-                        style={{ flexShrink: 0, opacity: 0.78 }}
-                      >
-                        {t(TRACK_KEYS[c.track])}
-                      </span>
-                      {c.isSkeleton ? (
-                        <span
-                          className="bl-tag bl-tag--skeleton"
-                          style={{ flexShrink: 0, opacity: 0.72 }}
-                        >
-                          {t("library.skeleton")}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </button>
-              );
-            })
+                  <CharacterReorderList
+                    items={reordering ? items : paginatedItems!}
+                    selectedId={selectedId}
+                    thumbnails={thumbnails}
+                    reordering={reordering}
+                    pageMotionClass={
+                      reordering
+                        ? undefined
+                        : `library-list-item--page-in library-list-item--${pageMotion.direction}`
+                    }
+                    pageMotionNonce={reordering ? undefined : pageMotion.nonce}
+                    isItemBusy={(id) => getJob(id)?.status === "running"}
+                    trackLabel={(track) => t(TRACK_KEYS[track])}
+                    currentLabel={t("library.current")}
+                    processingLabel={t("library.processing")}
+                    noEnglishName={t("library.noEnglishName")}
+                    skeletonLabel={t("library.skeleton")}
+                    dragHandleLabel={(name) => t("library.dragHandleAria", { name })}
+                    onPick={(id) => void pick(id)}
+                    onReorder={(orderedIds) => void persistReorder(orderedIds)}
+                  />
+                </div>
+              )}
+            </div>
           )}
-          </div>
-          {filteredItems && filteredItems.length > LIBRARY_PAGE_SIZE ? (
+          {!reordering && filteredItems && filteredItems.length > LIBRARY_PAGE_SIZE ? (
             <div className="library-pagination">
               <span className="library-pagination__summary body-sm">
                 {t("library.paginationSummary", {

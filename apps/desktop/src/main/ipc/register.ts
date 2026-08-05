@@ -339,6 +339,21 @@ export function registerIpc(deps: IpcDeps): void {
     }));
   });
 
+  ipcMain.handle(IPC.CharactersReorder, (_e, orderedIds: string[]) => {
+    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== "string")) {
+      return { ok: false as const, error: "invalid orderedIds" };
+    }
+    try {
+      vault.reorderCharacters(orderedIds);
+      return { ok: true as const };
+    } catch (e) {
+      return {
+        ok: false as const,
+        error: e instanceof Error ? e.message : String(e)
+      };
+    }
+  });
+
   ipcMain.handle(IPC.CharactersGet, (_e, characterId: string) => vault.getCharacter(characterId));
   ipcMain.handle(IPC.CharactersGetActive, () => {
     const id = deps.getActiveCharacterId();

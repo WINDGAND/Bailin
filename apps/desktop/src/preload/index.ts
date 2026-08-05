@@ -32,6 +32,8 @@ const api = {
   },
   characters: {
     list: () => ipcRenderer.invoke(IPC.CharactersList),
+    reorder: (orderedIds: string[]) =>
+      ipcRenderer.invoke(IPC.CharactersReorder, orderedIds),
     get: (id: string) => ipcRenderer.invoke(IPC.CharactersGet, id),
     importStarter: (id: string) => ipcRenderer.invoke(IPC.CharactersImportStarter, id),
     createDeep: (input: unknown) => ipcRenderer.invoke(IPC.CharactersCreateDeep, input),

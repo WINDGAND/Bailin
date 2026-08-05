@@ -2025,6 +2025,283 @@ body.settings-window #root {
   }
 }
 
+/* 角色仓库 · 列表工具条（搜索 / 调整顺序） */
+.library-list-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 0 0 12px;
+  min-width: 0;
+}
+
+.library-list-toolbar .input-group {
+  display: flex;
+  align-items: stretch;
+}
+
+.library-reorder-hint {
+  flex: 1;
+  align-self: center;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+}
+
+/* 调整顺序 / 完成：对齐侧栏 nav 选中高亮（白底胶囊 + 极轻阴影） */
+.library-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  align-self: stretch;
+  box-sizing: border-box;
+  margin: 0;
+  /* 与 .input 的 10px 竖向 padding + 14px 字号对齐 */
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    transform 100ms var(--ease-out);
+}
+
+.library-mode-btn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 30px -26px rgba(23, 38, 38, 0.6);
+}
+
+.library-mode-btn:active {
+  transform: scale(0.985);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 8px 24px -22px rgba(23, 38, 38, 0.55);
+}
+
+.library-mode-btn:focus-visible {
+  outline: none;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 30px -26px rgba(23, 38, 38, 0.6),
+    0 0 0 4px rgba(178, 24, 88, 0.10);
+}
+
+[data-theme="dark"] .library-mode-btn:hover,
+[data-theme="dark"] .library-mode-btn:focus-visible {
+  background: rgba(244, 240, 235, 0.08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 10px 28px -24px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .library-mode-btn:active {
+  background: rgba(244, 240, 235, 0.1);
+}
+
+.library-reorder-scroll {
+  max-height: min(62vh, 560px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  margin-right: -2px;
+}
+
+/* 调整顺序：锁死右侧整页滚动，只动仓库列表 */
+.settings-main.is-library-reordering {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+.settings-shell:has([data-library-reordering="true"]) .settings-main {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+.library-row--shell .library-row__body {
+  pointer-events: none;
+}
+
+.library-reorder-skeleton .library-drag-handle--static {
+  color: var(--ink-faint);
+  opacity: 0.55;
+}
+
+.library-reorder-ready {
+  animation: library-reorder-ready-in 140ms var(--ease-out) both;
+}
+
+@keyframes library-reorder-ready-in {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-reorder-ready {
+    animation: none;
+  }
+}
+
+.library-browse-scroll,
+.library-reorder-scroll {
+  min-width: 0;
+}
+
+.library-reorder-list.plain-list,
+.library-browse-list.plain-list {
+  border-top: none;
+}
+
+/*
+ * 调整顺序：把行内 drag transform 裁在列表盒内。
+ * 否则 Blink 会把 translateY 算进 scrollable overflow，撑大
+ * .library-reorder-scroll 的 scrollHeight，再叠加 autoScroll 无限垫高。
+ */
+.library-reorder-list.plain-list {
+  overflow-x: clip;
+  overflow-y: clip;
+}
+
+/* 统一行：进出调整模式不换 DOM 骨架，避免缩略图重挂载卡顿 */
+.library-row.plain-list__item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  cursor: default;
+  /* 刻意不 transition transform —— 否则拖拽跟手会糊 */
+  transition:
+    background-color 120ms var(--ease-out),
+    opacity 100ms var(--ease-out);
+}
+
+/* 原位抬起：角色留在列表列内上下拖，不再用飞到外面的 DragOverlay */
+.library-row.is-dragging {
+  opacity: 1;
+  background: var(--paper);
+  border-radius: 8px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 28px -18px rgba(23, 38, 38, 0.45);
+}
+
+.library-row__body {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 12px 12px 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.library-row:not(.library-row--reordering) .library-row__body {
+  padding-left: 12px;
+}
+
+.library-row__body:focus-visible {
+  outline: 2px solid var(--magenta);
+  outline-offset: -2px;
+}
+
+.library-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: grab;
+  touch-action: none;
+  border-radius: 4px;
+  opacity: 1;
+  overflow: hidden;
+  /* 宽高不过渡：进出调整模式要即时，不能整列挤开半拍 */
+  transition:
+    color 120ms var(--ease-out),
+    background-color 120ms var(--ease-out);
+}
+
+.library-drag-handle--collapsed {
+  flex-basis: 0;
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.library-drag-handle:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.library-drag-handle:active {
+  cursor: grabbing;
+  transform: scale(0.94);
+}
+
+.library-drag-handle:focus-visible {
+  outline: 2px solid var(--magenta);
+  outline-offset: -2px;
+}
+
+.library-drag-handle--static {
+  pointer-events: none;
+  cursor: grabbing;
+  color: var(--ink-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-mode-btn,
+  .library-drag-handle,
+  .library-row.plain-list__item {
+    transition: none;
+  }
+
+  .library-mode-btn:active {
+    transform: none;
+  }
+}
+
+[data-theme="dark"] .library-row.is-dragging {
+  background: var(--paper-deep);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 12px 28px -16px rgba(0, 0, 0, 0.55);
+}
+
 /* 角色仓库 · 列表底部分页（窄屏换行时仍居中） */
 .library-pagination {
   display: flex;

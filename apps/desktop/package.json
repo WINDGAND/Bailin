@@ -20,16 +20,18 @@
   },
   "dependencies": {
     "@bailin/character-protocol": "workspace:*",
-    "@bailin/prompts": "workspace:*",
     "@bailin/pet-atlas-tools": "workspace:*",
+    "@bailin/prompts": "workspace:*",
     "@bailin/sprite-runtime": "workspace:*",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "better-sqlite3": "^11.3.0",
     "electron-log": "^5.2.0",
     "ulid": "^2.3.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "rcedit": "^4.0.1",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.16.10",
     "@types/react": "^18.3.11",
@@ -38,6 +40,7 @@
     "electron": "^32.1.2",
     "electron-builder": "^25.0.5",
     "puppeteer": "^25.1.0",
+    "rcedit": "^4.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sharp": "^0.35.2",
@@ -69,7 +72,9 @@
       {
         "from": "resources",
         "to": "resources",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "npmRebuild": true,
@@ -81,7 +86,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "resources/icon.ico",
@@ -95,7 +102,10 @@
       "allowElevation": false,
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
-      "installerLanguages": ["zh_CN", "en_US"],
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
       "language": "2052",
       "shortcutName": "Bailin"
     }

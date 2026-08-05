@@ -741,6 +741,7 @@ export const IPC = {
   ImageGenClearKey: "bailin.imageGen.clearKey",
 
   CharactersList: "bailin.characters.list",
+  CharactersReorder: "bailin.characters.reorder",
   CharactersGet: "bailin.characters.get",
   CharactersImportStarter: "bailin.characters.importStarter",
   CharactersCreateDeep: "bailin.characters.createDeep",

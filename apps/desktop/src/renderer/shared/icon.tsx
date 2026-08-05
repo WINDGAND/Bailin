@@ -23,7 +23,8 @@ export type IconName =
   | "trash"
   | "search"
   | "sparkle"
-  | "play";
+  | "play"
+  | "grip-vertical";
 
 const ICON_PATHS: Record<IconName, ReactNode> = {
   close: <path d="M6 6l12 12M18 6L6 18" />,
@@ -65,7 +66,19 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
     <path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6L12 4zM18 16l.8 2.2L21 19l-2.2.8L18 22l-.8-2.2L15 19l2.2-.8L18 16z" />
   ),
 
-  play: <path d="M7 5l12 7-12 7V5z" fill="currentColor" stroke="none" />
+  play: <path d="M7 5l12 7-12 7V5z" fill="currentColor" stroke="none" />,
+
+  // 六点拖拽手柄（两列竖点）
+  "grip-vertical": (
+    <>
+      <circle cx="9" cy="7" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="7" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="17" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="17" r="1.25" fill="currentColor" stroke="none" />
+    </>
+  )
 };
 
 export interface IconProps {
