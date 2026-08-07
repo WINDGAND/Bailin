@@ -73,8 +73,8 @@ import {
   annotateQualityWeaknesses,
   applyResynthesisPatch,
   MAX_SYNTHESIS_ROUNDS,
+  runPhase2SynthesisWithResearchGuard,
   runTargetedResynthesis,
-  runTwoPhaseSynthesis,
   shouldTriggerResynthesis,
   ensureAnswerProtocol
 } from "./synthesis-pipeline.js";
@@ -480,20 +480,41 @@ export class BailinOrchestrator {
       totalDurationMs: Date.now() - researchStartedAt
     };
 
-    // ===== Phase 2: 两阶段框架提炼 =====
-    yield phaseEvent(jobId, "synthesizing", 40, "正在用调研结果提炼心智模型与表达风格…");
+    // ===== Phase 2: 两阶段框架提炼（调研成功但提炼失败时自动重试）=====
     let synthesisRound = 1;
-    const twoPhaseResult = await runTwoPhaseSynthesis(
+    const phase2EventBuffer: DeepProgressEvent[] = [];
+    const phase2WarnMark = warnings.length;
+    const twoPhaseResult = await runPhase2SynthesisWithResearchGuard(
       this.llm,
       config,
       research.docs,
-      warnings
+      warnings,
+      {
+        onAttempt: (attempt, maxAttempts) => {
+          const okCount = research.docs.filter((d) => d.status === "ok").length;
+          const message =
+            attempt === 1
+              ? "正在用调研结果提炼心智模型与表达风格…"
+              : `调研已成功 ${okCount} 路，框架提炼失败，正在第 ${attempt}/${maxAttempts} 次重试…`;
+          const evt = phaseEvent(
+            jobId,
+            "synthesizing",
+            40 + (attempt - 1) * 2,
+            message
+          );
+          phase2EventBuffer.push(evt);
+          // 重试可能要几十秒：先 live 推一次，避免进度条停在「提炼中」不动
+          input.liveBroadcast?.(evt);
+        }
+      }
     );
+    for (const evt of phase2EventBuffer) yield evt;
+    // 把 Phase 2 明细警告同步进 job 日志（vault.appendJobWarning），便于事后排查
+    for (let i = phase2WarnMark; i < warnings.length; i++) {
+      yield { kind: "warning" as const, jobId, message: warnings[i]! };
+    }
     let synthCard = twoPhaseResult.card;
     let synthesisPassA = twoPhaseResult.passA;
-    if (!synthCard) {
-      yield yieldWarn("[phase2·synthesis] 框架提炼失败，将回退到骨架角色");
-    }
 
     if (synthCard) {
       const summary: SynthesisSummaryPayload = {

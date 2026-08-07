@@ -30,6 +30,18 @@ export interface ChatRequest {
    * 其他阶段沿用 provider 默认 model（推荐 deepseek-v4-flash）。
    */
   modelOverride?: string;
+  /**
+   * DeepSeek V4 等推理模型的 thinking 开关。
+   * 结构化 JSON（Phase 2 提炼等）应传 "disabled"：否则 reasoning 可能耗尽 max_tokens，
+   * 导致 content 为空、finish_reason=length。
+   */
+  thinking?: "enabled" | "disabled";
+}
+
+/** deepseek-v4* 默认开 thinking，结构化输出任务需要显式关掉。 */
+export function modelSupportsThinkingToggle(model: string): boolean {
+  const lower = model.toLowerCase();
+  return lower.includes("deepseek-v4") || lower.includes("deepseek-reasoner");
 }
 
 const CHAT_FETCH_TIMEOUT_MS = 90_000;
@@ -567,6 +579,10 @@ export class LLMAdapter {
     if (!isSearch) {
       body.temperature = req.temperature ?? p.defaultTemperature ?? 0.7;
     }
+    // DeepSeek V4：允许关闭 thinking，避免推理吃光 token 后正文为空
+    if (req.thinking && modelSupportsThinkingToggle(model)) {
+      body.thinking = { type: req.thinking };
+    }
 
     let res: Response;
     try {
@@ -597,11 +613,27 @@ export class LLMAdapter {
 
     if (!req.stream) {
       const json = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+        choices?: Array<{
+          message?: { content?: string | null; reasoning_content?: string | null };
+          finish_reason?: string;
+        }>;
       };
-      const text = json.choices?.[0]?.message?.content ?? "";
+      const message = json.choices?.[0]?.message;
+      const text = message?.content ?? "";
+      const reasoningLen = (message?.reasoning_content ?? "").length;
       const fr = mapFinishReason(json.choices?.[0]?.finish_reason);
-      yield { kind: "delta", text };
+      if (!String(text).trim() && (fr === "length" || reasoningLen > 0)) {
+        yield {
+          kind: "error",
+          code: "REASONING_BUDGET_EXHAUSTED",
+          message:
+            reasoningLen > 0
+              ? `推理耗尽 token（reasoning ${reasoningLen} 字，正文为空，finish_reason=${fr}）。结构化任务请关闭 thinking 或增大 max_tokens。`
+              : `模型返回空正文（finish_reason=${fr}）`
+        };
+        return;
+      }
+      yield { kind: "delta", text: String(text) };
       yield { kind: "done", finishReason: fr };
       return;
     }

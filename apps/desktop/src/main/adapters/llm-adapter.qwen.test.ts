@@ -241,3 +241,11 @@ describe("LLMAdapter qwen enable_search path", () => {
     assert.equal(seenBody?.enable_search, undefined);
   });
 });
+
+describe("modelSupportsThinkingToggle", () => {
+  it("detects deepseek-v4 family", async () => {
+    const { modelSupportsThinkingToggle } = await import("./llm-adapter.js");
+    assert.equal(modelSupportsThinkingToggle("deepseek-v4-flash"), true);
+    assert.equal(modelSupportsThinkingToggle("gpt-4o-mini"), false);
+  });
+});
