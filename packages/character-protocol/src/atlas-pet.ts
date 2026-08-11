@@ -165,7 +165,11 @@ export function defaultAtlasStateMachine(): AtlasPet["stateMachine"] {
           { on: "dragStart", to: "drag" },
           { on: "responseStart", to: "think" },
           { on: "screenLock", to: "sleep" },
-          { on: "chatError", to: "sad" }
+          { on: "chatError", to: "sad" },
+          // 闲置自主行为：偶尔散步/坐立不安，长时间不动则打盹
+          { on: "tick", to: "walk", guard: "rand() < 0.0012" },
+          { on: "tick", to: "fidget", guard: "rand() < 0.002" },
+          { on: "tick", to: "sleep", guard: "idleSeconds > 120" }
         ]
       },
       walk: {
@@ -205,7 +209,9 @@ export function defaultAtlasStateMachine(): AtlasPet["stateMachine"] {
         transitions: [
           { on: "screenUnlock", to: "idle" },
           { on: "click", to: "click" },
-          { on: "chatOpen", to: "talk" }
+          { on: "chatOpen", to: "talk" },
+          // 自然醒：约 28s 均值
+          { on: "tick", to: "idle", guard: "rand() < 0.0006" }
         ]
       },
       sad: {
