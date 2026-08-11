@@ -21,6 +21,8 @@ import { ChatResizeHandles } from "./ChatResizeHandles.js";
 import { ChatHistoryPanel } from "./ChatHistoryPanel.js";
 import type { ProfileChange, ProfileUpdatedEvent } from "../../shared/ipc-contract.js";
 import { useT } from "../shared/i18n/index.js";
+import { useTheme } from "../shared/theme/index.js";
+import { resolveCharacterAccent } from "../shared/character-accent.js";
 import { resolveCharacterSignature } from "../settings/library/character-signature.js";
 
 export function ChatApp(): JSX.Element {
@@ -30,6 +32,13 @@ export function ChatApp(): JSX.Element {
   const { bundle } = useActiveCharacter();
   const { showToast } = useToast();
   const confirm = useConfirm();
+  const { resolved } = useTheme();
+
+  // 角色专属 accent：同角色恒定，随明暗主题切换档位
+  const accent = useMemo(
+    () => (bundle ? resolveCharacterAccent(bundle.card.id, resolved) : null),
+    [bundle, resolved]
+  );
 
   const [input, setInput] = useState<string>("");
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -234,7 +243,17 @@ export function ChatApp(): JSX.Element {
       }}
     >
       <ChatResizeHandles />
-      <div className="chat-panel">
+      <div
+        className="chat-panel"
+        style={
+          accent
+            ? ({
+                "--chat-accent": accent.accent,
+                "--chat-accent-strong": accent.strong
+              } as React.CSSProperties)
+            : undefined
+        }
+      >
         {/* Header */}
           <div className="chat-panel__header" style={{ position: "relative" }}>
           <div className="chat-panel__avatar" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>

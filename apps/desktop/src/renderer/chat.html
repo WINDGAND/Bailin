@@ -44,6 +44,9 @@
       }
 
       .chat-panel {
+        /* 角色专属 accent 默认回落到品牌洋红；ChatApp 按角色 id 注入覆盖值 */
+        --chat-accent: var(--magenta);
+        --chat-accent-strong: var(--magenta-deep);
         flex: 1;
         display: flex;
         flex-direction: column;
@@ -254,6 +257,7 @@
         background: var(--paper-deep);
         color: var(--ink);
         border: 1px solid var(--grid);
+        box-shadow: inset 3px 0 0 0 var(--chat-accent);
         white-space: normal;
       }
 
@@ -284,12 +288,38 @@
         padding-left: 0.15em;
       }
       .chat-md li::marker {
-        color: var(--magenta);
+        color: var(--chat-accent);
         font-weight: 600;
       }
       .chat-md strong {
         font-weight: 650;
         color: var(--ink);
+      }
+      /* 角色 accent 覆盖：链接 / 建议序号 / hover 左边条 */
+      .chat-panel .chat-md__a {
+        color: var(--chat-accent-strong);
+      }
+      .chat-panel .suggestion__index,
+      .chat-panel .suggestion__arrow {
+        color: var(--chat-accent);
+      }
+      .chat-panel .suggestion:hover {
+        border-left-color: var(--chat-accent);
+      }
+
+      /* 最新一条消息的入场：只落在最后一个 chat-row 上，历史批量渲染不会全屏乱飞 */
+      .chat-panel__body > .chat-row:last-of-type {
+        animation: chat-row-in 240ms var(--ease-out) both;
+      }
+      @keyframes chat-row-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
       }
       .chat-bubble--user {
         white-space: pre-wrap;
