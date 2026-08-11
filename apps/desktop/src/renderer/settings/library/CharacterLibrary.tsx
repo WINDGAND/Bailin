@@ -415,6 +415,23 @@ export function CharacterLibrary({
     setListPage(nextPage);
   }
 
+  /**
+   * 苹果式触感：pointerdown 就翻页（内容在按下时响应）。
+   * 鼠标 click 的 detail ≥ 1，已在 pointerdown 处理过则忽略；
+   * 键盘激活的 click detail 为 0，仍由此翻页。
+   */
+  function activateListPageFromPointer(nextPage: number): void {
+    changeListPage(nextPage);
+  }
+
+  function activateListPageFromClick(
+    nextPage: number,
+    detail: number
+  ): void {
+    if (detail !== 0) return;
+    changeListPage(nextPage);
+  }
+
   function enterReorderMode(): void {
     // 1) 同步画出骨架，点击立刻有反馈
     flushSync(() => {
@@ -529,7 +546,9 @@ export function CharacterLibrary({
           className={
             reordering
               ? "library-list-pane library-list-pane--reordering"
-              : "library-list-pane"
+              : filteredItems && filteredItems.length > LIBRARY_PAGE_SIZE
+                ? "library-list-pane library-list-pane--paginated"
+                : "library-list-pane"
           }
           style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 0 }}
         >
@@ -633,12 +652,7 @@ export function CharacterLibrary({
                     selectedId={selectedId}
                     thumbnails={thumbnails}
                     reordering={reordering}
-                    pageMotionClass={
-                      reordering
-                        ? undefined
-                        : `library-list-item--page-in library-list-item--${pageMotion.direction}`
-                    }
-                    pageMotionNonce={reordering ? undefined : pageMotion.nonce}
+                    pageMotion={reordering ? undefined : pageMotion}
                     isItemBusy={(id) => getJob(id)?.status === "running"}
                     trackLabel={(track) => t(TRACK_KEYS[track])}
                     currentLabel={t("library.current")}
@@ -665,17 +679,25 @@ export function CharacterLibrary({
               <div className="library-pagination__controls">
                 <button
                   type="button"
-                  className="btn btn--ghost"
+                  className="btn btn--ghost library-pagination__btn"
                   disabled={currentPage <= 1}
-                  onClick={() => changeListPage(currentPage - 1)}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0 || currentPage <= 1) return;
+                    activateListPageFromPointer(currentPage - 1);
+                  }}
+                  onClick={(e) => activateListPageFromClick(currentPage - 1, e.detail)}
                 >
                   {t("library.paginationPrev")}
                 </button>
                 <button
                   type="button"
-                  className="btn btn--ghost"
+                  className="btn btn--ghost library-pagination__btn"
                   disabled={currentPage >= totalPages}
-                  onClick={() => changeListPage(currentPage + 1)}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0 || currentPage >= totalPages) return;
+                    activateListPageFromPointer(currentPage + 1);
+                  }}
+                  onClick={(e) => activateListPageFromClick(currentPage + 1, e.detail)}
                 >
                   {t("library.paginationNext")}
                 </button>

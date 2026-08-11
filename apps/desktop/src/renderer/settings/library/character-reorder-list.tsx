@@ -114,8 +114,7 @@ export function CharacterReorderList({
   selectedId,
   thumbnails,
   reordering,
-  pageMotionClass,
-  pageMotionNonce,
+  pageMotion,
   isItemBusy,
   trackLabel,
   currentLabel,
@@ -130,8 +129,8 @@ export function CharacterReorderList({
   selectedId: string | null;
   thumbnails: Record<string, SpriteProgram | null>;
   reordering: boolean;
-  pageMotionClass?: string;
-  pageMotionNonce?: number;
+  /** 浏览态翻页入场；调整顺序时不传。 */
+  pageMotion?: { nonce: number; direction: "forward" | "backward" };
   isItemBusy: (id: string) => boolean;
   trackLabel: (track: ReorderLibraryItem["track"]) => string;
   currentLabel: string;
@@ -236,8 +235,7 @@ export function CharacterReorderList({
               noEnglishName={noEnglishName}
               skeletonLabel={skeletonLabel}
               dragHandleLabel={dragHandleLabel}
-              pageMotionClass={pageMotionClass}
-              pageMotionNonce={pageMotionNonce}
+              pageMotion={reordering ? undefined : pageMotion}
               onPick={onPick}
             />
           ))}
@@ -261,8 +259,7 @@ function SortableLibraryRow({
   noEnglishName,
   skeletonLabel,
   dragHandleLabel,
-  pageMotionClass,
-  pageMotionNonce,
+  pageMotion,
   onPick
 }: {
   item: ReorderLibraryItem;
@@ -278,8 +275,7 @@ function SortableLibraryRow({
   noEnglishName: string;
   skeletonLabel: string;
   dragHandleLabel: (displayName: string) => string;
-  pageMotionClass?: string;
-  pageMotionNonce?: number;
+  pageMotion?: { nonce: number; direction: "forward" | "backward" };
   onPick: (id: string) => void;
 }): JSX.Element {
   const {
@@ -306,15 +302,20 @@ function SortableLibraryRow({
     transition: reordering ? (lift ? undefined : transition) : undefined,
     zIndex: lift ? 6 : undefined,
     position: lift ? "relative" : undefined,
-    ...(!reordering && pageMotionNonce != null
-      ? { animationDelay: `${Math.min(index * 24, 120)}ms` }
+    // 首行 delay=0，按下即见首项；短 cascade 不抢按钮的即时反馈
+    ...(!reordering && pageMotion
+      ? { animationDelay: `${Math.min(index * 16, 80)}ms` }
       : null)
   };
 
   const className = [
     "plain-list__item",
     "library-row",
-    reordering ? "library-row--reordering" : pageMotionClass,
+    reordering
+      ? "library-row--reordering"
+      : pageMotion
+        ? `library-list-item--page-in library-list-item--${pageMotion.direction}`
+        : "",
     selected ? "is-selected" : "",
     lift ? "is-dragging" : ""
   ]

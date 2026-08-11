@@ -1964,28 +1964,33 @@ body.settings-window #root {
   border-radius: 4px;
 }
 
-/* 角色仓库：分页切换才有短 stagger；点选选中态要即时跟上手指 */
+/* 角色仓库：翻页逐行 cascade；首行无 delay，跟手于 pointerdown；点选仍即时 */
 .library-list-item--page-in {
-  animation: library-list-item-in 120ms var(--ease-out) both;
+  animation: library-list-item-in 160ms var(--ease-out) both;
   transition-duration: var(--motion-instant);
 }
 
 .library-list-item--forward {
-  --library-list-enter-y: 4px;
+  --library-list-enter-y: 6px;
+  --library-list-enter-x: 3px;
 }
 
 .library-list-item--backward {
-  --library-list-enter-y: -4px;
+  --library-list-enter-y: -6px;
+  --library-list-enter-x: -3px;
 }
 
 @keyframes library-list-item-in {
   from {
     opacity: 0;
-    transform: translateY(var(--library-list-enter-y, 4px));
+    transform: translate(
+      var(--library-list-enter-x, 3px),
+      var(--library-list-enter-y, 6px)
+    );
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate(0, 0);
   }
 }
 
@@ -2170,6 +2175,31 @@ body.settings-window #root {
   min-width: 0;
 }
 
+/*
+ * 浏览态每页固定六行的视觉页框：末页不足六项时保留留白，
+ * 让紧随其后的分页器保持在同一垂直位置。
+ */
+.library-list-pane--paginated {
+  --library-page-row-height: 69px;
+  --library-page-row-count: 6;
+}
+
+.library-list-pane--paginated .library-browse-scroll {
+  block-size: calc(var(--library-page-row-height) * var(--library-page-row-count));
+}
+
+.library-list-pane--paginated .library-browse-list {
+  grid-template-rows: repeat(
+    var(--library-page-row-count),
+    var(--library-page-row-height)
+  );
+}
+
+.library-list-pane--paginated .library-row {
+  block-size: var(--library-page-row-height);
+  overflow: hidden;
+}
+
 .library-reorder-list.plain-list,
 .library-browse-list.plain-list {
   border-top: none;
@@ -2325,6 +2355,64 @@ body.settings-window #root {
   justify-content: center;
   gap: 8px;
   flex: 0 1 auto;
+}
+
+/*
+ * 分页钮 · 苹果式触感：
+ * - 无 scale / spring（描边按钮缩放发「廉价」）
+ * - 按下：高亮瞬时落下（0ms）；抬起：150ms ease-out 回弹底色
+ * - 无悬停黑边；禁用无反馈
+ */
+.library-pagination__btn.btn--ghost {
+  min-width: 88px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  transform: none !important;
+  transition:
+    background 150ms var(--ease-out),
+    color 150ms var(--ease-out),
+    opacity 150ms var(--ease-out);
+}
+
+.library-pagination__btn.btn--ghost:hover:not(:disabled) {
+  background: rgba(23, 38, 38, 0.06);
+  border-color: transparent;
+  color: var(--ink);
+  box-shadow: none;
+  transform: none !important;
+}
+
+.library-pagination__btn.btn--ghost:active:not(:disabled):not([aria-disabled="true"]) {
+  background: rgba(23, 38, 38, 0.12);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none !important;
+  /* 按下瞬时；抬起沿用 150ms */
+  transition-duration: 0ms;
+}
+
+.library-pagination__btn.btn--ghost:disabled {
+  background: transparent;
+  border-color: transparent;
+  opacity: 0.38;
+}
+
+[data-theme="dark"] .library-pagination__btn.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+[data-theme="dark"] .library-pagination__btn.btn--ghost:hover:not(:disabled) {
+  background: rgba(244, 240, 235, 0.08);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+[data-theme="dark"] .library-pagination__btn.btn--ghost:active:not(:disabled):not([aria-disabled="true"]) {
+  background: rgba(244, 240, 235, 0.16);
+  border-color: transparent;
+  transition-duration: 0ms;
 }
 
 .library-item__thumb {
