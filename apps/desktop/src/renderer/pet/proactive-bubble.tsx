@@ -16,12 +16,17 @@ export interface ProactiveBubbleState {
 interface ProactiveBubbleProps {
   bubble: ProactiveBubbleState | null;
   placement: ProactiveBubblePlacement;
+  /** 退场动画播放中：由 App 层在真正卸载前置位。 */
+  leaving?: boolean;
   onDismiss: () => void;
   onOpenChat: () => void;
 }
 
 export const ProactiveBubble = forwardRef<HTMLDivElement, ProactiveBubbleProps>(
-  function ProactiveBubble({ bubble, placement, onDismiss, onOpenChat }, ref): JSX.Element | null {
+  function ProactiveBubble(
+    { bubble, placement, leaving = false, onDismiss, onOpenChat },
+    ref
+  ): JSX.Element | null {
     const t = useT();
     const reducedMotion = useReducedMotion();
     // 鼠标悬停 / 键盘聚焦 都应暂停自动消失计时；任一为 true 就 paused。
@@ -50,7 +55,7 @@ export const ProactiveBubble = forwardRef<HTMLDivElement, ProactiveBubbleProps>(
     return (
       <div
         ref={ref}
-        className={`proactive-bubble proactive-bubble--${placement}`}
+        className={`proactive-bubble proactive-bubble--${placement}${leaving ? " proactive-bubble--leaving" : ""}`}
         // 屏幕阅读器：气泡出现时通报新文字内容，但不打断用户当前任务。
         role="status"
         aria-live="polite"

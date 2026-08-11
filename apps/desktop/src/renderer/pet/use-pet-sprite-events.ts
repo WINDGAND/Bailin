@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import type { SpriteEvent } from "@bailin/character-protocol";
-import type { AmbientSignal, ChatStreamChunk, ChatVisibilityEvent } from "../../shared/ipc-contract.js";
+import type {
+  AmbientSignal,
+  ChatStreamChunk,
+  ChatVisibilityEvent,
+  ProactiveWhisperEvent
+} from "../../shared/ipc-contract.js";
 import { useBailin } from "../shared/use-bailin.js";
 
 /**
@@ -66,4 +71,30 @@ export function usePetSpriteEvents(
       }
     });
   }, [bailin, sendSpriteEvent]);
+
+  // 主动耳语联动：气泡出现 = 宠物开口；气泡自动消失后若聊天窗没开，收回 idle。
+  useEffect(() => {
+    if (!characterId) return;
+    let timer: number | null = null;
+    const off = bailin.on.proactiveWhisper((raw) => {
+      const evt = raw as ProactiveWhisperEvent;
+      if (evt.characterId && evt.characterId !== characterId) return;
+      if (timer !== null) window.clearTimeout(timer);
+      sendSpriteEvent("chatOpen");
+      // 5200ms = 气泡 AUTO_DISMISS 4500 + 余量
+      timer = window.setTimeout(() => {
+        timer = null;
+        void bailin.chat
+          .isVisible()
+          .then((visible) => {
+            if (!visible) sendSpriteEvent("chatClose");
+          })
+          .catch(() => sendSpriteEvent("chatClose"));
+      }, 5200);
+    });
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+      off();
+    };
+  }, [characterId, bailin, sendSpriteEvent]);
 }

@@ -133,6 +133,10 @@ if (!gotSingleInstanceLock) {
 function appBroadcast(channel: string, payload: unknown): void {
   if (channel === IPC.EventProactiveWhisper && proactiveBubbleHost) {
     proactiveBubbleHost.handleWhisper(payload as ProactiveWhisperEvent);
+    // 同时递给桌宠窗：让宠物在气泡出现时"开口说话"。
+    if (petWin && !petWin.isDestroyed()) {
+      petWin.webContents.send(channel, payload);
+    }
     return;
   }
   broadcastToAllWindows(channel, payload);
