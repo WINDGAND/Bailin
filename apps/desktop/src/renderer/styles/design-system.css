@@ -7160,6 +7160,51 @@ body.settings-window #root {
   color: var(--ink-soft);
 }
 
+/* 诞生揭晓舞台：洋红径向光 + 细网格，与桌宠预览台同语言 */
+.distill-reveal {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 18px;
+}
+
+.distill-reveal__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 168px;
+  min-height: 168px;
+  padding: 14px 22px 10px;
+  border-radius: 24px;
+  background:
+    radial-gradient(120% 90% at 50% 100%, rgba(178, 24, 88, 0.10) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent);
+  overflow: hidden;
+}
+
+.distill-reveal__stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(23, 38, 38, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 38, 38, 0.05) 1px, transparent 1px);
+  background-size: 16px 16px;
+  mask-image: radial-gradient(80% 70% at 50% 80%, black, transparent);
+}
+
+[data-theme="dark"] .distill-reveal__stage {
+  background:
+    radial-gradient(120% 90% at 50% 100%, rgba(204, 42, 104, 0.16) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .distill-reveal__stage.hatch {
+    animation: none;
+  }
+}
+
 .distill-hatch__list {
   margin-top: 10px;
   border-top: 1px solid var(--hairline, var(--grid));

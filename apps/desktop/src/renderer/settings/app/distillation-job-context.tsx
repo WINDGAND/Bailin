@@ -77,6 +77,8 @@ interface DistillationJobContextValue {
   failureReason?: string;
   isSkeleton?: boolean;
   researchSummary: ResearchSummaryPayload | null;
+  /** 完成事件带出的新角色 id——进度页用它拉 bundle 挂「破壳揭晓」。 */
+  doneCharacterId: string | null;
   startJob: (job: ActiveDistillationJob) => void;
   clearJob: () => void;
   dismissBanner: () => void;
@@ -99,6 +101,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
   const [failureReason, setFailureReason] = useState<string | undefined>();
   const [isSkeleton, setIsSkeleton] = useState(false);
   const [researchSummary, setResearchSummary] = useState<ResearchSummaryPayload | null>(null);
+  const [doneCharacterId, setDoneCharacterId] = useState<string | null>(null);
   const [showCheckpoint, setShowCheckpoint] = useState(false);
   const [showSpriteCheckpoint, setShowSpriteCheckpoint] = useState(false);
   const [spriteFailedRows, setSpriteFailedRows] = useState<HatchPetRowState[]>([]);
@@ -158,6 +161,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     setFailureReason(undefined);
     setIsSkeleton(false);
     setResearchSummary(null);
+    setDoneCharacterId(null);
     setShowCheckpoint(false);
     setShowSpriteCheckpoint(false);
     setSpriteFailedRows([]);
@@ -177,6 +181,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
     setFailureReason(undefined);
     setIsSkeleton(false);
     setResearchSummary(null);
+    setDoneCharacterId(null);
     setShowCheckpoint(false);
     setShowSpriteCheckpoint(false);
     setSpriteFailedRows([]);
@@ -317,6 +322,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
           setPhaseLabel("完成");
           setBannerStatus("done");
           setIsSkeleton(evt.isSkeleton);
+          setDoneCharacterId(evt.characterId);
           setShowCheckpoint(false);
           setShowSpriteCheckpoint(false);
           showToast({
@@ -365,6 +371,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
       failureReason,
       isSkeleton,
       researchSummary,
+      doneCharacterId,
       startJob,
       clearJob,
       dismissBanner,
@@ -381,6 +388,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
       failureReason,
       isSkeleton,
       researchSummary,
+      doneCharacterId,
       startJob,
       clearJob,
       dismissBanner,

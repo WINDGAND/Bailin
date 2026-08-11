@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  CharacterBundle,
   HatchPetRowState,
   QualityReport
 } from "@bailin/character-protocol";
@@ -10,6 +11,13 @@ import type {
 } from "../../../shared/ipc-contract.js";
 import { CopyButton, Spinner } from "../../shared/feedback.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
+import { PetRenderer } from "../../shared/pet-renderer.js";
+import { useBailin } from "../../shared/use-bailin.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  resolveAtlasPetPixelSize,
+  resolveDslPetPixelSize
+} from "../../../shared/pet-display-scale.js";
 import { agentNameKey, translatePhaseMessage } from "./distillation-phase-i18n.js";
 import { DistillationStageRail } from "./DistillationStageRail.js";
 import { useDistillationJobs } from "../app/distillation-job-context.js";
@@ -57,6 +65,7 @@ export function DistillationProgress({
     failureReason,
     isSkeleton,
     researchSummary,
+    doneCharacterId,
     timing
   } = useDistillationJobs();
   const {
@@ -185,6 +194,9 @@ export function DistillationProgress({
         <div className="card fade-in-up" style={{ padding: 20 }}>
           {finalState.kind === "done" ? (
             <>
+              {finalState.kind === "done" && !finalState.isSkeleton && doneCharacterId ? (
+                <HatchReveal characterId={doneCharacterId} />
+              ) : null}
               <div className="display display--section" style={{ marginBottom: 8 }}>
                 {finalState.isSkeleton ? t("distill.doneSkeleton") : t("distill.doneComplete")}
               </div>
@@ -854,4 +866,42 @@ function labelForHatchStatus(s: HatchJobStatus, t: TFn): string {
     case "cancelled":
       return t("distill.statusCancelled");
   }
+}
+
+/** 诞生揭晓：完成时让新角色当场破壳。组件与动画全部复用桌宠侧现成实现。 */
+function HatchReveal({ characterId }: { characterId: string }): JSX.Element | null {
+  const bailin = useBailin();
+  const reducedMotion = useReducedMotion();
+  const [bundle, setBundle] = useState<CharacterBundle | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void bailin.characters.get(characterId).then((b) => {
+      if (alive && b) setBundle(b as CharacterBundle);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [bailin, characterId]);
+
+  if (!bundle?.sprite) return null;
+
+  const program = bundle.sprite;
+  const size =
+    program.mode === "atlas" && program.atlas
+      ? resolveAtlasPetPixelSize(program.atlas.cell, 0.72)
+      : resolveDslPetPixelSize(program.size, program.displayScale, 0.72);
+
+  return (
+    <div className="distill-reveal" aria-hidden="true">
+      <div className={`distill-reveal__stage${reducedMotion ? "" : " hatch"}`}>
+        <PetRenderer
+          program={program}
+          hatching={!reducedMotion}
+          width={size.width}
+          height={size.height}
+        />
+      </div>
+    </div>
+  );
 }
