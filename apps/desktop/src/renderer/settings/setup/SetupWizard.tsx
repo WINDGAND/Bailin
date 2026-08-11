@@ -513,49 +513,24 @@ function StarterStep({
         {t("setup.stepStarter")}
       </div>
       <p className="body-md">{t("setup.starterIntro")}</p>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 10,
-          marginTop: 14
-        }}
-      >
+      <div className="starter-list" style={{ marginTop: 14 }}>
         {STARTER_BUNDLES.map((bundle: CharacterBundle, i) => (
           <button
             key={bundle.card.id}
-            className="card card--interactive fade-in-up"
-            style={{
-              textAlign: "left",
-              padding: 12,
-              cursor: "pointer",
-              background: "var(--paper)",
-              animationDelay: `${i * 50}ms`,
-              display: "flex",
-              gap: 12,
-              alignItems: "center"
-            }}
+            className="starter-row fade-in-up"
+            style={{ animationDelay: `${i * 50}ms` }}
             onClick={() => void pick(bundle.card.id)}
             disabled={importing != null}
             aria-busy={importing === bundle.card.id}
           >
-            <div
-              style={{
-                width: 48,
-                height: 48,
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              <PetRenderer program={bundle.sprite} width={48} height={48} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="row row--between gap-2" style={{ marginBottom: 4 }}>
+            <span className="starter-row__pet" aria-hidden="true">
+              <PetRenderer program={bundle.sprite} width={64} height={64} />
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span className="row row--between gap-2" style={{ marginBottom: 4 }}>
                 <span
                   className="display display--section"
-                  style={{ fontSize: 14, lineHeight: 1.15 }}
+                  style={{ fontSize: 15, lineHeight: 1.15 }}
                 >
                   {stripRoleSuffix(bundle.card.meta.name)}
                 </span>
@@ -564,11 +539,12 @@ function StarterStep({
                     ? t("setup.trackUtilityShort")
                     : t("setup.trackCompanionShort")}
                 </span>
-              </div>
+              </span>
               <p
                 className="body-sm"
                 style={{
                   margin: 0,
+                  color: "var(--ink-soft)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   display: "-webkit-box",
@@ -588,7 +564,7 @@ function StarterStep({
                   {t("setup.starterImporting")}
                 </span>
               ) : null}
-            </div>
+            </span>
           </button>
         ))}
       </div>

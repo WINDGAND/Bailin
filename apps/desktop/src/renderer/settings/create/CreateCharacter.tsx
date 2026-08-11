@@ -600,11 +600,11 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                           borderRadius: 8,
                           border:
                             materialMode === opt.id
-                              ? "1px solid var(--teal)"
+                              ? "1px solid var(--magenta)"
                               : suggestLocalOnly
-                                ? "1px dashed var(--teal)"
+                                ? "1px dashed var(--magenta-soft)"
                                 : "1px solid var(--grid-strong)",
-                          background: materialMode === opt.id ? "rgba(31,58,58,0.04)" : "transparent"
+                          background: materialMode === opt.id ? "var(--magenta-tint)" : "transparent"
                         }}
                       >
                         <input
