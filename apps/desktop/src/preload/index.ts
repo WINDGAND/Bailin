@@ -17,6 +17,9 @@ const api = {
       ipcRenderer.invoke(IPC.AppListReleases, options),
     dismissUpdate: (latestVersion: string) => ipcRenderer.invoke(IPC.AppDismissUpdate, latestVersion)
   },
+  feedback: {
+    submit: (input: unknown) => ipcRenderer.invoke(IPC.FeedbackSubmit, input)
+  },
   llm: {
     setProvider: (input: unknown) => ipcRenderer.invoke(IPC.LlmSetProvider, input),
     getProvider: () => ipcRenderer.invoke(IPC.LlmGetProvider),

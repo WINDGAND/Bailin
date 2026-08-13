@@ -31,6 +31,11 @@ import { findStarterById, STARTER_META } from "../../shared/starters.js";
 import { sanitizeApiKey } from "../../shared/sanitize-api-key.js";
 import { checkForUpdates } from "../update/update-checker.js";
 import {
+  FEEDBACK_INGEST_URL,
+  submitFeedbackToIngest
+} from "../feedback/submit-feedback.js";
+import { validateFeedbackInput } from "../feedback/validate-feedback.js";
+import {
   fetchReleaseSummaries,
   type PersistedReleaseCache,
   type ReleaseListStore
@@ -211,6 +216,25 @@ export function registerIpc(deps: IpcDeps): void {
     if (typeof latestVersion === "string" && latestVersion) {
       vault.setSetting(SETTING_UPDATE_DISMISSED_TAG, latestVersion);
     }
+    return undefined;
+  });
+  ipcMain.handle(IPC.FeedbackSubmit, async (_evt, input: unknown) => {
+    const raw =
+      input && typeof input === "object"
+        ? (input as { body?: unknown; contact?: unknown; files?: unknown })
+        : {};
+    const validated = validateFeedbackInput({
+      body: raw.body,
+      contact: raw.contact,
+      files: Array.isArray(raw.files) ? raw.files : []
+    });
+    if (!validated.ok) return validated;
+    return submitFeedbackToIngest({
+      url: FEEDBACK_INGEST_URL,
+      version: app.getVersion(),
+      value: validated.value,
+      fetchImpl: (request, init) => net.fetch(request instanceof URL ? request.href : request, init)
+    });
   });
 
   // ===== LLM =====

@@ -19,7 +19,7 @@ import { UpdateProvider, useUpdateInfo } from "./update-context.js";
 import { ChangelogPanel } from "../changelog/ChangelogPanel.js";
 import { useI18n } from "../../shared/i18n/index.js";
 
-type Tab = "library" | "create" | "memory" | "desktop" | "key" | "settings" | "changelog";
+type Tab = "library" | "create" | "memory" | "desktop" | "key" | "settings" | "changelog" | "feedback";
 
 const SIDEBAR_COLLAPSED_KEY = "bailin.settingsSidebarCollapsed";
 

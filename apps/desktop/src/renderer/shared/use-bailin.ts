@@ -13,6 +13,8 @@ import type {
   ImageGenerationConfigDTO,
   ImageTierName,
   ListReleasesResult,
+  FeedbackSubmitInput,
+  FeedbackSubmitResult,
   ProactiveSettings,
   ProactiveStatus,
   ProactiveWhisperEvent
@@ -22,6 +24,9 @@ import type { ChatStreamChunk, ChatVisibilityEvent } from "../../shared/ipc-cont
 interface BailinWindow {
   bailin: {
     app: { isFirstRun(): Promise<boolean>; completeFirstRun(): Promise<void>; quit(): Promise<void>; getLocale(): Promise<"zh" | "en">; setLocale(locale: "zh" | "en"): Promise<void>; getTheme(): Promise<import("../../shared/ipc-contract.js").ThemePreference>; setTheme(theme: import("../../shared/ipc-contract.js").ThemePreference): Promise<void>; openExternal(url: string): Promise<{ ok: boolean }>; getVersion(): Promise<string>; checkForUpdates(): Promise<import("../../shared/ipc-contract.js").UpdateCheckResult>; listReleases(options?: import("../../shared/ipc-contract.js").ListReleasesOptions): Promise<ListReleasesResult>; dismissUpdate(latestVersion: string): Promise<void> };
+    feedback: {
+      submit(input: FeedbackSubmitInput): Promise<FeedbackSubmitResult>;
+    };
     llm: {
       setProvider(input: unknown): Promise<{ ok: boolean; error?: string }>;
       getProvider(): Promise<unknown>;
@@ -223,6 +228,9 @@ function makeBailinStub(): BailinWindow["bailin"] {
       checkForUpdates: async () => ({ hasUpdate: false, error: "stub 环境" }),
       listReleases: async (_options?) => ({ ok: false, error: "stub 环境" }),
       dismissUpdate: async () => {}
+    },
+    feedback: {
+      submit: async () => ({ ok: false, code: "offline" as const, error: "stub 环境" })
     },
     llm: {
       setProvider: async () => ({ ok: false, error: "stub" }),

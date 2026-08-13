@@ -88,6 +88,11 @@ export interface BailinApi {
     dismissUpdate(latestVersion: string): Promise<void>;
   };
 
+  /** 应用内意见反馈：只发用户主动填写的内容，不碰角色/对话/画像。 */
+  feedback: {
+    submit(input: FeedbackSubmitInput): Promise<FeedbackSubmitResult>;
+  };
+
   // ===== LLM 提供商 =====
   llm: {
     setProvider(input: LLMProviderConfig): Promise<{ ok: boolean; error?: string }>;
@@ -291,6 +296,20 @@ export interface ProactiveBubblePlacementEvent {
   placement: ProactiveBubblePlacement;
 }
 
+export interface FeedbackSubmitInput {
+  body: string;
+  contact?: string;
+  files: Array<{ name: string; mime: string; bytes: Uint8Array }>;
+}
+
+export type FeedbackSubmitResult =
+  | { ok: true }
+  | {
+      ok: false;
+      code: "invalid" | "too_large" | "rate_limited" | "offline" | "upstream";
+      error: string;
+    };
+
 export type SettingsTab =
   | "library"
   | "create"
@@ -298,7 +317,8 @@ export type SettingsTab =
   | "desktop"
   | "key"
   | "settings"
-  | "changelog";
+  | "changelog"
+  | "feedback";
 
 export interface NavigateSettingsEvent {
   tab: SettingsTab;
@@ -728,6 +748,8 @@ export const IPC = {
   AppCheckForUpdates: "bailin.app.checkForUpdates",
   AppListReleases: "bailin.app.listReleases",
   AppDismissUpdate: "bailin.app.dismissUpdate",
+
+  FeedbackSubmit: "bailin.feedback.submit",
 
   LlmSetProvider: "bailin.llm.setProvider",
   LlmGetProvider: "bailin.llm.getProvider",

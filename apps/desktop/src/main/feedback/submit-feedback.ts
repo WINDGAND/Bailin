@@ -1,14 +1,7 @@
+import type { FeedbackSubmitResult } from "../../shared/ipc-contract.js";
 import type { ValidatedFeedback } from "./validate-feedback.js";
 
 export const FEEDBACK_INGEST_URL = "https://bailin-feedback.windgand.workers.dev/v1/feedback";
-
-export type FeedbackSubmitResult =
-  | { ok: true }
-  | {
-      ok: false;
-      code: "invalid" | "too_large" | "rate_limited" | "offline" | "upstream";
-      error: string;
-    };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const FALLBACK_ERROR = "发送失败，请稍后再试";
