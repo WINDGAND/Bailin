@@ -19,6 +19,10 @@ export interface ValidatedIngest {
   files: IngestFile[];
 }
 
+function isFeedbackEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export function sniffImageMime(bytes: Uint8Array): FeedbackAllowedMime | null {
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
@@ -71,7 +75,12 @@ export function validateIngestPayload(input: {
     if (trimmed.length > FEEDBACK_CONTACT_MAX) {
       return { ok: false, status: 400, code: "invalid", message: "联系方式过长" };
     }
-    if (trimmed.length > 0) contact = trimmed;
+    if (trimmed.length > 0) {
+      if (!isFeedbackEmail(trimmed)) {
+        return { ok: false, status: 400, code: "invalid", message: "请填写正确的邮箱" };
+      }
+      contact = trimmed;
+    }
   }
 
   if (input.files.length > FEEDBACK_MAX_FILES) {

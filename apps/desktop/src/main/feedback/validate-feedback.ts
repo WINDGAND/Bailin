@@ -1,3 +1,5 @@
+import { isFeedbackEmail } from "../../shared/feedback-email.js";
+
 export const FEEDBACK_BODY_MIN = 8;
 export const FEEDBACK_BODY_MAX = 4000;
 export const FEEDBACK_CONTACT_MAX = 200;
@@ -94,7 +96,12 @@ export function validateFeedbackInput(input: {
     if (trimmed.length > FEEDBACK_CONTACT_MAX) {
       return { ok: false, code: "invalid", error: "联系方式过长" };
     }
-    if (trimmed.length > 0) contact = trimmed;
+    if (trimmed.length > 0) {
+      if (!isFeedbackEmail(trimmed)) {
+        return { ok: false, code: "invalid", error: "请填写正确的邮箱" };
+      }
+      contact = trimmed;
+    }
   }
 
   if (!Array.isArray(input.files)) {

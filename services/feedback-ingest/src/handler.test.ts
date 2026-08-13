@@ -139,6 +139,15 @@ describe("handleFeedback", () => {
     assert.equal(four.status, 400);
   });
 
+  it("returns 400 for a non-email contact", async () => {
+    const res = await handleFeedback(
+      requestFromForm({ body: "12345678", version: "0.0.14", contact: "my_wechat" }),
+      env(memoryKv()),
+      { fetchImpl: mockFeishu(), now, ip: "2.2.2.5" }
+    );
+    assert.equal(res.status, 400);
+  });
+
   it("returns 429 on the 6th request in the same UTC hour", async () => {
     const kv = memoryKv({ [`rl:1.1.1.1:${hourKey}`]: "5" });
     const res = await handleFeedback(requestFromForm({ body: "12345678", version: "0.0.14" }), env(kv), {

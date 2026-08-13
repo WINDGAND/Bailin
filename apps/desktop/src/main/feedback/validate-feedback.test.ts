@@ -35,6 +35,18 @@ describe("validateFeedbackInput", () => {
     if (r.ok) assert.equal(r.value.contact, undefined);
   });
 
+  it("accepts a valid email contact", () => {
+    const r = validateFeedbackInput({ body: "12345678", contact: "  me+dev@example.com  ", files: [] });
+    assert.equal(r.ok, true);
+    if (r.ok) assert.equal(r.value.contact, "me+dev@example.com");
+  });
+
+  it("rejects non-email contact", () => {
+    const r = validateFeedbackInput({ body: "12345678", contact: "my_wechat", files: [] });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.code, "invalid");
+  });
+
   it("rejects contact longer than 200", () => {
     const r = validateFeedbackInput({ body: "12345678", contact: "c".repeat(201), files: [] });
     assert.equal(r.ok, false);

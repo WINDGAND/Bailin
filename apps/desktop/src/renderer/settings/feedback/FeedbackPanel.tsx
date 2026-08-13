@@ -3,6 +3,7 @@ import { useDirtyTracker } from "../app/dirty-context.js";
 import { useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
 import { useBailin } from "../../shared/use-bailin.js";
+import { isFeedbackEmail } from "../../../shared/feedback-email.js";
 
 const BODY_MIN = 8;
 const BODY_MAX = 4000;
@@ -23,13 +24,18 @@ function normalizeMime(type: string): string | null {
   return null;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function FeedbackPanel(): JSX.Element {
   const t = useT();
   const bailin = useBailin();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<LocalFile[]>([]);
-  const [version, setVersion] = useState("");
   const [body, setBody] = useState("");
   const [contact, setContact] = useState("");
   const [files, setFiles] = useState<LocalFile[]>([]);
@@ -37,10 +43,8 @@ export function FeedbackPanel(): JSX.Element {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
-
-  useEffect(() => {
-    void bailin.app.getVersion().then(setVersion);
-  }, [bailin]);
+  const [dragOver, setDragOver] = useState(false);
+  const [shakeBody, setShakeBody] = useState(false);
 
   filesRef.current = files;
   useEffect(() => {
@@ -57,11 +61,25 @@ export function FeedbackPanel(): JSX.Element {
     trimmed.length === 0
       ? ""
       : trimmed.length < BODY_MIN
-        ? t("userFeedback.bodyTooShort")
+        ? t("userFeedback.bodyTooShort", { count: BODY_MIN - trimmed.length })
         : trimmed.length > BODY_MAX
           ? t("userFeedback.bodyTooLong")
           : "";
-  const canSubmit = !submitting && trimmed.length >= BODY_MIN && trimmed.length <= BODY_MAX;
+  const contactTrimmed = contact.trim();
+  const contactError =
+    contactTrimmed.length === 0
+      ? ""
+      : isFeedbackEmail(contactTrimmed)
+        ? ""
+        : t("userFeedback.contactInvalid");
+  const canSubmit =
+    !submitting &&
+    trimmed.length >= BODY_MIN &&
+    trimmed.length <= BODY_MAX &&
+    !contactError;
+  const charCount = trimmed.length;
+  const charCountTone =
+    charCount > BODY_MAX ? "danger" : charCount > BODY_MAX * 0.9 ? "warn" : "";
 
   const addFiles = useCallback(
     async (list: FileList | File[]) => {
@@ -130,7 +148,11 @@ export function FeedbackPanel(): JSX.Element {
   }
 
   async function onSubmit(): Promise<void> {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      setShakeBody(true);
+      window.setTimeout(() => setShakeBody(false), 500);
+      return;
+    }
     setSubmitting(true);
     setFormError("");
     try {
@@ -165,14 +187,21 @@ export function FeedbackPanel(): JSX.Element {
 
   if (sent) {
     return (
-      <div className="feedback-page fade-in-up">
+      <div className="feedback-page feedback-page--sent fade-in-up">
         <div className="eyebrow">{t("userFeedback.eyebrow")}</div>
         <div className="display display--page">{t("userFeedback.title")}</div>
         <div className="feedback-thanks">
-          <p className="display display--section" style={{ margin: "18px 0 8px" }}>
+          <div className="feedback-thanks__icon" aria-hidden="true">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+          <p className="display display--section feedback-thanks__title">
             {t("userFeedback.thanksTitle")}
           </p>
-          <p className="apple-page-subtitle">{t("userFeedback.thanksBody")}</p>
+          <p className="apple-page-subtitle feedback-thanks__body">
+            {t("userFeedback.thanksBody")}
+          </p>
           <button type="button" className="btn btn--ghost" onClick={resetForm}>
             {t("userFeedback.writeAnother")}
           </button>
@@ -183,26 +212,30 @@ export function FeedbackPanel(): JSX.Element {
 
   return (
     <div className="feedback-page">
-      <div style={{ marginBottom: 26 }}>
+      <header className="feedback-header">
         <div className="eyebrow">{t("userFeedback.eyebrow")}</div>
-        <div className="display display--page">{t("userFeedback.title")}</div>
-        <p className="apple-page-subtitle">{t("userFeedback.subtitle")}</p>
-        <p className="body-sm feedback-privacy" style={{ color: "var(--ink-soft)" }}>
-          {t("userFeedback.privacy")}
-        </p>
-      </div>
+        <h1 className="display display--page feedback-header__title">
+          {t("userFeedback.title")}
+        </h1>
+      </header>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-        <section className="forge-section">
-          <div className="forge-section__head">
+      <div className="feedback-form">
+        <section className="forge-section feedback-field">
+          <div className="forge-section__head feedback-field__head">
             <label className="bl-field-label" htmlFor="feedback-body">
               {t("userFeedback.bodyLabel")}
             </label>
+            <span
+              className={`char-count${charCountTone ? ` char-count--${charCountTone}` : ""}`}
+              aria-live="polite"
+            >
+              {t("userFeedback.bodyCount", { count: charCount })}
+            </span>
           </div>
           <textarea
             id="feedback-body"
-            className={bodyError ? "textarea textarea--invalid" : "textarea"}
-            rows={8}
+            className={`textarea feedback-textarea${bodyError ? " textarea--invalid" : ""}${shakeBody ? " shake-once" : ""}`}
+            rows={7}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder={t("userFeedback.bodyPlaceholder")}
@@ -216,24 +249,31 @@ export function FeedbackPanel(): JSX.Element {
         </section>
 
         <section
-          className="forge-section"
+          className={`forge-section feedback-field feedback-dropzone-section${dragOver ? " is-dragover" : ""}`}
           onDragOver={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            setDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(false);
           }}
           onDrop={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            setDragOver(false);
             void addFiles(e.dataTransfer?.files ?? []);
           }}
         >
-          <div className="forge-section__head">
+          <div className="forge-section__head feedback-field__head">
             <span className="bl-field-label">{t("userFeedback.attachLabel")}</span>
+            <span className="bl-field-hint">{t("userFeedback.attachHint")}</span>
           </div>
-          <div className="apple-dropzone">
-            <div style={{ marginBottom: 10 }}>
+          <div className="apple-dropzone feedback-dropzone">
+            <div className="feedback-dropzone__copy">
               <div className="apple-dropzone__title">{t("userFeedback.attachTitle")}</div>
-              <div className="apple-dropzone__hint">{t("userFeedback.attachHint")}</div>
             </div>
             <button
               type="button"
@@ -259,6 +299,7 @@ export function FeedbackPanel(): JSX.Element {
                 {files.map((file, i) => (
                   <li key={file.previewUrl} className="feedback-thumb">
                     <img src={file.previewUrl} alt={file.name} />
+                    <span className="feedback-thumb__size">{formatBytes(file.bytes.length)}</span>
                     <button
                       type="button"
                       className="btn btn--ghost btn--sm btn--icon feedback-thumb__remove"
@@ -279,21 +320,30 @@ export function FeedbackPanel(): JSX.Element {
           ) : null}
         </section>
 
-        <section className="forge-section">
-          <div className="forge-section__head">
+        <section className="forge-section feedback-field">
+          <div className="forge-section__head feedback-field__head">
             <label className="bl-field-label" htmlFor="feedback-contact">
               {t("userFeedback.contactLabel")}
             </label>
           </div>
           <input
             id="feedback-contact"
-            className="input"
+            className={contactError ? "input input--invalid" : "input"}
+            type="email"
+            inputMode="email"
+            autoComplete="email"
             value={contact}
             onChange={(e) => setContact(e.target.value)}
             placeholder={t("userFeedback.contactPlaceholder")}
-            autoComplete="off"
             disabled={submitting}
+            aria-invalid={contactError ? true : undefined}
+            aria-describedby={contactError ? "feedback-contact-error" : undefined}
           />
+          {contactError ? (
+            <p id="feedback-contact-error" className="bl-field-hint bl-field-hint--error" role="alert">
+              {contactError}
+            </p>
+          ) : null}
         </section>
 
         {formError ? (
@@ -305,17 +355,19 @@ export function FeedbackPanel(): JSX.Element {
         <div className="feedback-submit-row">
           <button
             type="button"
-            className="btn btn--magenta"
+            className={`btn btn--magenta feedback-submit${submitting ? " is-submitting" : ""}`}
             disabled={!canSubmit}
             onClick={() => void onSubmit()}
           >
-            {submitting ? t("userFeedback.submitting") : t("userFeedback.submit")}
+            {submitting ? (
+              <>
+                <span className="spinner spinner--magenta" aria-hidden="true" />
+                {t("userFeedback.submitting")}
+              </>
+            ) : (
+              t("userFeedback.submit")
+            )}
           </button>
-          {version ? (
-            <p className="body-sm feedback-version" style={{ color: "var(--ink-faint)" }}>
-              {t("userFeedback.versionHint", { version })}
-            </p>
-          ) : null}
         </div>
       </div>
     </div>
