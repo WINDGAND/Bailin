@@ -652,8 +652,36 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 9999;
+  z-index: 2147483647;
   pointer-events: none;
+  view-transition-name: none;
+}
+
+/*
+ * Toast 宿主从启动起就挂在 Popover top layer，避免每次弹出都
+ * setAttribute(popover) → display:none → showPopover 造成「上-下-上」闪一下。
+ * UA popover 默认居中带边框，这里重置回右下角堆叠。
+ */
+.toast-stack[popover] {
+  inset: unset;
+  top: auto;
+  left: auto;
+  right: 24px;
+  bottom: 24px;
+  margin: 0;
+  border: none;
+  padding: 0;
+  overflow: visible;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+  color: inherit;
+  view-transition-name: none;
+}
+.toast-stack[popover]:popover-open {
+  display: flex;
 }
 .toast {
   pointer-events: auto;
@@ -1994,9 +2022,11 @@ body.settings-window #root {
   }
 }
 
-/* 角色详情：短交叉淡入；连点时 JS 会跳过 VT，避免动画排队 */
+/* 角色详情：短交叉淡入；连点时 JS 会跳过 VT，避免动画排队。
+ * view-transition-name 只在 pick 过渡期间由 JS 写入。常驻的 name 会在
+ * 「设为当前桌宠」重绘卡片时把合成层抬到 toast 之上，造成闪挡。 */
 .library-detail-surface {
-  view-transition-name: library-detail;
+  view-transition-name: none;
 }
 
 ::view-transition-group(library-detail) {

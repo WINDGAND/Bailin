@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -13,6 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import { useT } from "./i18n/index.js";
 import { copyToClipboard } from "./copy-to-clipboard.js";
+import { registerTopLayerHost } from "./top-layer.js";
 
 /**
  * 通用反馈组件层：Toast / ConfirmDialog / Skeleton / StatusDot / CopyButton。
@@ -186,11 +188,23 @@ function ToastStack({
 }: {
   toasts: ToastItem[];
   onDismiss: (id: number) => void;
-}): JSX.Element | null {
+}): JSX.Element {
   const t = useT();
-  if (toasts.length === 0) return null;
+  const stackRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = stackRef.current;
+    if (!el) return;
+    registerTopLayerHost(el);
+    return () => registerTopLayerHost(null);
+  }, []);
   return createPortal(
-    <div className="toast-stack" role="region" aria-label={t("feedback.toastRegion")}>
+    <div
+      ref={stackRef}
+      className="toast-stack"
+      role="region"
+      aria-label={t("feedback.toastRegion")}
+      aria-hidden={toasts.length === 0}
+    >
       {toasts.map((toast) => (
         <div
           key={toast.id}

@@ -107,9 +107,12 @@ export function CharacterLibrary({
     direction: "forward"
   });
   const pickRequestRef = useRef(0);
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
   const newRefFileInput = useRef<HTMLInputElement | null>(null);
   const appearanceMenuRef = useRef<HTMLDivElement | null>(null);
   const appearanceMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const detailSurfaceRef = useRef<HTMLDivElement | null>(null);
 
   async function pick(id: string): Promise<void> {
     const requestId = ++pickRequestRef.current;
@@ -142,7 +145,9 @@ export function CharacterLibrary({
         },
         {
           startViewTransition:
-            viewTransitionDocument.startViewTransition?.bind(viewTransitionDocument)
+            viewTransitionDocument.startViewTransition?.bind(viewTransitionDocument),
+          namedElement: detailSurfaceRef.current,
+          viewTransitionName: "library-detail"
         }
       );
     } catch (e) {
@@ -172,19 +177,20 @@ export function CharacterLibrary({
     }
     setItems(list);
     void prefetchThumbnails(list);
-    if (keepSelected && selectedId) {
+    const currentSelectedId = selectedIdRef.current;
+    if (keepSelected && currentSelectedId) {
       // 当前选中角色还在 → 同步详情；否则跳到 active 或第一个
-      const stillExists = list.some((c) => c.id === selectedId);
+      const stillExists = list.some((c) => c.id === currentSelectedId);
       if (stillExists) {
-        const next = await bailin.characters.get(selectedId);
+        const next = await bailin.characters.get(currentSelectedId);
         setSelected(next);
-        const extra = await bailin.characters.getResearchByCharacter(selectedId);
+        const extra = await bailin.characters.getResearchByCharacter(currentSelectedId);
         setResearchDocs(extra.docs);
         setQualityReport(extra.qualityReport);
       } else {
         await autoSelect(list);
       }
-    } else if (!selectedId) {
+    } else if (!currentSelectedId) {
       await autoSelect(list);
     }
   }
@@ -707,7 +713,11 @@ export function CharacterLibrary({
         </div>
 
         {/* —————— 详情 —————— */}
-        <div className="bl-card library-detail-surface" style={{ minHeight: 380 }}>
+        <div
+          ref={detailSurfaceRef}
+          className="bl-card library-detail-surface"
+          style={{ minHeight: 380 }}
+        >
           {!selected ? (
             <EmptyDetail t={t} />
           ) : (
