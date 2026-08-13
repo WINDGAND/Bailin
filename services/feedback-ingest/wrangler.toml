@@ -1,0 +1,7 @@
+name = "bailin-feedback"
+main = "src/index.ts"
+compatibility_date = "2026-08-13"
+
+[[kv_namespaces]]
+binding = "FEEDBACK_KV"
+id = "REPLACE_AFTER_CREATE"
