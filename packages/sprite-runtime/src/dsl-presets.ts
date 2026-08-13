@@ -132,10 +132,7 @@ export function standardStateMachine(): SpriteDSL["stateMachine"] {
           { on: "click", to: "click" },
           { on: "chatOpen", to: "talk" },
           { on: "dragStart", to: "drag" },
-          { on: "screenLock", to: "sleep" },
-          { on: "tick", to: "walk", guard: "rand() < 0.006" },
-          { on: "tick", to: "fidget", guard: "rand() < 0.003" },
-          { on: "tick", to: "sleep", guard: "idleSeconds > 120" }
+          { on: "screenLock", to: "sleep" }
         ]
       },
       walk: {
