@@ -208,6 +208,7 @@ The LLM uses that skeleton to **address your question from that angle**, not to 
 
 - **Zero subscription** — bring any compatible API key
 - **Fully local** — characters, chats, and profiles live in SQLite on your machine; no telemetry
+- **Optional feedback** — the in-app Feedback page sends only what you type, optional images, the app version, and optional contact info. No telemetry by default
 - **Encrypted keys** — Windows DPAPI; renderer never sees plaintext keys
 - **One-click wipe** — clear all data and keys in Settings
 
