@@ -17,9 +17,11 @@ import { DistillationJobProvider } from "./distillation-job-context.js";
 import { DistillationJobBanner } from "./DistillationJobBanner.js";
 import { UpdateProvider, useUpdateInfo } from "./update-context.js";
 import { ChangelogPanel } from "../changelog/ChangelogPanel.js";
+import { FeedbackPanel } from "../feedback/FeedbackPanel.js";
 import { useI18n } from "../../shared/i18n/index.js";
+import type { SettingsTab } from "../../../shared/ipc-contract.js";
 
-type Tab = "library" | "create" | "memory" | "desktop" | "key" | "settings" | "changelog" | "feedback";
+type Tab = SettingsTab;
 
 const SIDEBAR_COLLAPSED_KEY = "bailin.settingsSidebarCollapsed";
 
@@ -48,7 +50,8 @@ interface TabDef {
     | "nav.desktop"
     | "nav.key"
     | "nav.settings"
-    | "nav.changelog";
+    | "nav.changelog"
+    | "nav.feedback";
   icon: (props: { size?: number }) => JSX.Element;
 }
 
@@ -59,7 +62,8 @@ const TABS: TabDef[] = [
   { id: "desktop", labelKey: "nav.desktop", icon: CompanionIcon },
   { id: "key", labelKey: "nav.key", icon: KeyIcon },
   { id: "settings", labelKey: "nav.settings", icon: SettingsIcon },
-  { id: "changelog", labelKey: "nav.changelog", icon: ChangelogIcon }
+  { id: "changelog", labelKey: "nav.changelog", icon: ChangelogIcon },
+  { id: "feedback", labelKey: "nav.feedback", icon: FeedbackIcon }
 ];
 
 export function SettingsApp(): JSX.Element {
@@ -170,6 +174,13 @@ export function SettingsApp(): JSX.Element {
     handler: () => void tryGoTab("changelog")
   });
   useShortcut({
+    id: "tab-8",
+    combo: "8",
+    scope: "Settings",
+    label: t("nav.feedback"),
+    handler: () => void tryGoTab("feedback")
+  });
+  useShortcut({
     id: "help",
     combo: "?",
     scope: "Settings",
@@ -276,7 +287,7 @@ export function SettingsApp(): JSX.Element {
                 我们走 "page navigation" 模式而不是 "tablist" 模式 ——
                   - 每个 tab 切换近似独立 page（main 会 unmount/remount），不是页面内嵌的 tabpanel
                   - aria-current="page" 是 W3C 推荐的 navigation 模式标记
-                  - 不接管 ArrowKeys：用户用 Tab 在按钮间移动，Cmd+1..7 数字键直达
+                  - 不接管 ArrowKeys：用户用 Tab 在按钮间移动，Cmd+1..8 数字键直达
                 如未来想换成 tablist 模式，记得同时改 main 为 role="tabpanel" + aria-labelledby
                 + 加 Arrow 键导航 + 取消 main 的 key={tab} 强制 remount。
               */}
@@ -321,6 +332,7 @@ export function SettingsApp(): JSX.Element {
                 {tab === "key" ? <ApiKeyPanel /> : null}
                 {tab === "settings" ? <GeneralSettingsPanel /> : null}
                 {tab === "changelog" ? <ChangelogPanel /> : null}
+                {tab === "feedback" ? <FeedbackPanel /> : null}
               </div>
             </main>
           </div>
@@ -502,6 +514,27 @@ function ChangelogIcon({ size = 18 }: IconProps): JSX.Element {
       <path d="M4 18h5" />
       <circle cx="17" cy="15" r="4.5" />
       <path d="M17 12.7v2.3l1.6 1" />
+    </svg>
+  );
+}
+
+function FeedbackIcon({ size = 18 }: IconProps): JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 6.5h14a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5H11l-4 3v-3H5A1.5 1.5 0 0 1 3.5 15V8A1.5 1.5 0 0 1 5 6.5z" />
+      <path d="M8 11h.01" />
+      <path d="M12 11h.01" />
+      <path d="M16 11h.01" />
     </svg>
   );
 }

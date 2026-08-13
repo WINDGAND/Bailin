@@ -6,7 +6,8 @@ export const zh = {
     desktop: "桌宠与陪伴",
     key: "模型与 API Key",
     settings: "设置",
-    changelog: "更新日志"
+    changelog: "更新日志",
+    feedback: "意见反馈"
   },
   sidebar: {
     collapse: "收起侧边栏",
@@ -1063,6 +1064,36 @@ export const zh = {
     toastCopiedShort: "已复制",
     toastCopyFailed: "复制失败，请手动选中文本",
     thinking: "正在思考"
+  },
+  userFeedback: {
+    eyebrow: "写给开发者",
+    title: "意见反馈",
+    subtitle: "不必去 GitHub 开 Issue。写下想法、问题或改进建议，可选附上截图。",
+    privacy:
+      "提交后只会送出这段文字、可选附件、当前版本号和你留下的联系方式。角色、对话和画像仍留在本机。",
+    bodyLabel: "你的想法",
+    bodyPlaceholder: "哪里不顺手，或你希望百灵怎样更好…",
+    bodyTooShort: "再多写几个字就可以发送",
+    bodyTooLong: "最多 4000 字",
+    attachLabel: "截图",
+    attachTitle: "拖入、选择或粘贴",
+    attachHint: "最多 3 张，每张不超过 5MB（png / jpg / webp / gif）",
+    chooseFile: "选择图片",
+    attachTooMany: "最多 3 张图片",
+    attachTooBig: "这张图超过 5MB",
+    attachBadType: "只接受 png / jpg / webp / gif",
+    removeFile: "移除",
+    contactLabel: "联系方式",
+    contactPlaceholder: "邮箱或微信号，方便追问（可选）",
+    versionHint: "将随反馈发送 · v{{version}}",
+    submit: "发送给开发者",
+    submitting: "发送中…",
+    thanksTitle: "收到了，谢谢",
+    thanksBody: "我会在飞书里看到这条。",
+    writeAnother: "再写一条",
+    toastOffline: "现在离线，连上后再发",
+    toastRateLimited: "刚才已经收过了，请稍后再试",
+    toastFailed: "发送失败，请稍后再试"
   },
   keyboard: {
     dialogAria: "快捷键",

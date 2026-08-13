@@ -8,7 +8,8 @@ export const en: TranslationTree = {
     desktop: "Desktop Companion",
     key: "Model & API Key",
     settings: "Settings",
-    changelog: "Changelog"
+    changelog: "Changelog",
+    feedback: "Feedback"
   },
   sidebar: {
     collapse: "Collapse sidebar",
@@ -1073,6 +1074,36 @@ export const en: TranslationTree = {
     toastCopiedShort: "Copied",
     toastCopyFailed: "Copy failed—select the text manually",
     thinking: "Thinking"
+  },
+  userFeedback: {
+    eyebrow: "To the maker",
+    title: "Feedback",
+    subtitle: "No GitHub Issue needed. Write an idea, a problem, or a suggestion—screenshots optional.",
+    privacy:
+      "Submit sends only this text, optional images, the current version, and any contact you leave. Characters, chats, and profiles stay on this machine.",
+    bodyLabel: "Your note",
+    bodyPlaceholder: "What feels off, or how Bailin could be better…",
+    bodyTooShort: "A few more characters and you can send",
+    bodyTooLong: "4000 characters max",
+    attachLabel: "Screenshots",
+    attachTitle: "Drop, choose, or paste",
+    attachHint: "Up to 3 images, 5MB each (png / jpg / webp / gif)",
+    chooseFile: "Choose images",
+    attachTooMany: "3 images max",
+    attachTooBig: "That image is over 5MB",
+    attachBadType: "png / jpg / webp / gif only",
+    removeFile: "Remove",
+    contactLabel: "Contact",
+    contactPlaceholder: "Email or WeChat, if you want a reply (optional)",
+    versionHint: "Sent with this report · v{{version}}",
+    submit: "Send to the developer",
+    submitting: "Sending…",
+    thanksTitle: "Got it—thank you",
+    thanksBody: "I'll see this in Feishu.",
+    writeAnother: "Write another",
+    toastOffline: "You're offline. Send again when you're back.",
+    toastRateLimited: "Just received one—try again in a bit",
+    toastFailed: "Couldn't send. Please try again."
   },
   keyboard: {
     dialogAria: "Keyboard shortcuts",

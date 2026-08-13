@@ -5594,6 +5594,65 @@ body.settings-window #root {
   color: var(--ink-faint);
 }
 
+.feedback-page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.feedback-privacy {
+  margin: 0 0 8px;
+  max-width: 36em;
+}
+
+.feedback-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.feedback-thumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--paper-deep);
+}
+
+.feedback-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.feedback-thumb__remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+
+.feedback-thanks {
+  padding: 8px 0 24px;
+}
+
+.feedback-submit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-top: 8px;
+}
+
+.feedback-version {
+  margin: 0;
+}
+
+.feedback-form-error {
+  margin: 0;
+}
+
 /* Forge: Apple pass overrides */
 .forge-form.apple-single-column {
   margin: 0 auto;
