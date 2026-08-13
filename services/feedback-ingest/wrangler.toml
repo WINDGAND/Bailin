@@ -1,7 +1,8 @@
 name = "bailin-feedback"
 main = "src/index.ts"
 compatibility_date = "2026-08-13"
+account_id = "249d148805927a49c530c5eb1cca4149"
 
 [[kv_namespaces]]
 binding = "FEEDBACK_KV"
-id = "REPLACE_AFTER_CREATE"
+id = "ff9fae373e5844deb66aa7a812bb1522"

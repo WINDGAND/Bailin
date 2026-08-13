@@ -1,7 +1,7 @@
 import type { FeedbackSubmitResult } from "../../shared/ipc-contract.js";
 import type { ValidatedFeedback } from "./validate-feedback.js";
 
-export const FEEDBACK_INGEST_URL = "https://bailin-feedback.windgand.workers.dev/v1/feedback";
+export const FEEDBACK_INGEST_URL = "https://bailin-feedback.1969295061.workers.dev/v1/feedback";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const FALLBACK_ERROR = "发送失败，请稍后再试";
