@@ -1,0 +1,36 @@
+# 把「每日补注释」云端自动化开出的 PR 自动合入 main。
+# Cursor 云端代理只会推 cursor/* 分支并开 PR（常为 Draft），不能在产品层改成直推 main。
+name: Auto-merge cursor comment docs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: auto-merge-comment-docs-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: >
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.user.login == 'cursor[bot]' &&
+      startsWith(github.event.pull_request.head.ref, 'cursor/') &&
+      startsWith(github.event.pull_request.title, 'docs:') &&
+      contains(github.event.pull_request.title, '注释')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark ready and squash-merge into main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "$(gh pr view "$PR" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh pr ready "$PR"
+          fi
+          gh pr merge "$PR" --squash --delete-branch
