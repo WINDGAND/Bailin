@@ -59,6 +59,9 @@ desktop.ini
 # Agent skills（本地安装缓存，锁文件见 skills-lock.json）
 .agents/
 
+# Workbuddy 本地记忆与自动化（不推送远程）
+.workbuddy/
+
 # 本地文档与导出产物（不推送远程：含大赛材料、superpowers 计划等）
 docs/
 output/
