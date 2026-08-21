@@ -1,3 +1,11 @@
+/**
+ * 主动陪伴编排器：把环境信号与定时 LLM 耳语收口成桌宠开口。
+ *
+ * 主进程唯一入口。`handleSignal` 走场景模板；`tickLlmWhisper` 走智能截图。
+ * 开口前过 `checkGates`（开关、勿扰、专注、hush、聊天可见、桌宠隐藏、配额）。
+ * 模板耳语不计入每小时配额；只有 LLM 层在 `publishWhisper` 里 +1。
+ * 成功开口后一律按 `defaultHushMinutes` 写入 hush，避免连发。
+ */
 import { ulid } from "ulid";
 import { IPC, type AmbientSignal, type ProactiveStatus } from "../../shared/ipc-contract.js";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
@@ -23,6 +31,10 @@ import { tryProactiveLlmWhisper } from "./proactive-llm-whisper.js";
 import { renderWhisperTemplate, scenarioFromSignal } from "./whisper-templates.js";
 import type { ProactiveSettings } from "../../shared/ipc-contract.js";
 
+/**
+ * 编排器依赖注入。
+ * `broadcast` 把信号 / 耳语推给所有渲染进程；截图与 LLM 缺省时智能耳语会失败。
+ */
 export interface ProactiveOrchestratorDeps {
   vault: LocalVault;
   getActiveCharacterId: () => string | null;
@@ -37,29 +49,42 @@ export interface ProactiveOrchestratorDeps {
   screenCapture?: ScreenCaptureService;
 }
 
+/** 耳语原因：环境信号 kind，外加久坐与 LLM 两档。 */
 type WhisperReason = AmbientSignal["kind"] | "long_active" | "llm";
 
+/** 主动陪伴中枢：设置读写、环境信号处理、模板/LLM 耳语发布。 */
 export class ProactiveOrchestrator {
   constructor(private readonly deps: ProactiveOrchestratorDeps) {}
 
+  /** 读取规范化后的主动陪伴设置。无副作用。 */
   getSettings() {
     return readProactiveSettings(this.deps.vault);
   }
 
+  /**
+   * 规范化后写回 vault。
+   * @returns 实际落盘的设置，供 IPC 回传设置页。
+   */
   setSettings(input: Parameters<typeof writeProactiveSettings>[1]) {
     return writeProactiveSettings(this.deps.vault, input);
   }
 
+  /**
+   * 暂时闭嘴到 `now + durationMs`。
+   * 时长 ≤0 时截止时间等于现在，相当于立刻解除。
+   */
   hush(durationMs: number): void {
     const until = Date.now() + Math.max(0, durationMs);
     this.deps.vault.setSetting(SETTING_PROACTIVE_HUSH_UNTIL, String(until));
   }
 
+  /** 进入专注模式到 `now + durationMs`；门控里视为比 hush 更强的静音。 */
   focusMode(durationMs: number): void {
     const until = Date.now() + Math.max(0, durationMs);
     this.deps.vault.setSetting(SETTING_PROACTIVE_FOCUS_UNTIL, String(until));
   }
 
+  /** 聚合设置页状态栏所需字段；时间戳缺失则为 `undefined`。 */
   getStatus(): ProactiveStatus {
     const settings = this.getSettings();
     const activeMinutes = this.deps.getActiveMinutes?.() ?? 0;
@@ -81,6 +106,10 @@ export class ProactiveOrchestrator {
     };
   }
 
+  /**
+   * 处理一条环境信号：先广播给渲染进程，再决定是否模板开口。
+   * 锁屏只广播、永不耳语（`locked`）；场景开关关闭则 `scenario-disabled`。
+   */
   async handleSignal(signal: AmbientSignal): Promise<{ ok: boolean; reason?: string }> {
     this.deps.broadcast(IPC.EventAmbientSignal, signal);
     if (signal.kind === "lock") {
@@ -92,6 +121,10 @@ export class ProactiveOrchestrator {
     return this.maybeTemplateWhisper(signal);
   }
 
+  /**
+   * 设置页「现在试一次」：合成信号并以 `force` 绕过多数门控（仍要求功能未关闭）。
+   * @param reason 默认 `manual`。
+   */
   async triggerNow(reason: AmbientSignal["kind"] = "manual"): Promise<{ ok: boolean; reason?: string }> {
     return this.maybeTemplateWhisper({ kind: reason, at: Date.now() } as AmbientSignal, {
       force: true
@@ -141,6 +174,9 @@ export class ProactiveOrchestrator {
     });
   }
 
+  /**
+   * 定时巡检智能截图耳语。走完整门控与小时配额；冷却由 `tryProactiveLlmWhisper` 内部处理。
+   */
   async tickLlmWhisper(): Promise<{ ok: boolean; reason?: string }> {
     const settings = this.getSettings();
     const gate = this.checkGates(settings, { force: false });
@@ -185,6 +221,10 @@ export class ProactiveOrchestrator {
     });
   }
 
+  /**
+   * 按信号 kind 渲染场景模板并发布。
+   * 久坐用 `activeMinutes`，闲置把秒数折成分钟塞进文案；其它场景不传分钟。
+   */
   private async maybeTemplateWhisper(
     signal: AmbientSignal,
     options: { force?: boolean } = {}
@@ -222,6 +262,11 @@ export class ProactiveOrchestrator {
     });
   }
 
+  /**
+   * 落盘最近一次触发、广播耳语事件，并按默认时长 hush。
+   * 仅 `layer === "llm"` 时消耗小时配额并记录 `LAST_LLM_AT`；
+   * 久坐成功后重置环境监视器的连续活跃计数。
+   */
   private publishWhisper(input: {
     characterId: string;
     text: string;
@@ -256,6 +301,10 @@ export class ProactiveOrchestrator {
     return { ok: true };
   }
 
+  /**
+   * 自动触发的门控。`force` 可绕过勿扰 / 专注 / hush / 聊天可见 / 桌宠隐藏 / 配额为 0，
+   * 但不能绕过总开关或频率 `off`。
+   */
   private checkGates(
     settings: ProactiveSettings,
     opts: { force?: boolean }
@@ -286,6 +335,10 @@ export class ProactiveOrchestrator {
     return { ok: true };
   }
 
+  /**
+   * 场景开关。`resume` 与 `unlock` 共用「解锁」开关；`manual` 始终允许。
+   * `lock` 不会走到这里（`handleSignal` 已提前返回）。
+   */
   private isScenarioEnabled(signal: AmbientSignal): boolean {
     const toggles = this.getSettings().scenarioToggles;
     switch (signal.kind) {
@@ -338,6 +391,10 @@ export class ProactiveOrchestrator {
     return Number.isFinite(n) ? n : null;
   }
 
+  /**
+   * 读本小时 LLM 耳语计数。vault 里的桶标识与当前 UTC 小时不一致时视为 0，
+   * 不立刻写回，等下一次 `setHourCount` 再换桶。
+   */
   private getHourCount(now: number): { bucket: string; count: number } {
     const bucket = currentHourBucket(now);
     const savedBucket = this.deps.vault.getSetting(SETTING_PROACTIVE_HOUR_BUCKET);
