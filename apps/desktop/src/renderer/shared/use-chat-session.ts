@@ -1,3 +1,11 @@
+/**
+ * 聊天会话 React Hook：把主进程 chat IPC 接到气泡与独立聊天窗。
+ *
+ * 按 `bundle.card.id` 加载当前会话，订阅 `chatStream` 拼流式正文。
+ * 超过 `STALL_TIMEOUT_MS` 无完成则取消请求并记 TIMEOUT。
+ * `regenerateAssistant` 会先删助手回合，再以 `skipUserAppend` 重发上一条用户内容，
+ * 避免列表里出现重复用户气泡。
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ulid } from "ulid";
 import type { CharacterBundle } from "@bailin/character-protocol";
@@ -5,6 +13,7 @@ import type { ChatTurn } from "../../shared/ipc-contract.js";
 import { useBailin } from "./use-bailin.js";
 import { useT } from "./i18n/index.js";
 
+/** 渲染层回合；`error` 仅出现在失败 / 超时的助手气泡上。 */
 export interface UiTurn {
   id: string;
   role: "user" | "assistant";
@@ -13,9 +22,12 @@ export interface UiTurn {
   error?: { code?: string; message: string };
 }
 
+/** 发送生命周期：空闲、等首 token、正在拼 delta。 */
 export type StreamPhase = "idle" | "thinking" | "streaming";
+/** 气泡菜单短聊 vs 独立聊天窗；传给 `chat.send` 的 surface。 */
 export type ChatSurface = "bubble" | "chat";
 
+/** Hook 对外状态与操作；`streaming` 是 `phase !== "idle"` 的便捷别名。 */
 export interface ChatSessionState {
   sessionId: string;
   turns: UiTurn[];
@@ -34,8 +46,18 @@ export interface ChatSessionState {
   regenerateAssistant(assistantTurnId: string): Promise<void>;
 }
 
+/** 流式卡住判定：thinking / streaming 持续这么久仍未 idle 则取消并报 TIMEOUT。 */
 const STALL_TIMEOUT_MS = 100_000;
 
+/**
+ * 绑定某个角色包的聊天会话。
+ * @param bundle 当前角色；为 null 时清空本地状态且不发 IPC。
+ * @param options.surface 气泡或独立窗，影响主进程记录来源。
+ * @param options.historyLimit 载入最近回合条数，默认 24。
+ * @param options.onInfo / onError 可选 toast 回调，取消、超时、失败时触发。
+ * @returns 会话状态与 submit / cancel / 删改重试等方法。
+ * 副作用：订阅 `chatStream`、按角色切换加载活动会话、超时会调用 `chat.cancel`。
+ */
 export function useChatSession(
   bundle: CharacterBundle | null,
   options: {
@@ -90,6 +112,7 @@ export function useChatSession(
 
   useEffect(() => {
     return bailin.on.chatStream((chunk) => {
+      // 只接受当前 in-flight 请求的 chunk，避免切换会话后旧流写进新列表。
       if (chunk.requestId !== inFlightRef.current) return;
       if (chunk.error) {
         setPending("");
@@ -177,6 +200,7 @@ export function useChatSession(
       setLastError(null);
 
       const userTurnId = ulid();
+      // regenerate 路径已有用户气泡，跳过再插一条，避免重复。
       if (!opts?.skipUserAppend) {
         setTurns((prev) => [
           ...prev,
@@ -220,6 +244,7 @@ export function useChatSession(
     await bailin.chat.cancel(id);
     setPending((cur) => {
       if (cur.length > 0) {
+        // 已流出的半截正文保留为一条助手消息，并以 ⏹ 标记用户主动取消。
         setTurns((prev) => [
           ...prev,
           { id: id + "-cancel", role: "assistant", content: cur + " ⏹", createdAt: Date.now() }
@@ -260,6 +285,7 @@ export function useChatSession(
     const lastUser = [...turns].reverse().find((t) => t.role === "user");
     if (!lastUser) return;
     setTurns((prev) => {
+      // 只丢掉最近一条带 error 的助手气泡，再原样重发最后一条用户内容。
       const idx = [...prev].reverse().findIndex((t) => t.error);
       if (idx < 0) return prev;
       const realIdx = prev.length - 1 - idx;
@@ -373,6 +399,7 @@ export function useChatSession(
   };
 }
 
+/** 持久化回合转 UI；系统 / 工具角色丢弃。无副作用。 */
 function toUiTurns(turns: ChatTurn[]): UiTurn[] {
   return turns
     .filter((t) => t.role === "user" || t.role === "assistant")
