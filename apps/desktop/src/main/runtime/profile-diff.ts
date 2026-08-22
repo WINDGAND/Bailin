@@ -1,3 +1,10 @@
+/**
+ * 画像差分应用器：把 LLM 抽出的增删补丁合入本地 `UserProfile`。
+ *
+ * 主进程记忆仓库与设置页 MemoryPanel 共用。自动来源不得覆盖用户手写的称呼；
+ * 事实条数超过 `FACTS_LIMIT` 时优先丢掉自动条目、保留手工条目。
+ * `parseExtractionDiff` 面对模型乱 JSON 做防御性解析，结构不对则返回 null。
+ */
 import { ulid } from "ulid";
 import type {
   ProfileChange,
@@ -14,14 +21,17 @@ import {
   profileForPrompt
 } from "../../shared/profile.js";
 
+/** 画像事实条数上限；超限时 `trimFacts` 只裁自动条目。 */
 const FACTS_LIMIT = 24;
 
+/** 一次抽取写入所需的角色 / 会话定位；`now` 可注入以便测试冻结时间。 */
 export interface ApplyExtractionContext {
   characterId: string;
   sessionId: string;
   now?: number;
 }
 
+/** 合入后的画像与变更清单；`applied` 表示至少产生了一条变更。无 I/O。 */
 export interface ApplyExtractionResult {
   profile: UserProfile;
   changes: ProfileChange[];
@@ -33,6 +43,7 @@ function factTextExists(facts: ProfileFact[], text: string): boolean {
   return facts.some((f) => normalizeEntryText(f.text) === key);
 }
 
+/** 超限时先保住手工条目，再从自动条目尾部丢掉，最后按更新时间倒序。 */
 function trimFacts(facts: ProfileFact[]): ProfileFact[] {
   if (facts.length <= FACTS_LIMIT) return facts;
   const manual = facts.filter((f) => f.source === "manual");
@@ -72,6 +83,13 @@ function removeAutoFacts(facts: ProfileFact[], toRemove: ProfileFactInput[] | un
   );
 }
 
+/**
+ * 将抽取差分应用到当前画像的浅拷贝上（不改入参）。
+ * @param current 现有画像
+ * @param diff LLM 或调用方给出的增删
+ * @param ctx 角色 / 会话与可选时间戳
+ * @returns 新画像与变更列表；用户手写称呼不会被自动来源改写。
+ */
 export function applyExtractionDiff(
   current: UserProfile,
   diff: ProfileExtractionDiff,
@@ -86,6 +104,7 @@ export function applyExtractionDiff(
 
   const addName = diff.add?.preferredName?.trim();
   if (addName) {
+    // 空称呼、自动来源或尚未填写时才允许覆盖；manual 称呼保持原样。
     const canSet =
       !profile.preferredName ||
       profile.preferredName.source === "auto" ||
@@ -142,6 +161,7 @@ function hasFactInputs(items: ProfileFactInput[] | undefined): boolean {
   return Boolean(items?.some((f) => f.text.trim()));
 }
 
+/** 增删两侧都没有有效称呼或事实时视为空差分。无副作用。 */
 export function isEmptyExtractionDiff(diff: ProfileExtractionDiff): boolean {
   const add = diff.add ?? {};
   const remove = diff.remove ?? {};
@@ -164,6 +184,10 @@ function parseFactInputs(v: unknown): ProfileFactInput[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
+/**
+ * 把未知 JSON 收成 `ProfileExtractionDiff`。
+ * 非对象返回 null；缺字段或事实文本为空时对应部分省略。无副作用。
+ */
 export function parseExtractionDiff(raw: unknown): ProfileExtractionDiff | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -188,7 +212,10 @@ export function parseExtractionDiff(raw: unknown): ProfileExtractionDiff | null 
   return { add, remove };
 }
 
-/** 供单元测试 / MemoryPanel save 路径。 */
+/**
+ * 把用户手写画像收成合法 `UserProfile`：空文本丢掉、缺 id 补 ulid、来源一律标 manual。
+ * 供单元测试与 MemoryPanel 保存路径。无 I/O。
+ */
 export function sanitizeManualProfile(input: Partial<UserProfile>, now = Date.now()): UserProfile {
   const base = emptyProfile();
 
