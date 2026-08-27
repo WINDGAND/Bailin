@@ -1,3 +1,10 @@
+/**
+ * DSL 像素精灵渲染：按当前动画帧把 `SpriteProgram` 画到 Canvas 2D / OffscreenCanvas。
+ *
+ * 只处理 `mode === "dsl"` 的程序；atlas 贴图由桌面端其它渲染层负责。
+ * 不引用 DOM，Worker 与主线程均可调用。绘制会改写传入的 `ctx`（clear / transform / fill），
+ * 用 `save`/`restore` 包一层，避免变换泄漏到调用方。
+ */
 import type {
   AnimationName,
   PaletteEntry,
@@ -7,16 +14,16 @@ import type {
 } from "@bailin/character-protocol";
 
 /**
- * 像素渲染器：把 DSL + 当前动画帧绘制到 OffscreenCanvas / Canvas 2D 上下文。
- * 不引用 DOM；可在 Worker / 主线程通用。
+ * 单帧绘制入参。
+ * `frameIndex` 会对动画帧数取模循环；`scale` 是整数像素放大倍数（关闭图像平滑）。
  */
-
 export interface RenderFrameInput {
   animation: AnimationName;
   frameIndex: number;
   scale: number;
 }
 
+/** 某一帧里对单个部件的位移 / 旋转 / 显隐 / 调色板替换。 */
 interface AnimatedTransform {
   partId: string;
   dx?: number;
@@ -27,6 +34,17 @@ interface AnimatedTransform {
   paletteSwap?: number;
 }
 
+/**
+ * 把 DSL 精灵的一帧绘制到 `ctx`。
+ *
+ * 非 DSL 程序、缺少 `dsl`、或连 idle 动画都没有时直接返回，不画。
+ * 部件按 `z` 升序叠画；当前帧把该部件标成 `visible === false` 则跳过。
+ *
+ * @param ctx Canvas 2D 或 OffscreenCanvas 上下文；会被清空并绘制，函数结束时 restore
+ * @param program 精灵程序；仅 `mode === "dsl"` 且带 `dsl` 时生效
+ * @param input 动画名、帧序号与缩放
+ * @returns 无返回值；副作用是改写 `ctx` 的像素与变换栈
+ */
 export function renderSprite(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   program: SpriteProgram,
@@ -34,6 +52,7 @@ export function renderSprite(
 ): void {
   if (program.mode !== "dsl" || !program.dsl) return;
   const dsl = program.dsl;
+  // 未知动画名回落到 idle，避免状态机切到未定义 clip 时整帧空白
   const animation = dsl.animations[input.animation] ?? dsl.animations.idle;
   if (!animation) return;
 
@@ -59,6 +78,10 @@ export function renderSprite(
   ctx.restore();
 }
 
+/**
+ * 绘制单个部件：先施加锚点变换，再画矢量形状或像素字面量。
+ * 内部 `save`/`restore`，不把局部变换留给下一部件。
+ */
 function drawPart(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   part: SpritePart,
@@ -71,6 +94,7 @@ function drawPart(
   const rotate = transform?.rotate ?? 0;
   const scale = transform?.scale ?? 1;
   if (part.anchor) {
+    // 有锚点时绕锚点旋转/缩放，避免部件围着画布原点甩出去
     ctx.translate(part.anchor.x + dx, part.anchor.y + dy);
     if (rotate !== 0) ctx.rotate((rotate * Math.PI) / 180);
     if (scale !== 1) ctx.scale(scale, scale);
@@ -124,6 +148,7 @@ function drawPart(
       for (let x = 0; x < row.length; x += 1) {
         const ch = row[x];
         if (!ch || ch === " ") continue;
+        // A–P 映射调色板 0–15；空格是透明。整帧 paletteSwap 会覆盖字母索引。
         const idx = "ABCDEFGHIJKLMNOP".indexOf(ch);
         const swap = transform?.paletteSwap;
         const color =
@@ -140,6 +165,13 @@ function drawPart(
   ctx.restore();
 }
 
+/**
+ * 按状态机当前状态取出应对动画名；该状态未配置动画时回落到 `"idle"`。
+ *
+ * @param dsl 含 `stateMachine` 的 DSL
+ * @param state 状态机状态键
+ * @returns 动画名；无副作用
+ */
 export function pickAnimationForState(
   dsl: SpriteDSL,
   state: keyof SpriteDSL["stateMachine"]["states"]
