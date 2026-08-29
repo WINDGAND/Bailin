@@ -1,3 +1,10 @@
+/**
+ * 百灵深度蒸馏编排器：把调研、提炼、外貌、桌宠孵化与质量自检串成一条可取消的流水线。
+ *
+ * `createCharacterDeep` 是主路径（async generator 向渲染进程推进度）；
+ * `regenerateSprite` / `regenerateAppearance` / `regenerateQuote` 供角色库「只重跑一步」。
+ * 本类持有 LLM 与可选的 HatchPetPipeline，不直接读写窗口；落盘由 LocalVault / hatch 子流程完成。
+ */
 import { ulid } from "ulid";
 import {
   AppearanceSpecSchema,
@@ -105,6 +112,7 @@ export interface ReferenceImageInput {
   notes?: string;
 }
 
+/** 「重画形象」结果：失败时仍可能带回骨架 sprite，供 UI 不至于空白。 */
 export interface RegenerateSpriteResult {
   ok: boolean;
   sprite?: SpriteProgram;
@@ -112,6 +120,7 @@ export interface RegenerateSpriteResult {
   error?: string;
 }
 
+/** 「重跑外貌」结果：可能同时带回新 appearance 与据此生成的 sprite。 */
 export interface RegenerateAppearanceResult {
   ok: boolean;
   appearance?: AppearanceSpec;
@@ -120,6 +129,10 @@ export interface RegenerateAppearanceResult {
   error?: string;
 }
 
+/**
+ * 「核实座右铭」结果。
+ * `ok` 仅在 `quoteStatus === "verified"` 时为 true；provisional / missing 仍会回写 card。
+ */
 export interface RegenerateQuoteResult {
   ok: boolean;
   card?: CharacterCard;
@@ -176,6 +189,10 @@ export class BailinOrchestrator {
   /** 座右铭手动重试并发锁（characterId）。 */
   private quoteJobs = new Set<string>();
 
+  /**
+   * 注入聊天 LLM；同时提供 imageGen + vault 时才会创建 HatchPetPipeline。
+   * 缺任一依赖时 hatch 主路径关闭，形象退回程序化像素。
+   */
   constructor(
     private llm: LLMAdapter,
     options?: {
@@ -861,6 +878,10 @@ export class BailinOrchestrator {
 
   // ===== 内部步骤 =====
 
+  /**
+   * 跑调研 Agent。`agentPlans` 存在时以计划里的联网开关为准，否则回退 `config.enableWebSearch`。
+   * 进度先写入 eventBuffer（generator 稍后 drain），并经 liveBroadcast 立刻推到前端。
+   */
   private async runResearchAgentsForJob(
     config: DistillationJobConfig,
     context: { sourceContext?: string; englishName?: string },
@@ -2118,6 +2139,7 @@ export class BailinOrchestrator {
 
 }
 
+/** prompt slug → ResearchDoc.agentId；未知 slug 在 onAgentStart 里直接跳过。 */
 const AGENT_SLUG_TO_ID: Record<string, ResearchAgentId> = {
   writings: 1,
   conversations: 2,
@@ -2127,6 +2149,7 @@ const AGENT_SLUG_TO_ID: Record<string, ResearchAgentId> = {
   timeline: 6
 };
 
+/** 把 6 路调研文档压成 IPC 用的 ResearchSummaryPayload（excerpt 截到 400 字）。 */
 function buildResearchSummaryPayload(
   docs: ResearchDoc[],
   totalDurationMs: number,
@@ -2154,6 +2177,7 @@ function buildResearchSummaryPayload(
   };
 }
 
+/** 构造 phase 进度事件；`progress` 是 0–100 的展示百分比，不是内部权重。 */
 function phaseEvent(
   jobId: string,
   phase: DistillationJob["status"],
@@ -2163,6 +2187,7 @@ function phaseEvent(
   return { kind: "phase", jobId, phase, progress, message };
 }
 
+/** 把供应商原始错误压成设置页可读的中文；无法归类时截断原文。 */
 function toUserFacingProviderError(raw: string): string {
   const text = raw.trim();
   if (/401|403|unauthorized|invalid api key|AUTH_FAILED/i.test(text)) {
@@ -2290,13 +2315,14 @@ function makeMinimalAppearance(
   };
 }
 
+/** 从模型回复里抠 JSON：先整段 parse，再剥 markdown 围栏，最后取首尾花括号。 */
 function extractJSON(raw: string): unknown | null {
   const trimmed = raw.trim();
   if (trimmed.startsWith("{")) {
     try {
       return JSON.parse(trimmed);
     } catch {
-      // fall through
+      // 整段非法时继续试围栏 / 切片，不直接判失败
     }
   }
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]+?)```/i);
