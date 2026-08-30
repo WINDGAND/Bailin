@@ -1,3 +1,9 @@
+/**
+ * 角色对话运行时：会话 CRUD、安全闸门、系统提示组装，以及把 LLM 流式输出写入 vault。
+ *
+ * 主进程 IPC 通过本类发消息；桌宠气泡与完整聊天窗共用 `sendMessage`，靠 `responseMode` 区分长度与排版。
+ * 安全硬拒不走模型；软拒仍交给角色口吻（见 `SafetyPolicy`）。本文件不直接碰 SQLite schema。
+ */
 import { ulid } from "ulid";
 import type { CharacterBundle } from "@bailin/character-protocol";
 import { buildSystemPrompt } from "@bailin/prompts";
@@ -8,7 +14,8 @@ import type { MemoryStore } from "./memory-store.js";
 import { GLOBAL_REFUSAL_LIST, SafetyPolicy } from "../safety/safety-policy.js";
 
 /**
- * CharacterRuntime: 组装系统提示词、调度 LLM、把流式 chunk 投递给上层。
+ * 面向主进程的对话调度器。
+ * 持久化委托 `LocalVault`；画像只读 `MemoryStore`；真正的 HTTP 流在 `LLMAdapter`。
  */
 export class CharacterRuntime {
   private firstActivation = new Set<string>();
@@ -21,11 +28,16 @@ export class CharacterRuntime {
     private safety: SafetyPolicy
   ) {}
 
+  /** 中止当前进行中的流式回复；无进行中请求时为空操作。 */
   cancelActive(): void {
     this.active?.abort();
     this.active = null;
   }
 
+  /**
+   * 新建会话并设为当前会话。同时清掉该角色的 firstActivation，让下一轮再走开场介绍。
+   * @returns 新 sessionId
+   */
   newSession(characterId: string): string {
     this.firstActivation.delete(characterId);
     const sessionId = ulid();
@@ -34,6 +46,10 @@ export class CharacterRuntime {
     return sessionId;
   }
 
+  /**
+   * 返回该角色当前会话；vault 里没有有效 active 时回退到最近一条，再没有则新建。
+   * 副作用：可能写入 `activeSessionId` 或创建新会话。
+   */
   getOrCreateActiveSession(characterId: string): string {
     const active = this.vault.getActiveSessionId(characterId);
     if (active && this.vault.chatSessionExists(active)) {
@@ -47,41 +63,62 @@ export class CharacterRuntime {
     return this.newSession(characterId);
   }
 
+  /** 列出该角色的会话摘要，默认最多 50 条。无副作用。 */
   listChatSessions(characterId: string, limit = 50) {
     return this.vault.listChatSessions(characterId, limit);
   }
 
+  /**
+   * 切换当前会话。会话不存在时返回 false，不改 active。
+   * @returns 是否切换成功
+   */
   switchSession(characterId: string, sessionId: string): boolean {
     if (!this.vault.chatSessionExists(sessionId)) return false;
     this.vault.setActiveSessionId(characterId, sessionId);
     return true;
   }
 
+  /** 重命名会话标题；会话不存在时返回 false。 */
   renameChatSession(sessionId: string, title: string): boolean {
     return this.vault.renameChatSession(sessionId, title);
   }
 
+  /** 删除会话及其全部 turn；会话不存在时返回 false。 */
   deleteChatSession(characterId: string, sessionId: string): boolean {
     return this.vault.deleteChatSession(characterId, sessionId);
   }
 
+  /**
+   * 有有效 sessionId 则原样返回，否则新建会话。
+   * 给 IPC 入口兜底：渲染进程漏传 session 时仍能落盘。
+   */
   ensureSession(characterId: string, sessionId: string | undefined): string {
     if (sessionId && sessionId.length > 0) return sessionId;
     return this.newSession(characterId);
   }
 
+  /** 读取该会话最近若干 turn，供 UI 与 LLM history 共用。无副作用。 */
   getRecentTurns(characterId: string, sessionId: string, limit: number) {
     return this.vault.getRecentTurns(characterId, sessionId, limit);
   }
 
+  /** 删除单条 turn；不存在时返回 false。 */
   deleteTurn(turnId: string): boolean {
     return this.vault.deleteTurn(turnId);
   }
 
+  /** 删除该会话中自 `turnId` 起的后续 turn（含自身），用于「从这里重新生成」。 */
   deleteTurnsFrom(characterId: string, sessionId: string, turnId: string): boolean {
     return this.vault.deleteTurnsFrom(characterId, sessionId, turnId);
   }
 
+  /**
+   * 发送一轮用户消息并流式产出 assistant chunk。
+   *
+   * 副作用：把 user/assistant turn 写入 vault、替换 `this.active` 供 `cancelActive` 中止本轮、标记 firstActivation。
+   * `skipUserAppend` 用于重新生成：history 里已有本轮 user，不再追加。
+   * 硬拒直接 yield 拒答文案并以 `finishReason=safety` 结束，不调用 LLM。
+   */
   async *sendMessage(input: {
     bundle: CharacterBundle;
     sessionId: string;
@@ -94,12 +131,14 @@ export class CharacterRuntime {
   }): AsyncGenerator<ChatChunk> {
     const { bundle, sessionId, userContent, responseMode = "full" } = input;
     const verdict = this.safety.check(userContent);
+    // 硬拒（如未成年色情）不走模型，避免把越界请求送进供应商日志。
     if (verdict.kind === "hard-refuse") {
       yield { kind: "delta", text: verdict.defaultRefusal ?? this.safety.defaultRefusal() };
       yield { kind: "done", finishReason: "safety" };
       return;
     }
 
+    // 进程内首次激活：用来在 system prompt 里触发角色自我介绍；重启主进程会重置。
     const isFirst = !this.firstActivation.has(bundle.card.id);
     if (isFirst) this.firstActivation.add(bundle.card.id);
 
@@ -155,10 +194,12 @@ export class CharacterRuntime {
     const ac = new AbortController();
     this.active = ac;
 
+    // ChatRequest 只接受 user|assistant；旧 system turn 并入 user，避免被适配器丢掉。
     const historyMessages = history.map((t) => ({
       role: t.role === "system" ? "user" : (t.role as "user" | "assistant"),
       content: t.content
     }));
+    // 重新生成时 history 已含本轮 user，再 append 会重复提问。
     const messages = skipUserAppend
       ? historyMessages
       : [...historyMessages, { role: "user" as const, content: userContent }];
@@ -169,6 +210,7 @@ export class CharacterRuntime {
         systemPrompt,
         messages,
         temperature: bundle.runtime.llm.temperature,
+        // 气泡模式硬截断 token，避免短气泡被长文撑破。
         maxTokens:
           responseMode === "bubble"
             ? Math.min(bundle.runtime.llm.maxTokens, 160)
@@ -185,6 +227,7 @@ export class CharacterRuntime {
         }
       }
     } finally {
+      // 流中途 abort / 报错也要把已产出的 assistant 落盘，避免界面有字、库里没有。
       if (assistantBuf.length > 0) {
         this.vault.appendTurn({
           id: assistantTurnId,
