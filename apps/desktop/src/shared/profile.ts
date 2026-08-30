@@ -1,3 +1,10 @@
+/**
+ * 用户画像规范化：把 LocalVault 里新旧 JSON 统一成 `UserProfile` v2，并裁成 prompt 可用片段。
+ *
+ * 旧版把目标 / 顾虑 / 禁忌拆成独立字符串数组；新版全部收进 `facts` 并带 `category`。
+ * `normalizeProfile` 只做形状迁移、不写盘。`profileForPrompt` 按分类截断（`boundary` 不截断）。
+ * 主进程记忆仓库、画像抽取与聊天 system prompt 共用本模块。
+ */
 import type {
   ProfileEntry,
   ProfileFact,
@@ -6,6 +13,7 @@ import type {
   UserProfile
 } from "./ipc-contract.js";
 
+/** UI 与 prompt 共用的分类展示顺序；未知分类会被归一成 `other`。 */
 export const PROFILE_FACT_CATEGORY_ORDER: ProfileFactCategory[] = [
   "identity",
   "goal",
@@ -17,12 +25,17 @@ export const PROFILE_FACT_CATEGORY_ORDER: ProfileFactCategory[] = [
   "other"
 ];
 
+/** 空画像：无称呼、无事实。无副作用。 */
 export function emptyProfile(): UserProfile {
   return { facts: [] };
 }
 
 const VALID_CATEGORIES = new Set<string>(PROFILE_FACT_CATEGORY_ORDER);
 
+/**
+ * 把未知 / 缺失的分类收成 `other`，避免脏 JSON 把非法 category 送进 prompt。
+ * @returns 合法 `ProfileFactCategory`；无法识别时为 `other`。
+ */
 export function normalizeFactCategory(value: unknown): ProfileFactCategory {
   if (typeof value === "string" && VALID_CATEGORIES.has(value)) {
     return value as ProfileFactCategory;
@@ -78,6 +91,7 @@ function migrateEntryList(
   now: number
 ): ProfileFact[] {
   if (!Array.isArray(items)) return [];
+  // v2 已带 category；v1 ProfileEntry 无 category，用调用方传入的分类补上；再不行当纯字符串列表迁。
   if (items.every(isProfileFact)) {
     return items.map((f) => ({ ...f, category: normalizeFactCategory(f.category) }));
   }
@@ -96,6 +110,7 @@ export function normalizeProfile(raw: unknown, now = Date.now()): UserProfile {
   const o = raw as Record<string, unknown>;
 
   let preferredName: PreferredNameField | undefined;
+  // 旧数据把称呼存成裸字符串；新结构是 `{ text, updatedAt, source }`。
   if (isPreferredNameField(o.preferredName)) {
     preferredName = o.preferredName;
   } else if (typeof o.preferredName === "string" && o.preferredName.trim()) {
@@ -134,10 +149,12 @@ export function normalizeProfile(raw: unknown, now = Date.now()): UserProfile {
   return { preferredName, facts };
 }
 
+/** 取出称呼正文；空串视为未设置。无副作用。 */
 export function profilePreferredNameText(profile: UserProfile): string | undefined {
   return profile.preferredName?.text?.trim() || undefined;
 }
 
+/** 比较 / 去重用：去首尾空白、压成单空格并转小写。不改原字符串。 */
 export function normalizeEntryText(text: string): string {
   return text.trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -178,6 +195,7 @@ export function profileForPrompt(profile: UserProfile): {
     if (items.length === 0) continue;
 
     let selected: string[];
+    // 边界 / 禁忌全部进 prompt，避免被截断后角色踩线；其它分类按 PROMPT_LIMITS 截取。
     if (cat === "boundary") {
       selected = items;
     } else {
