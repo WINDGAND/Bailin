@@ -1,3 +1,9 @@
+/**
+ * Phase 2 框架提炼流水线：把调研文档压成内存中的 `CharacterCard`。
+ *
+ * 主路径是两阶段合成（Pass A 扫描候选 → Pass B 出完整卡）；Pass A 失败则回退单次提炼。
+ * 另含定向重提炼补丁、质量薄弱标注、answerProtocol 补全。本文件不落盘、不写角色包。
+ */
 import type { CharacterCard, QualityReport, ResearchDoc } from "@bailin/character-protocol";
 import {
   buildFrameworkSynthesisPrompt,
@@ -14,13 +20,20 @@ import type { DistillationJobConfig } from "@bailin/character-protocol";
 import { isAnswerProtocolValid, parseCard, SCHEMA_VERSION } from "@bailin/character-protocol";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 
+/** 质量自检闭环里定向重提炼的最大轮数（含首次合成后的补强）。 */
 export const MAX_SYNTHESIS_ROUNDS = 2;
+/** 质量总分低于此阈值时触发定向重提炼（与 Sanity/Edge 失败条件并列）。 */
 export const RESYNTHESIS_SCORE_THRESHOLD = 0.65;
 /** Phase 1 调研成功但 Phase 2 提炼失败时的自动重试上限（含首次）。 */
 export const MAX_PHASE2_ATTEMPTS = 3;
 /** 至少几路调研成功才值得为心智模型自动重试提炼（避免调研本身崩了还空转）。 */
 export const PHASE2_RETRY_MIN_OK_DOCS = 3;
 
+/**
+ * 两阶段提炼的产出。
+ * `card` 为 null 表示本轮未得到合法人格卡；
+ * `passA` 为 null 表示走了单次回退路径或 Pass A 未成功。
+ */
 export interface TwoPhaseSynthesisResult {
   card: CharacterCard | null;
   passA: SynthesisPassAResult | null;
@@ -29,6 +42,10 @@ export interface TwoPhaseSynthesisResult {
 /**
  * Phase 1 已产出足够调研、但 Phase 2 未产出合法人格卡时，应自动重试提炼，
  * 避免「调研档案齐全、心智模型却是骨架占位」直接交付。
+ *
+ * @param docs 调研文档；只计 `status === "ok"` 的路数
+ * @param card 当前人格卡；非 null 则不必重试
+ * @returns 是否应再跑一轮提炼；无副作用
  */
 export function shouldRetryPhase2Synthesis(
   docs: ResearchDoc[],
@@ -39,6 +56,10 @@ export function shouldRetryPhase2Synthesis(
   return okCount >= PHASE2_RETRY_MIN_OK_DOCS;
 }
 
+/**
+ * 定向重提炼补丁：覆盖心智模型与启发式，可选追加诚实边界备注与价值观张力。
+ * 由 `applyResynthesisPatch` 写回原卡；本结构本身不含副作用。
+ */
 export interface TargetedResynthesisPatch {
   mentalModels: CharacterCard["mentalModels"];
   heuristics: CharacterCard["heuristics"];
@@ -46,7 +67,17 @@ export interface TargetedResynthesisPatch {
   tensionsAppend?: string[];
 }
 
-/** 两阶段提炼：Pass A 扫描 → Pass B 完整 card。Pass A 失败时回退单次提炼。 */
+/**
+ * 两阶段提炼：Pass A 扫描候选 → Pass B 生成完整 card。
+ * Pass A 失败时回退单次提炼；不抛错，失败只写入 `warnings`。
+ *
+ * @param llm 聊天适配器；本函数会多次 `chatOnce`（非流式、thinking 关闭）
+ * @param config 蒸馏任务配置（角色名 / 来源 / 赛道 / 用户素材）
+ * @param docs Phase 1 调研文档；失败路会以错误摘要进入 prompt
+ * @param warnings 就地追加告警，调用方负责展示
+ * @param opts.attempt 第几次尝试（≥2 抬 token、降温并压缩调研正文）
+ * @returns `{ card, passA }`；card 可能为 null
+ */
 export async function runTwoPhaseSynthesis(
   llm: LLMAdapter,
   config: DistillationJobConfig,
@@ -97,6 +128,14 @@ export async function runTwoPhaseSynthesis(
 /**
  * 带调研成功守卫的 Phase 2：首次失败且调研足够完整时自动重试，
  * 避免直接落到骨架心智模型。
+ *
+ * @param llm 聊天适配器
+ * @param config 蒸馏任务配置
+ * @param docs Phase 1 调研文档（用 `shouldRetryPhase2Synthesis` 判断是否值得重试）
+ * @param warnings 汇总各次尝试的告警（重试轮会加 `[phase2·attempt n/m]` 前缀）
+ * @param opts.maxAttempts 覆盖默认 `MAX_PHASE2_ATTEMPTS`
+ * @param opts.onAttempt 每轮开始前回调，仅通知 UI，不改变结果
+ * @returns 最后一轮的 `{ card, passA }`；全部失败时 card 为 null
  */
 export async function runPhase2SynthesisWithResearchGuard(
   llm: LLMAdapter,
@@ -144,6 +183,21 @@ export async function runPhase2SynthesisWithResearchGuard(
   return last;
 }
 
+/**
+ * 针对质量未过关的心智模型 / 启发式做定向重提炼，返回补丁而不改原卡。
+ *
+ * LLM 失败、JSON 非法或 `parseCard` 校验失败时返回 null，并写入 `warnings`。
+ * 不修改传入的 `card`；由调用方再 `applyResynthesisPatch`。
+ *
+ * @param llm 聊天适配器（非流式、thinking 关闭、温度 0.25）
+ * @param config 蒸馏任务配置，用于 prompt 角色锚点
+ * @param docs 调研文档；失败路以 `> Agent … 失败` 占位
+ * @param card 当前人格卡，只作 prompt 输入
+ * @param qualityReport Phase 4 质量报告，指出薄弱项
+ * @param passA 可选的 Pass A 扫描结果，帮助模型对照候选
+ * @param warnings 就地追加失败原因
+ * @returns 校验通过的补丁；失败为 null
+ */
 export async function runTargetedResynthesis(
   llm: LLMAdapter,
   config: DistillationJobConfig,
@@ -225,7 +279,12 @@ export async function runTargetedResynthesis(
   };
 }
 
-/** 是否应触发定向重提炼（Sanity/Edge 失败或总分过低）。 */
+/**
+ * 是否应触发定向重提炼：总分过低、总评 fail，或 Sanity/Edge 未过。
+ *
+ * @param report Phase 4 质量报告
+ * @returns true 表示应调用 `runTargetedResynthesis`；无副作用
+ */
 export function shouldTriggerResynthesis(report: QualityReport): boolean {
   if (report.overallScore < RESYNTHESIS_SCORE_THRESHOLD) return true;
   if (report.verdict === "fail") return true;
@@ -234,7 +293,14 @@ export function shouldTriggerResynthesis(report: QualityReport): boolean {
   return false;
 }
 
-/** 达上限仍不通过：在诚实边界标注薄弱维度。 */
+/**
+ * 达上限仍不通过时，把未过关维度写入诚实边界备注（就地修改 `card`）。
+ * 备注去重后最多保留 8 条。
+ *
+ * @param card 被标注的人格卡
+ * @param report 最后一轮质量报告
+ * @param synthesisRounds 已完成的提炼轮次，写入文案
+ */
 export function annotateQualityWeaknesses(
   card: CharacterCard,
   report: QualityReport,
@@ -257,6 +323,16 @@ export function annotateQualityWeaknesses(
   };
 }
 
+/**
+ * 把定向重提炼补丁写回人格卡（就地修改）。
+ *
+ * 覆盖 mentalModels / heuristics，刷新 `updatedAt`，并清空 `answerProtocol`
+ * （心智模型变了，旧路由可能不匹配，需后续 `ensureAnswerProtocol` 重生）。
+ * 可选把诚实边界备注、价值观张力去重追加。
+ *
+ * @param card 被修改的人格卡
+ * @param patch `runTargetedResynthesis` 的产出
+ */
 export function applyResynthesisPatch(
   card: CharacterCard,
   patch: TargetedResynthesisPatch
@@ -280,6 +356,7 @@ export function applyResynthesisPatch(
   }
 }
 
+/** Pass A：从调研中扫描心智模型/启发式候选。失败返回 null，由调用方回退单次提炼。 */
 async function runPassA(
   llm: LLMAdapter,
   input: FrameworkSynthesisInput,
@@ -300,6 +377,7 @@ async function runPassA(
     return null;
   }
   if (r.finishReason === "length") {
+    // Pass A 截断仍尝试解析已有 JSON；Pass B / legacy 则直接失败以便外层重试。
     warnings.push("[phase2·passA] 输出被截断（finish_reason=length）");
   }
   const json = extractJSON(r.text) as Record<string, unknown> | null;
@@ -332,6 +410,7 @@ async function runPassA(
   };
 }
 
+/** Pass B：基于 Pass A 候选生成完整 CharacterCard。截断视为失败，便于外层重试。 */
 async function runPassB(
   llm: LLMAdapter,
   input: FrameworkSynthesisInput,
@@ -359,6 +438,7 @@ async function runPassB(
   return parseCardFromLLM(r.text, warnings, "[phase2·passB]", input);
 }
 
+/** 单次框架提炼回退路径（Pass A 失败时使用）。截断同样视为失败。 */
 async function runLegacySinglePassSynthesis(
   llm: LLMAdapter,
   input: FrameworkSynthesisInput,
@@ -385,6 +465,7 @@ async function runLegacySinglePassSynthesis(
   return parseCardFromLLM(r.text, warnings, "[phase2·legacy]", input);
 }
 
+/** 从 LLM 正文抽出 JSON，补齐必填字段后经 `parseCard` 校验；失败只记 warning。 */
 function parseCardFromLLM(
   text: string,
   warnings: string[],
@@ -414,6 +495,7 @@ function parseCardFromLLM(
   return null;
 }
 
+/** 缺 timeline/sources 时注入占位，避免整卡因非核心字段作废。 */
 function ensureTimelineAndSources(
   json: Record<string, unknown>,
   warnings: string[],
@@ -433,7 +515,12 @@ function ensureTimelineAndSources(
 
 /**
  * LLM 常漏掉「创建时已知」的硬字段（sourceType/track/roleplay 字面量等）。
- * 用 config 补齐，避免调研齐全却因缺字段整卡作废。
+ * 用 config 补齐，避免调研齐全却因缺字段整卡作废。就地改 `json`。
+ *
+ * @param json LLM 返回的卡草稿（会被写入 meta/roleplay/identity）
+ * @param input 创建时已知的角色名 / 来源 / 赛道
+ * @param warnings 记录补齐了哪些字段
+ * @param label 告警前缀（如 `[phase2·passB]`）
  */
 export function seedRequiredCardFields(
   json: Record<string, unknown>,
@@ -519,7 +606,11 @@ export function seedRequiredCardFields(
 
 /**
  * Pass B 常把 Pass A 候选形态（claim/domains）直接塞进 mentalModels/heuristics。
- * 在进 zod 前映射到协议字段，避免「有内容却整卡作废」。
+ * 在进 zod 前映射到协议字段，避免「有内容却整卡作废」。就地改 `json`。
+ *
+ * @param json 卡草稿
+ * @param warnings 记录规范化了多少条
+ * @param label 告警前缀
  */
 export function normalizeMentalModelsAndHeuristics(
   json: Record<string, unknown>,
@@ -600,6 +691,7 @@ export function normalizeMentalModelsAndHeuristics(
   }
 }
 
+/** 把调研 doc 压成 prompt 输入；`markdownCap` 用于重试时截断正文以给输出留预算。 */
 function toSynthesisInput(
   config: DistillationJobConfig,
   docs: ResearchDoc[],
@@ -627,6 +719,10 @@ function toSynthesisInput(
   };
 }
 
+/**
+ * 从 LLM 正文中抠 JSON 对象：优先 markdown 代码围栏，否则取第一个 `{` 到最后一个 `}`。
+ * 解析失败返回 null，不抛错。
+ */
 function extractJSON(text: string): Record<string, unknown> | null {
   const trimmed = text.trim();
   let candidate = trimmed;
@@ -642,17 +738,25 @@ function extractJSON(text: string): Record<string, unknown> | null {
   }
 }
 
+/** 只保留字符串元素，最多 12 条，供 contradictions / sourceGaps 使用。 */
 function stringArray(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is string => typeof x === "string").slice(0, 12);
 }
 
+/** 非法或未知 `initialTier` 一律当作 heuristic，避免 Pass A 候选整批丢弃。 */
 function normalizeTier(v: unknown): SynthesisPassAResult["candidates"][0]["initialTier"] {
   if (v === "mental-model" || v === "heuristic" || v === "discard") return v;
   return "heuristic";
 }
 
-/** Pass B 未产出有效 answerProtocol 时，用 LLM 或确定性回退补全。 */
+/**
+ * Pass B 未产出有效 answerProtocol 时，用 LLM 或确定性回退补全（就地写 `card`）。
+ *
+ * @param llm 聊天适配器；失败则走 `deriveFallbackAnswerProtocol`
+ * @param card 被写入 `answerProtocol` 的人格卡
+ * @param warnings 记录 LLM 失败或结构无效
+ */
 export async function ensureAnswerProtocol(
   llm: LLMAdapter,
   card: CharacterCard,
