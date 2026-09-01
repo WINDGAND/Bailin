@@ -1,3 +1,10 @@
+/**
+ * 深度蒸馏进度页内容区的纯 reducer。
+ *
+ * 把主进程推来的 `DistillationProgressEvent` 折成可渲染的调研卡片、
+ * hatch 生图面板与质量报告。状态挂在 DistillationJobProvider 上，
+ * 切走设置 tab 卸载进度页后再回来仍能看到步骤内容。本文件无 IPC、无 DOM。
+ */
 import type {
   HatchPetRowState,
   QualityReport,
@@ -11,6 +18,7 @@ import type {
   SynthesisSummaryPayload
 } from "../../../shared/ipc-contract.js";
 
+/** 进度页上一张调研 Agent 卡片的展示态。 */
 export interface AgentCardState {
   agentId: ResearchAgentId;
   agentName: string;
@@ -23,6 +31,7 @@ export interface AgentCardState {
   excerpt?: string;
 }
 
+/** Phase 1 六路调研的空卡片占位，下标与 `agentId` 1..6 对齐。 */
 export const INITIAL_AGENTS: AgentCardState[] = [
   { agentId: 1, agentName: "", status: "pending" },
   { agentId: 2, agentName: "", status: "pending" },
@@ -32,6 +41,7 @@ export const INITIAL_AGENTS: AgentCardState[] = [
   { agentId: 6, agentName: "", status: "pending" }
 ];
 
+/** 单行 atlas 生图（或 base 立绘）的生命周期。`mirrored` 表示由对向行镜像，未真正调生图。 */
 export type HatchJobStatus =
   | "pending"
   | "running"
@@ -40,6 +50,7 @@ export type HatchJobStatus =
   | "mirrored"
   | "cancelled";
 
+/** 进度页 hatch 面板里一行 job 的展示数据。 */
 export interface HatchJobState {
   jobId: string;
   rowState: HatchPetRowState | "base";
@@ -50,6 +61,7 @@ export interface HatchJobState {
   mirroredFrom?: string;
 }
 
+/** hatch-pet 生图阶段整块面板的累加状态（成本、atlas 校验、QA 路径）。 */
 export interface HatchPanelState {
   started: boolean;
   jobsCount?: number;
@@ -63,6 +75,7 @@ export interface HatchPanelState {
   jobs: Record<string, HatchJobState>;
 }
 
+/** 尚未收到任何 hatch 事件时的空面板。 */
 export const INITIAL_HATCH_STATE: HatchPanelState = {
   started: false,
   jobs: {},
@@ -70,6 +83,7 @@ export const INITIAL_HATCH_STATE: HatchPanelState = {
   estimatedCostUsd: 0
 };
 
+/** 进度页内容区完整快照：调研卡片 + 合成摘要 + 质量报告 + hatch 面板。 */
 export interface ProgressContentState {
   agents: AgentCardState[];
   warnings: string[];
@@ -80,6 +94,7 @@ export interface ProgressContentState {
   doneCharacterId: string | null;
 }
 
+/** 新开蒸馏任务时的空内容区。 */
 export const INITIAL_PROGRESS_CONTENT: ProgressContentState = {
   agents: INITIAL_AGENTS,
   warnings: [],
@@ -104,6 +119,16 @@ function agentFromDoc(doc: ResearchDoc, prev: AgentCardState): AgentCardState {
   };
 }
 
+/**
+ * 把一条 hatch 进度事件折进面板状态。
+ *
+ * 中途才挂上监听时可能错过 `start`，因此除 `default` 外任意事件都会把 `started` 置 true，
+ * 避免面板一直空白。无副作用。
+ *
+ * @param state 当前 hatch 面板
+ * @param evt 主进程 `HatchProgressEventDTO`
+ * @returns 新面板快照；未知 `kind` 原样返回
+ */
 export function reduceHatch(
   state: HatchPanelState,
   evt: HatchProgressEventDTO
@@ -180,6 +205,7 @@ export function reduceHatch(
           ...state.jobs,
           [evt.jobId]: {
             jobId: evt.jobId,
+            // 镜像事件未带 rowState，从 `row-<state>` 的 jobId 反推姿态行。
             rowState: (evt.jobId.replace(/^row-/, "") as HatchPetRowState) ?? "base",
             status: "mirrored",
             mirroredFrom: evt.from
@@ -208,6 +234,9 @@ export function reduceHatch(
 
 /**
  * 用户点取消时立刻冻结内容区：停掉调研/生图转圈，避免终态已是「已取消」但子项仍显示研究中。
+ *
+ * @param state 当前内容区
+ * @returns 新快照；只把 pending/running 标成 cancelled，已结束的 job/agent 不动
  */
 export function freezeProgressContentOnCancel(
   state: ProgressContentState
@@ -236,6 +265,10 @@ export function freezeProgressContentOnCancel(
 /**
  * 累加进度页内容区状态。与 stageDisplay 一样挂在 Provider 上，
  * 切设置 tab 卸载进度页后切回时仍能看到步骤 4/5 等内容。
+ *
+ * @param state 当前内容区
+ * @param evt 主进程广播的蒸馏进度事件
+ * @returns 新快照；未知 `kind` 原样返回。无副作用。
  */
 export function reduceProgressContent(
   state: ProgressContentState,
