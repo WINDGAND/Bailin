@@ -1,3 +1,15 @@
+/**
+ * 主进程 IPC 注册中心：把渲染进程 `window.bailin` 的 invoke / 事件接到
+ * vault、角色运行时、蒸馏编排器、主动陪伴等依赖上。
+ *
+ * `registerIpc` 一次性挂上绝大部分 handler；聊天删除 / 会话列表由
+ * `chat-turn-handlers`、`chat-session-handlers` 另行注册，避免 preload 与
+ * 主进程热更新时通道对不齐。深度蒸馏在后台跑 async generator，调研 /
+ * 形象确认用内存里的审批 gate 卡住，进度通过 broadcast 推给所有窗口。
+ *
+ * 本文件不创建 BrowserWindow，窗口与桌宠操作一律走 `IpcDeps` 注入，
+ * 以免和 `index.ts` 循环引用。
+ */
 import { app, ipcMain, BrowserWindow, net, shell } from "electron";
 import { ulid } from "ulid";
 import {
@@ -48,6 +60,12 @@ import {
   type DistillationJob
 } from "@bailin/character-protocol";
 
+/**
+ * 注册 IPC 所需的主进程依赖。
+ * 持久化 / 编排 / LLM 是长生命周期对象；窗口与桌宠回调由 `index.ts` 在
+ * 窗体创建后注入。可选回调（locale / theme / 主动陪伴）未提供时对应
+ * 设置变更只落盘，不刷新窗体外观。
+ */
 export interface IpcDeps {
   vault: LocalVault;
   memory: MemoryStore;
@@ -90,22 +108,34 @@ export interface IpcDeps {
 }
 
 const SETTING_FIRST_RUN_DONE = "first_run_done";
+/** settings 表 key：界面语言，取值 `"zh"` / `"en"`。 */
 export const SETTING_LOCALE = "ui.locale";
+/** settings 表 key：主题偏好，取值 `"light"` / `"dark"` / `"system"`。 */
 export const SETTING_THEME = "ui.theme";
 const SETTING_ACTIVE_CHARACTER = "active_character_id";
 const SETTING_LLM_PROVIDER = "llm_provider_json";
 const SETTING_LLM_API_KEY = "llm_api_key_enc";
+/** settings 表 key：生图供应商 JSON（不含 apiKey）。 */
 export const SETTING_IMAGE_PROVIDER = "image_provider_json";
+/** settings 表 key：生图 API Key 的 DPAPI 密文；复用 LLM 供应商时不读这项。 */
 export const SETTING_IMAGE_API_KEY = "image_api_key_enc";
+/** settings 表 key：用户点过「忽略此版本」的纯版本号。 */
 export const SETTING_UPDATE_DISMISSED_TAG = "update.dismissed_tag";
+/** settings 表 key：GitHub Release 列表本地缓存 JSON。 */
 export const SETTING_RELEASES_CACHE = "update.releases_cache_json";
 
+/**
+ * 深度蒸馏 checkpoint 的一次性 Promise。
+ * 调研确认 / 形象确认各持一个；渲染进程 `approveDistillation` 时 resolve，
+ * `cancelDistillation` 时 reject，让编排器 generator 从 `awaitApproval` 继续或退出。
+ */
 interface ApprovalGate {
   promise: Promise<DistillationApprovalResult>;
   resolve: (result: DistillationApprovalResult) => void;
   reject: (err: Error) => void;
 }
 
+/** 进行中深度蒸馏的内存态。落盘仍走 vault.jobs；进程退出则 gate 丢失，需用户重开任务。 */
 interface DeepJobState {
   jobId: string;
   abortCtl: AbortController;
@@ -122,6 +152,12 @@ function makeGate(): ApprovalGate {
   return { promise, resolve, reject };
 }
 
+/**
+ * 注册全部 `IPC.*` invoke handler。
+ *
+ * @param deps 已构造的 vault / 编排器 / 窗口回调
+ * @returns 无返回；副作用是改写 `ipcMain`、vault，并向各窗口 `broadcast`
+ */
 export function registerIpc(deps: IpcDeps): void {
   const { vault, memory, runtime, orchestrator, proactive, llm, imageGen, broadcast, profileExtractor } =
     deps;
@@ -132,6 +168,7 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.AppIsFirstRun, () => vault.getSetting(SETTING_FIRST_RUN_DONE) !== "1");
   ipcMain.handle(IPC.AppCompleteFirstRun, () => vault.setSetting(SETTING_FIRST_RUN_DONE, "1"));
   ipcMain.handle(IPC.AppQuit, () => {
+    // 延迟退出：先让 invoke 响应回到渲染进程，避免前端把这次调用当成 IPC 失败。
     setTimeout(() => process.exit(0), 50);
   });
   ipcMain.handle(IPC.AppGetLocale, () => {
@@ -162,6 +199,7 @@ export function registerIpc(deps: IpcDeps): void {
     } catch {
       return { ok: false };
     }
+    // 只放行 http(s)，挡住 file: / javascript: 等被 shell.openExternal 打开的协议。
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return { ok: false };
     await shell.openExternal(parsed.href);
     return { ok: true };
@@ -252,6 +290,7 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(IPC.LlmGetProvider, () => {
     const json = vault.getSetting(SETTING_LLM_PROVIDER);
     const key = vault.getEncryptedString(SETTING_LLM_API_KEY);
+    // 供应商 JSON 与加密 Key 必须成对存在，缺一即视为未配置。
     if (!json || !key) return null;
     try {
       const rest = JSON.parse(json) as {
@@ -943,9 +982,17 @@ export function registerIpc(deps: IpcDeps): void {
   });
 }
 
+/** 桌宠窗口左上角坐标 JSON：`{ x, y }`，激活角色或拖动结束时写入。 */
 const SETTING_PET_POS = "pet_position_json";
 export { SETTING_PET_POS };
 
+/**
+ * 向当前所有 BrowserWindow 推送同一事件。
+ * 单窗 `send` 失败会被吞掉，避免某个已销毁窗口拖垮整次广播。
+ *
+ * @param channel 事件名（与 preload 里 `on.*` 对应）
+ * @param payload 结构化 payload，不做深拷贝
+ */
 export function broadcastToAllWindows(channel: string, payload: unknown): void {
   for (const w of BrowserWindow.getAllWindows()) {
     try {
@@ -957,8 +1004,9 @@ export function broadcastToAllWindows(channel: string, payload: unknown): void {
 }
 
 /**
- * 从 Vault 读取生图配置；返回 DTO（不含 apiKey）。
- * 没有任何配置时返回 DEFAULT_IMAGE_GENERATION_CONFIG（仅展示，用户必须显式保存才会落库）。
+ * 从 Vault 读取生图配置 DTO（不含 apiKey），供渲染进程展示。
+ * 从未保存过配置时返回 `null`（UI 显示「尚未配置」）；JSON 损坏时才回退到
+ * `DEFAULT_IMAGE_GENERATION_CONFIG` 的展示字段，避免把损坏数据当成有效配置。
  */
 export function readImageConfigForRenderer(
   vault: LocalVault

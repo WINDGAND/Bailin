@@ -16,6 +16,12 @@ interface BaseAnimationOptions {
   mouthId: string;
 }
 
+/**
+ * 按角色部件 id 生成 idle / 行走 / 说话等共用动画表。
+ *
+ * @param opts 身体 / 头 / 眼 / 嘴的 partId；位移单位是 96×96 画布上的像素
+ * @returns 可直接写入 `SpriteDSL.animations` 的动画 map，调用方可再覆盖单项
+ */
 export function baseAnimations(opts: BaseAnimationOptions): AnimationMap {
   const { bodyId, headId, eyesId, mouthId } = opts;
   return {
@@ -122,6 +128,12 @@ export function baseAnimations(opts: BaseAnimationOptions): AnimationMap {
   };
 }
 
+/**
+ * 桌宠默认状态机：idle 为起点，点击 / 拖拽 / 聊天 / 锁屏切入对应态。
+ * walk 在 `tick` 上带 `arrived()` 与低概率随机回 idle，避免一直走。
+ *
+ * @returns 新对象，可被 `withFidgetVariants` 再包一层
+ */
 export function standardStateMachine(): SpriteDSL["stateMachine"] {
   return {
     initial: "idle",
@@ -139,6 +151,7 @@ export function standardStateMachine(): SpriteDSL["stateMachine"] {
         animation: "walk-right",
         transitions: [
           { on: "tick", to: "idle", guard: "arrived()" },
+          // 未到位时每 tick 约 2% 概率停步，避免永远贴边走。
           { on: "tick", to: "idle", guard: "rand() < 0.02" },
           { on: "click", to: "click" },
           { on: "chatOpen", to: "talk" },
@@ -185,6 +198,12 @@ export function standardStateMachine(): SpriteDSL["stateMachine"] {
   };
 }
 
+/**
+ * 脚底椭圆影子 part，z = -1 保证压在身体下面。
+ *
+ * @param palette 用描边色当影子色，避免再占一个调色板槽
+ * @returns 可推进 `SpriteDSL.parts` 的单个 part（无副作用）
+ */
 export function standardShadow(palette: { outlineIndex: number }) {
   return {
     id: "shadow",
@@ -197,6 +216,13 @@ export function standardShadow(palette: { outlineIndex: number }) {
   };
 }
 
+/**
+ * 确保状态机带 fidget 态（播完 `fidget-a` 后回 idle）。
+ * 传入已有 fidget 时覆盖为同一套转换，方便 starter 与 sprite-builder 共用出口。
+ *
+ * @param sm `standardStateMachine()` 或其浅拷贝
+ * @returns 新的 stateMachine 对象，不修改入参
+ */
 export function withFidgetVariants(
   sm: ReturnType<typeof standardStateMachine>
 ): ReturnType<typeof standardStateMachine> {
