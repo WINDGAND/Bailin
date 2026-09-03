@@ -1,8 +1,17 @@
+/**
+ * 从 GitHub Releases 拉取更新日志摘要，带磁盘 / 内存两级缓存。
+ *
+ * 先探 `/releases/latest`，仅在 latest tag 相对本地有变化（或列表里缺该 tag）时
+ * 才拉 `/releases?per_page=`，避免打开设置页就打满列表接口。
+ * 生产由 LocalVault 注入持久化；未注入时用模块级内存 store（测试可清空）。
+ * 副作用：新鲜命中只读；tag 未变会回写 `fetchedAt`；成功拉列表会整份覆盖 store。
+ */
 const GITHUB_REPO = "WINDGAND/Bailin";
 const FETCH_TIMEOUT_MS = 10_000;
 /** 本地缓存在此时间内视为新鲜：直接返回，不打 GitHub。 */
 const DISK_FRESH_MS = 6 * 60 * 60 * 1000;
 
+/** 一条已发布 Release 的展示摘要（不含 draft / prerelease）。 */
 export interface ReleaseSummary {
   version: string;
   tag: string;
@@ -12,6 +21,7 @@ export interface ReleaseSummary {
   notesMarkdown: string;
 }
 
+/** 列表拉取结果：成功时可带缓存标记；失败只在完全没有本地副本时出现。 */
 export type ListReleasesResult =
   | {
       ok: true;
@@ -22,6 +32,7 @@ export type ListReleasesResult =
     }
   | { ok: false; error: string };
 
+/** 写入 store 的缓存快照：用 latestTag 判断是否需要重拉完整列表。 */
 export interface PersistedReleaseCache {
   latestTag: string;
   fetchedAt: number;
@@ -73,6 +84,7 @@ function mapReleaseItems(json: unknown): ReleaseSummary[] | null {
   if (!Array.isArray(json)) return null;
   const releases: ReleaseSummary[] = [];
   for (const item of json as GitHubReleaseItem[]) {
+    // draft / prerelease 不进更新日志，避免把未发布 tag 展示给用户
     if (item.draft || item.prerelease) continue;
     const tag = item.tag_name;
     if (!tag) continue;
@@ -111,6 +123,7 @@ async function githubGet(
     } catch {
       // ignore body parse failures
     }
+    // 未认证 GitHub API 易 403 限流；单独翻译文案，设置页可直接展示
     if (res.status === 403 && /rate limit/i.test(detail)) {
       return {
         ok: false,
@@ -191,6 +204,7 @@ export async function fetchReleaseSummaries(options?: {
     return { ok: false, error: "GitHub 响应缺少 tag_name" };
   }
 
+  // latestTag 对得上但列表里没有该 tag（例如上次 per_page 截断）→ 必须重拉列表
   const diskContainsLatest = disk?.releases.some((release) => release.tag === latestTag) ?? false;
   if (disk && disk.latestTag === latestTag && diskContainsLatest) {
     store.save({ ...disk, fetchedAt: nowMs });
