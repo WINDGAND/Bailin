@@ -40,6 +40,16 @@ import {
   type SpriteCheckpointAction
 } from "./sprite-checkpoint-action.js";
 
+/**
+ * 深度蒸馏任务的 React Context。
+ *
+ * 把一次创建角色的进度、计时、调研 / 形象 checkpoint 从进度页抽出来：
+ * 状态挂在不随设置 tab 卸载的 Provider 上，横幅与 DistillationProgress 读同一份快照。
+ * 进度事件来自主进程 IPC；用户取消会乐观切终态，并丢弃晚到的 phase / done。
+ * 不直接写 vault——落盘由主进程完成。
+ */
+
+/** 横幅可见状态；checkpoint 等待与终态和后端 phase 不完全一一对应。 */
 export type DistillationBannerStatus =
   | "running"
   | "awaiting_research"
@@ -48,6 +58,7 @@ export type DistillationBannerStatus =
   | "failed"
   | "cancelled";
 
+/** 正在跑（或刚结束、尚未 dismiss）的蒸馏任务标识。 */
 export interface ActiveDistillationJob {
   jobId: string;
   characterName: string;
@@ -79,9 +90,13 @@ interface DistillationJobContextValue {
   researchSummary: ResearchSummaryPayload | null;
   /** 完成事件带出的新角色 id——进度页用它拉 bundle 挂「破壳揭晓」。 */
   doneCharacterId: string | null;
+  /** 登记新任务并重置展示状态；不发起 IPC（调用方已 create job）。 */
   startJob: (job: ActiveDistillationJob) => void;
+  /** 立刻清空本地快照，不取消主进程任务。 */
   clearJob: () => void;
+  /** 仅终态可关横幅；进行中点关无效，避免丢进度。 */
   dismissBanner: () => void;
+  /** 乐观取消：先切 cancelled，再 IPC；非运行态则只清本地。 */
   cancelJob: () => Promise<void>;
 }
 
@@ -89,6 +104,13 @@ const DistillationJobContext = createContext<DistillationJobContextValue | null>
 
 const TERMINAL: DistillationBannerStatus[] = ["done", "failed", "cancelled"];
 
+/**
+ * 提供当前深度蒸馏任务状态、横幅控制与取消入口。
+ *
+ * @param children 设置窗子树（横幅 / 进度页 / 创建页）
+ * @returns 包好 Context 的节点，并在等待确认时挂调研 / 精灵 checkpoint 对话框
+ * 副作用：订阅 distillationProgress、toast、经 preload 批准调研或精灵 checkpoint / 取消任务
+ */
 export function DistillationJobProvider({ children }: { children: ReactNode }): JSX.Element {
   const t = useT();
   const bailin = useBailin();
@@ -223,6 +245,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
       }
       return;
     }
+    // 已是终态或无进行中任务：只需清本地，不必再打取消 IPC
     resetJobState();
   }, [bailin, resetJobState, showToast, t]);
 
@@ -244,6 +267,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
   const resolveSprite = useCallback(
     async (action: "retry" | "continue") => {
       const job = activeJobRef.current;
+      // 进行中的 retry/continue 未结束前忽略重复点击
       if (!job || userCancelledRef.current || spriteActionPending) return;
       setSpriteActionPending(action);
       const result = await submitSpriteCheckpointAction(
@@ -305,6 +329,7 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
             bannerStatusRef.current === "awaiting_research" ||
             bannerStatusRef.current === "awaiting_sprite"
           ) {
+            // 已离开 checkpoint：关掉对话框并恢复 running，避免卡在等待态
             setBannerStatus("running");
             setShowCheckpoint(false);
             setShowSpriteCheckpoint(false);
@@ -422,6 +447,12 @@ export function DistillationJobProvider({ children }: { children: ReactNode }): 
   );
 }
 
+/**
+ * 读取当前蒸馏任务快照与操作入口。
+ *
+ * @returns Provider 下发的 context 值
+ * @throws 在 DistillationJobProvider 外调用时抛错
+ */
 export function useDistillationJobs(): DistillationJobContextValue {
   const ctx = useContext(DistillationJobContext);
   if (!ctx) {
