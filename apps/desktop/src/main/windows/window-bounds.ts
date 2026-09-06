@@ -1,5 +1,14 @@
 import { screen, type BrowserWindow } from "electron";
 
+/**
+ * 窗口矩形钳制：把设置窗 / 桌宠窗限制在当前显示器的可见范围内。
+ *
+ * 设置窗走 workArea（避开任务栏）；桌宠走完整 display.bounds，
+ * 避免多次 clamp 把可达范围悄悄收缩。几何计算本身无副作用；
+ * 仅 `clampPetWindow` 会在坐标变化时写回 content bounds。
+ */
+
+/** 窗口或内容区的屏幕矩形（DIP 像素）。 */
 export interface BoundsRect {
   x: number;
   y: number;
@@ -7,6 +16,7 @@ export interface BoundsRect {
   height: number;
 }
 
+/** 显示器工作区或完整 bounds；具体语义由调用方传入的矩形决定。 */
 export interface WorkAreaRect {
   x: number;
   y: number;
@@ -17,6 +27,14 @@ export interface WorkAreaRect {
 /**
  * 将窗口左上角限制在 workArea 内，保证整块窗口可见。
  * 纯函数，便于单测与 verify 脚本复用。
+ *
+ * @param x 期望左上角 X
+ * @param y 期望左上角 Y
+ * @param width 窗口宽
+ * @param height 窗口高
+ * @param workArea 目标矩形（工作区或完整屏幕）
+ * @param margin 内侧留白，默认 8
+ * @returns 钳制后的整数坐标；窗口比目标区还大时钉在左上 + margin
  */
 export function clampPositionToWorkArea(
   x: number,
@@ -31,19 +49,34 @@ export function clampPositionToWorkArea(
   const maxX = workArea.x + workArea.width - width - margin;
   const maxY = workArea.y + workArea.height - height - margin;
 
+  // 窗口宽/高超过目标区时 max < min，合法区间为空，钉在左上以免来回抖动
   const clampedX = maxX < minX ? minX : Math.min(Math.max(x, minX), maxX);
   const clampedY = maxY < minY ? minY : Math.min(Math.max(y, minY), maxY);
 
   return { x: Math.round(clampedX), y: Math.round(clampedY) };
 }
 
-/** 根据窗口当前矩形匹配显示器，并限制在对应 workArea 内（保留任务栏边距）。 */
+/**
+ * 根据窗口当前矩形匹配显示器，并限制在对应 workArea 内（保留任务栏边距）。
+ *
+ * @param rect 当前窗口矩形
+ * @param margin 内侧留白，默认 8
+ * @returns 钳制后的坐标
+ * 副作用：读取 `screen.getDisplayMatching` 以选择目标显示器
+ */
 export function clampRectToWorkArea(rect: BoundsRect, margin = 8): { x: number; y: number } {
   const display = screen.getDisplayMatching(rect);
   return clampPositionToWorkArea(rect.x, rect.y, rect.width, rect.height, display.workArea, margin);
 }
 
-/** 根据窗口当前矩形匹配显示器，并限制在完整屏幕 bounds 内。 */
+/**
+ * 根据窗口当前矩形匹配显示器，并限制在完整屏幕 bounds 内。
+ *
+ * @param rect 当前窗口矩形
+ * @param margin 内侧留白，默认 0
+ * @returns 钳制后的坐标
+ * 副作用：读取 `screen.getDisplayMatching` 以选择目标显示器
+ */
 export function clampRectToDisplayBounds(rect: BoundsRect, margin = 0): { x: number; y: number } {
   const display = screen.getDisplayMatching(rect);
   return clampPositionToWorkArea(rect.x, rect.y, rect.width, rect.height, display.bounds, margin);
@@ -63,6 +96,11 @@ export function clampRectToDisplayBounds(rect: BoundsRect, margin = 0): { x: num
  * 配合调用方传入的固定 size，规避 electron#27651 在 Windows 非整数 DPI 下
  * 反复 setBounds/setPosition 让窗口物理尺寸"长大"的累积 bug —— 这个 bug
  * 也是用户能直观感觉到的"活动范围越用越小"的根因之一。
+ *
+ * @param win 桌宠 `BrowserWindow`
+ * @param size 固定内容尺寸；缺省则用当前 content bounds（可能已被 DPI 舍入放大）
+ * @returns 钳制后的坐标
+ * 副作用：坐标变化时调用 `setContentBounds`，宽高保持传入或当前 content 尺寸
  */
 export function clampPetWindow(
   win: BrowserWindow,
