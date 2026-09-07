@@ -1,5 +1,13 @@
 import { looksLikeForeignTranslitWithoutDot } from "./character-names.js";
 
+/**
+ * 座右铭 / 标志性原话：校验格式、清洗占位句、判断要不要专项检索。
+ *
+ * 骨架卡会写入「我还没准备好。」一类占位，读侧必须当成没有原话。
+ * 非中文母语角色要求「原文（中文译文）」；华人角色用纯中文。
+ * 本文件只做字符串判断，不调 LLM、不读写磁盘。
+ */
+
 const CJK_RE = /[\u4e00-\u9fff\u3400-\u4dbf]/;
 const LATIN_RE = /[A-Za-z]/;
 const KANA_RE = /[\u3040-\u309f\u30a0-\u30ff]/;
@@ -12,8 +20,15 @@ const SKELETON_PLACEHOLDER_QUOTES = [
   "I am not ready yet."
 ] as const;
 
+/** 座右铭核验状态：已核实原话 / 用人格文案顶上 / 尚无可用签名。 */
 export type QuoteStatus = "verified" | "provisional" | "missing";
 
+/**
+ * 是否为骨架卡占位句（中英各一条，大小写不敏感）。
+ *
+ * @param quote 待判断文案；空串或 undefined 视为非占位
+ * @returns 命中占位列表则为 true
+ */
 export function isSkeletonPlaceholderQuote(quote: string | undefined): boolean {
   const trimmed = quote?.trim();
   if (!trimmed) return false;
@@ -208,6 +223,12 @@ export function isChineseNativeForQuote(
   return true;
 }
 
+/**
+ * 去掉首尾空白与成对引号（半角 / 直角引号），写入 meta 前用。
+ *
+ * @param value 原始座右铭
+ * @returns 剥掉外层引号后的正文；纯函数，无副作用
+ */
 export function normalizeQuoteOneLiner(value: string): string {
   return value.trim().replace(/^["「『]|["」』]$/g, "").trim();
 }
