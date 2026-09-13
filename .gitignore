@@ -59,6 +59,9 @@ desktop.ini
 # Agent skills（本地安装缓存，锁文件见 skills-lock.json）
 .agents/
 
+# 本地快捷方式资源（图标等，不推送远程）
+.shortcut-assets/
+
 # Workbuddy 本地记忆与自动化（不推送远程）
 .workbuddy/
 
