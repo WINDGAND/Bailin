@@ -43,3 +43,4 @@ export { UploadIcon } from "./UploadIcon.js";
 export { UserIcon } from "./UserIcon.js";
 export { WifiIcon } from "./WifiIcon.js";
 export { WrenchIcon } from "./WrenchIcon.js";
+export { XIcon } from "./XIcon.js";

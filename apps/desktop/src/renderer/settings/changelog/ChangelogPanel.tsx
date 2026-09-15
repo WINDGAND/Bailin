@@ -4,6 +4,13 @@ import { isNewerVersion } from "../../../shared/version-compare.js";
 import { useBailin } from "../../shared/use-bailin.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
 import { ChatMarkdown } from "../../shared/chat-markdown.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  ExternalLinkIcon,
+  RefreshCwIcon,
+  XIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 import { useUpdateInfo } from "../app/update-context.js";
 import { groupReleasesByDay } from "./group-releases.js";
 import { stripLeadingDuplicateTitle } from "./strip-leading-duplicate-title.js";
@@ -28,6 +35,8 @@ export function ChangelogPanel(): JSX.Element {
   const { locale } = useI18n();
   const bailin = useBailin();
   const { currentVersion, updateInfo, dismiss, syncFromServer } = useUpdateInfo();
+  const reducedMotion = useReducedMotion();
+  const retryIcon = useHostedAnimatedIcon(reducedMotion);
   const [state, setState] = useState<LoadState>("loading");
   const [releases, setReleases] = useState<ReleaseSummary[]>([]);
   const [error, setError] = useState("");
@@ -80,7 +89,14 @@ export function ChangelogPanel(): JSX.Element {
           <span>
             {t("update.changelogStale", { reason: staleReason })}
           </span>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void load(true)}>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => void load(true)}
+            onMouseEnter={retryIcon.onMouseEnter}
+            onMouseLeave={retryIcon.onMouseLeave}
+          >
+            <RefreshCwIcon ref={retryIcon.ref} size={14} />
             {t("update.changelogRetry")}
           </button>
         </div>
@@ -96,7 +112,14 @@ export function ChangelogPanel(): JSX.Element {
       {state === "error" ? (
         <div className="changelog__state changelog__state--error" role="alert">
           <span>{t("update.changelogError")}</span>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void load(true)}>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => void load(true)}
+            onMouseEnter={retryIcon.onMouseEnter}
+            onMouseLeave={retryIcon.onMouseLeave}
+          >
+            <RefreshCwIcon ref={retryIcon.ref} size={14} />
             {t("update.changelogRetry")}
           </button>
         </div>
@@ -159,6 +182,9 @@ function ChangelogItemRow({
   onDismiss: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }): JSX.Element {
+  const reducedMotion = useReducedMotion();
+  const viewIcon = useHostedAnimatedIcon(reducedMotion);
+  const dismissIcon = useHostedAnimatedIcon(reducedMotion);
   const notes = stripLeadingDuplicateTitle(item.notesMarkdown, item.title);
   const versionChip = formatVersionChip(item.version);
 
@@ -196,7 +222,14 @@ function ChangelogItemRow({
         ) : null}
         <div className="row gap-2 changelog-item__actions">
           {isHighlighted ? (
-            <button type="button" className="btn btn--magenta btn--sm" onClick={onView}>
+            <button
+              type="button"
+              className="btn btn--magenta btn--sm"
+              onClick={onView}
+              onMouseEnter={viewIcon.onMouseEnter}
+              onMouseLeave={viewIcon.onMouseLeave}
+            >
+              <ExternalLinkIcon ref={viewIcon.ref} size={14} />
               {t("update.viewRelease")}
             </button>
           ) : (
@@ -204,12 +237,22 @@ function ChangelogItemRow({
               type="button"
               className="btn btn--ghost btn--sm changelog-item__cta"
               onClick={onView}
+              onMouseEnter={viewIcon.onMouseEnter}
+              onMouseLeave={viewIcon.onMouseLeave}
             >
+              <ExternalLinkIcon ref={viewIcon.ref} size={14} />
               {t("update.changelogViewRelease")}
             </button>
           )}
           {isHighlighted ? (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={onDismiss}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={onDismiss}
+              onMouseEnter={dismissIcon.onMouseEnter}
+              onMouseLeave={dismissIcon.onMouseLeave}
+            >
+              <XIcon ref={dismissIcon.ref} size={14} />
               {t("update.dismiss")}
             </button>
           ) : null}
