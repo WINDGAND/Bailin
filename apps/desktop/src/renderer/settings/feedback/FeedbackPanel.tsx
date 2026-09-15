@@ -4,6 +4,16 @@ import { useToast } from "../../shared/feedback.js";
 import { useT } from "../../shared/i18n/index.js";
 import { useBailin } from "../../shared/use-bailin.js";
 import { isFeedbackEmail } from "../../../shared/feedback-email.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  CircleCheckIcon,
+  FolderOpenIcon,
+  SendIcon,
+  SquarePenIcon,
+  UploadIcon,
+  XIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 
 const BODY_MIN = 8;
 const BODY_MAX = 4000;
@@ -45,6 +55,12 @@ export function FeedbackPanel(): JSX.Element {
   const [sent, setSent] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [shakeBody, setShakeBody] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const sendIcon = useHostedAnimatedIcon(reducedMotion);
+  const dropzoneIcon = useHostedAnimatedIcon(reducedMotion);
+  const folderIcon = useHostedAnimatedIcon(reducedMotion);
+  const writeAnotherIcon = useHostedAnimatedIcon(reducedMotion);
+  const thanksIcon = useHostedAnimatedIcon(reducedMotion);
 
   filesRef.current = files;
   useEffect(() => {
@@ -191,10 +207,13 @@ export function FeedbackPanel(): JSX.Element {
         <div className="eyebrow">{t("userFeedback.eyebrow")}</div>
         <div className="display display--page">{t("userFeedback.title")}</div>
         <div className="feedback-thanks">
-          <div className="feedback-thanks__icon" aria-hidden="true">
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
+          <div
+            className="feedback-thanks__icon"
+            aria-hidden="true"
+            onMouseEnter={thanksIcon.onMouseEnter}
+            onMouseLeave={thanksIcon.onMouseLeave}
+          >
+            <CircleCheckIcon ref={thanksIcon.ref} size={44} />
           </div>
           <p className="display display--section feedback-thanks__title">
             {t("userFeedback.thanksTitle")}
@@ -202,7 +221,14 @@ export function FeedbackPanel(): JSX.Element {
           <p className="apple-page-subtitle feedback-thanks__body">
             {t("userFeedback.thanksBody")}
           </p>
-          <button type="button" className="btn btn--ghost" onClick={resetForm}>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={resetForm}
+            onMouseEnter={writeAnotherIcon.onMouseEnter}
+            onMouseLeave={writeAnotherIcon.onMouseLeave}
+          >
+            <SquarePenIcon ref={writeAnotherIcon.ref} size={15} />
             {t("userFeedback.writeAnother")}
           </button>
         </div>
@@ -271,16 +297,26 @@ export function FeedbackPanel(): JSX.Element {
             <span className="bl-field-label">{t("userFeedback.attachLabel")}</span>
             <span className="bl-field-hint">{t("userFeedback.attachHint")}</span>
           </div>
-          <div className="apple-dropzone feedback-dropzone">
-            <div className="feedback-dropzone__copy">
-              <div className="apple-dropzone__title">{t("userFeedback.attachTitle")}</div>
+          <div
+            className="apple-dropzone feedback-dropzone"
+            onMouseEnter={dropzoneIcon.onMouseEnter}
+            onMouseLeave={dropzoneIcon.onMouseLeave}
+          >
+            <div className="apple-dropzone__lead">
+              <UploadIcon ref={dropzoneIcon.ref} size={22} />
+              <div className="feedback-dropzone__copy">
+                <div className="apple-dropzone__title">{t("userFeedback.attachTitle")}</div>
+              </div>
             </div>
             <button
               type="button"
               className="btn btn--ghost btn--sm"
               onClick={() => fileInputRef.current?.click()}
               disabled={submitting || files.length >= MAX_FILES}
+              onMouseEnter={folderIcon.onMouseEnter}
+              onMouseLeave={folderIcon.onMouseLeave}
             >
+              <FolderOpenIcon ref={folderIcon.ref} size={15} />
               {t("userFeedback.chooseFile")}
             </button>
             <input
@@ -297,18 +333,11 @@ export function FeedbackPanel(): JSX.Element {
             {files.length > 0 ? (
               <ul className="feedback-thumbs">
                 {files.map((file, i) => (
-                  <li key={file.previewUrl} className="feedback-thumb">
-                    <img src={file.previewUrl} alt={file.name} />
-                    <span className="feedback-thumb__size">{formatBytes(file.bytes.length)}</span>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm btn--icon feedback-thumb__remove"
-                      aria-label={t("userFeedback.removeFile")}
-                      onClick={() => removeFile(i)}
-                    >
-                      ×
-                    </button>
-                  </li>
+                  <FeedbackThumb
+                    key={file.previewUrl}
+                    file={file}
+                    onRemove={() => removeFile(i)}
+                  />
                 ))}
               </ul>
             ) : null}
@@ -358,6 +387,8 @@ export function FeedbackPanel(): JSX.Element {
             className={`btn btn--magenta feedback-submit${submitting ? " is-submitting" : ""}`}
             disabled={!canSubmit}
             onClick={() => void onSubmit()}
+            onMouseEnter={sendIcon.onMouseEnter}
+            onMouseLeave={sendIcon.onMouseLeave}
           >
             {submitting ? (
               <>
@@ -365,11 +396,42 @@ export function FeedbackPanel(): JSX.Element {
                 {t("userFeedback.submitting")}
               </>
             ) : (
-              t("userFeedback.submit")
+              <>
+                <SendIcon ref={sendIcon.ref} size={15} />
+                {t("userFeedback.submit")}
+              </>
             )}
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function FeedbackThumb({
+  file,
+  onRemove
+}: {
+  file: LocalFile;
+  onRemove: () => void;
+}): JSX.Element {
+  const t = useT();
+  const reducedMotion = useReducedMotion();
+  const removeIcon = useHostedAnimatedIcon(reducedMotion);
+  return (
+    <li className="feedback-thumb">
+      <img src={file.previewUrl} alt={file.name} />
+      <span className="feedback-thumb__size">{formatBytes(file.bytes.length)}</span>
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm btn--icon feedback-thumb__remove"
+        aria-label={t("userFeedback.removeFile")}
+        onClick={onRemove}
+        onMouseEnter={removeIcon.onMouseEnter}
+        onMouseLeave={removeIcon.onMouseLeave}
+      >
+        <XIcon ref={removeIcon.ref} size={12} />
+      </button>
+    </li>
   );
 }
