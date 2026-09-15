@@ -1,4 +1,11 @@
 import { useT } from "../../shared/i18n/index.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  CloudCogIcon,
+  CpuIcon,
+  WrenchIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 
 export type ProviderMode = "cloud" | "local" | "custom";
 
@@ -35,6 +42,10 @@ interface ProviderModeSwitchProps {
 
 export function ProviderModeSwitch({ mode, onChange }: ProviderModeSwitchProps): JSX.Element {
   const t = useT();
+  const reducedMotion = useReducedMotion();
+  const cloudIcon = useHostedAnimatedIcon(reducedMotion);
+  const localIcon = useHostedAnimatedIcon(reducedMotion);
+  const customIcon = useHostedAnimatedIcon(reducedMotion);
 
   return (
     <div className="provider-mode-switch" role="tablist" aria-label={t("provider.modeSwitchAria")}>
@@ -45,7 +56,10 @@ export function ProviderModeSwitch({ mode, onChange }: ProviderModeSwitchProps):
           aria-selected={mode === "cloud"}
           className={mode === "cloud" ? "segmented__item is-active" : "segmented__item"}
           onClick={() => onChange("cloud")}
+          onMouseEnter={cloudIcon.onMouseEnter}
+          onMouseLeave={cloudIcon.onMouseLeave}
         >
+          <CloudCogIcon ref={cloudIcon.ref} size={14} />
           {t("provider.modeCloud")}
         </button>
         <button
@@ -54,7 +68,10 @@ export function ProviderModeSwitch({ mode, onChange }: ProviderModeSwitchProps):
           aria-selected={mode === "local"}
           className={mode === "local" ? "segmented__item is-active" : "segmented__item"}
           onClick={() => onChange("local")}
+          onMouseEnter={localIcon.onMouseEnter}
+          onMouseLeave={localIcon.onMouseLeave}
         >
+          <CpuIcon ref={localIcon.ref} size={14} />
           {t("provider.modeLocal")}
         </button>
         <button
@@ -63,7 +80,10 @@ export function ProviderModeSwitch({ mode, onChange }: ProviderModeSwitchProps):
           aria-selected={mode === "custom"}
           className={mode === "custom" ? "segmented__item is-active" : "segmented__item"}
           onClick={() => onChange("custom")}
+          onMouseEnter={customIcon.onMouseEnter}
+          onMouseLeave={customIcon.onMouseLeave}
         >
+          <WrenchIcon ref={customIcon.ref} size={14} />
           {t("provider.modeCustom")}
         </button>
       </div>

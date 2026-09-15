@@ -2,6 +2,8 @@ import { CopyButton, Spinner } from "../../shared/feedback.js";
 import type { ReadinessKey, ReadinessMap, ReadinessState } from "./apply-recommended-bundle.js";
 import { useT } from "../../shared/i18n/index.js";
 import { FieldLabel } from "../../shared/FieldHelp.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import { CopyIcon, useHostedAnimatedIcon } from "../../shared/animated-icons/index.js";
 
 const ALL_ROWS: ReadinessKey[] = ["chat", "vision", "webSearch", "imageGen"];
 
@@ -50,6 +52,8 @@ export function ReadinessChecklist({
 
 function ReadinessCell({ label, state }: { label: string; state: ReadinessState }): JSX.Element {
   const t = useT();
+  const reducedMotion = useReducedMotion();
+  const copyIcon = useHostedAnimatedIcon(reducedMotion);
   let statusClass = "is-idle";
   let statusText = t("provider.readinessIdle");
 
@@ -95,6 +99,9 @@ function ReadinessCell({ label, state }: { label: string; state: ReadinessState 
           label={t("provider.copyErrorDetail")}
           small
           className="provider-readiness-meter__copy"
+          icon={<CopyIcon ref={copyIcon.ref} size={14} />}
+          onMouseEnter={copyIcon.onMouseEnter}
+          onMouseLeave={copyIcon.onMouseLeave}
         />
       ) : null}
     </div>

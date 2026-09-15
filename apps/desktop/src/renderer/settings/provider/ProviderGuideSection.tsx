@@ -1,11 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ForwardRefExoticComponent, type RefAttributes } from "react";
 import {
   SINGLE_KEY_EXAMPLE_STACK,
   MODEL_ROLE_IDS,
   type ModelRoleId
 } from "./presets.js";
 import { useT } from "../../shared/i18n/index.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  EyeIcon,
+  MessageCircleIcon,
+  PaletteIcon,
+  WifiIcon,
+  useHostedAnimatedIcon,
+  type AnimatedIconHandle
+} from "../../shared/animated-icons/index.js";
+import type { AnimatedIconProps } from "../../shared/animated-icons/shell.js";
 import { CloudEndpointHint } from "./CloudEndpointHint.js";
+
+type RoleIcon = ForwardRefExoticComponent<AnimatedIconProps & RefAttributes<AnimatedIconHandle | null>>;
+
+const ROLE_ICONS: Record<ModelRoleId, RoleIcon> = {
+  chat: MessageCircleIcon,
+  vision: EyeIcon,
+  webSearch: WifiIcon,
+  imageGen: PaletteIcon
+};
 
 const ROLE_I18N: Record<ModelRoleId, string> = {
   chat: "chat",
@@ -48,25 +67,9 @@ export function ProviderGuideSection({ compact = false }: ProviderGuideSectionPr
               {t("provider.guide.modelRolesTitle")}
             </div>
             <div className="provider-role-spectrum">
-              {MODEL_ROLE_IDS.map((role) => {
-                const key = ROLE_I18N[role];
-                return (
-                  <div
-                    className={`provider-role-spectrum__item provider-role-spectrum__item--${role}`}
-                    key={role}
-                  >
-                    <span className="provider-role-spectrum__index">{ROLE_INDEX[role]}</span>
-                    <div className="provider-role-spectrum__copy">
-                      <div className="provider-role-spectrum__label">
-                        {t(`provider.guide.modelRoles.${key}.label`)}
-                      </div>
-                      <div className="provider-role-spectrum__when">
-                        {t(`provider.guide.modelRoles.${key}.when`)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {MODEL_ROLE_IDS.map((role) => (
+                <RoleSpectrumItem key={role} role={role} />
+              ))}
             </div>
           </div>
 
@@ -138,3 +141,30 @@ export function ProviderGuideSection({ compact = false }: ProviderGuideSectionPr
     </section>
   );
 }
+
+function RoleSpectrumItem({ role }: { role: ModelRoleId }): JSX.Element {
+  const t = useT();
+  const reducedMotion = useReducedMotion();
+  const hosted = useHostedAnimatedIcon(reducedMotion);
+  const Icon = ROLE_ICONS[role];
+  const key = ROLE_I18N[role];
+  return (
+    <div
+      className={`provider-role-spectrum__item provider-role-spectrum__item--${role}`}
+      onMouseEnter={hosted.onMouseEnter}
+      onMouseLeave={hosted.onMouseLeave}
+    >
+      <span className="provider-role-spectrum__index">{ROLE_INDEX[role]}</span>
+      <div className="provider-role-spectrum__copy">
+        <div className="provider-role-spectrum__label">
+          <Icon ref={hosted.ref} size={14} />
+          {t(`provider.guide.modelRoles.${key}.label`)}
+        </div>
+        <div className="provider-role-spectrum__when">
+          {t(`provider.guide.modelRoles.${key}.when`)}
+        </div>
+      </div>
+    </div>
+  );
+}
+

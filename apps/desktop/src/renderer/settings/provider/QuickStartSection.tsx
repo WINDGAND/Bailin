@@ -4,6 +4,15 @@ import { FieldLabel } from "../../shared/FieldHelp.js";
 import { ReadinessChecklist } from "./ReadinessChecklist.js";
 import { useBailin } from "../../shared/use-bailin.js";
 import { useT } from "../../shared/i18n/index.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  ExternalLinkIcon,
+  EyeIcon,
+  EyeOffIcon,
+  ShieldCheckIcon,
+  TrashIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 import { CloudEndpointHint } from "./CloudEndpointHint.js";
 
 const FAQ_LINKS: Record<RecommendedBundle["faqId"], { href: string; site: string }> = {
@@ -43,6 +52,11 @@ export function QuickStartSection({
 }: QuickStartSectionProps): JSX.Element {
   const t = useT();
   const bailin = useBailin();
+  const reducedMotion = useReducedMotion();
+  const openSiteIcon = useHostedAnimatedIcon(reducedMotion);
+  const showKeyIcon = useHostedAnimatedIcon(reducedMotion);
+  const clearIcon = useHostedAnimatedIcon(reducedMotion);
+  const verifyIcon = useHostedAnimatedIcon(reducedMotion);
   const faqId = selectedBundle.faqId;
   const link = FAQ_LINKS[faqId];
   const bundleLabel = t(`provider.bundles.${selectedBundle.id}.label`);
@@ -80,7 +94,10 @@ export function QuickStartSection({
               type="button"
               className="provider-link-btn"
               onClick={() => void bailin.app.openExternal(link.href)}
+              onMouseEnter={openSiteIcon.onMouseEnter}
+              onMouseLeave={openSiteIcon.onMouseLeave}
             >
+              <ExternalLinkIcon ref={openSiteIcon.ref} size={14} />
               {t("provider.quickStart.openSiteAlt", { site: link.site })}
             </button>
           </div>
@@ -117,7 +134,14 @@ export function QuickStartSection({
                     className="btn btn--ghost btn--sm"
                     onClick={onToggleShowKey}
                     aria-label={showKey ? t("provider.hideKeyAria") : t("provider.showKeyAria")}
+                    onMouseEnter={showKeyIcon.onMouseEnter}
+                    onMouseLeave={showKeyIcon.onMouseLeave}
                   >
+                    {showKey ? (
+                      <EyeOffIcon ref={showKeyIcon.ref} size={14} />
+                    ) : (
+                      <EyeIcon ref={showKeyIcon.ref} size={14} />
+                    )}
                     {showKey ? t("provider.hideKey") : t("provider.showKey")}
                   </button>
                 </div>
@@ -132,7 +156,10 @@ export function QuickStartSection({
                   className="btn btn--ghost btn--sm"
                   onClick={onClear}
                   disabled={busy || !apiKey}
+                  onMouseEnter={clearIcon.onMouseEnter}
+                  onMouseLeave={clearIcon.onMouseLeave}
                 >
+                  <TrashIcon ref={clearIcon.ref} size={14} />
                   {t("provider.clearConfig")}
                 </button>
               ) : (
@@ -144,7 +171,10 @@ export function QuickStartSection({
                 onClick={onConnect}
                 disabled={busy || !apiKey.trim()}
                 data-hint={!apiKey ? t("provider.fillKeyFirst") : ""}
+                onMouseEnter={verifyIcon.onMouseEnter}
+                onMouseLeave={verifyIcon.onMouseLeave}
               >
+                <ShieldCheckIcon ref={verifyIcon.ref} size={15} />
                 {busy ? t("provider.oneClickRunning") : t("provider.verifyKeyAndChat")}
               </button>
             </div>

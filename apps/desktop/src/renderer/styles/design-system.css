@@ -3547,6 +3547,9 @@ body.settings-window #root {
 }
 
 .provider-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 0;
   border: none;
   background: none;
@@ -3593,6 +3596,14 @@ body.settings-window #root {
 
 .provider-connect__key-input {
   margin-top: 8px;
+}
+
+.provider-connect__key-input .input {
+  padding-right: 96px;
+}
+
+.provider-connect__key-input .input-group__suffix .btn {
+  white-space: nowrap;
 }
 
 .input--provider-key {
@@ -3820,6 +3831,9 @@ body.settings-window #root {
 }
 
 .provider-mode-switch__control .segmented__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   padding: 7px 11px;
@@ -3973,6 +3987,9 @@ body.settings-window #root {
 }
 
 .provider-role-spectrum__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12.5px;
   font-weight: 650;
   color: var(--ink);

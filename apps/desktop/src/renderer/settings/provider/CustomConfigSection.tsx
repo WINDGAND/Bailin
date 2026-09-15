@@ -1,4 +1,12 @@
 import { useId, useState } from "react";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  EyeIcon,
+  EyeOffIcon,
+  ShieldCheckIcon,
+  TrashIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 import type {
   ImageGenerationConfigDTO,
   ImageTierConfigDTO,
@@ -50,6 +58,10 @@ export interface CustomConfigSectionProps {
 
 export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Element {
   const t = useT();
+  const reducedMotion = useReducedMotion();
+  const showKeyIcon = useHostedAnimatedIcon(reducedMotion);
+  const clearIcon = useHostedAnimatedIcon(reducedMotion);
+  const verifyIcon = useHostedAnimatedIcon(reducedMotion);
   const reuseLLMId = useId();
   const [imageGenOpen, setImageGenOpen] = useState(false);
   const [optionalOpen, setOptionalOpen] = useState(false);
@@ -99,7 +111,14 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
                   className="btn btn--ghost btn--sm"
                   onClick={props.onToggleShowKey}
                   aria-label={props.showKey ? t("provider.hideKeyAria") : t("provider.showKeyAria")}
+                  onMouseEnter={showKeyIcon.onMouseEnter}
+                  onMouseLeave={showKeyIcon.onMouseLeave}
                 >
+                  {props.showKey ? (
+                    <EyeOffIcon ref={showKeyIcon.ref} size={14} />
+                  ) : (
+                    <EyeIcon ref={showKeyIcon.ref} size={14} />
+                  )}
                   {props.showKey ? t("provider.hideKey") : t("provider.showKey")}
                 </button>
               </div>
@@ -313,7 +332,10 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
               className="btn btn--ghost btn--sm"
               onClick={props.onClear}
               disabled={props.busy || !props.apiKey}
+              onMouseEnter={clearIcon.onMouseEnter}
+              onMouseLeave={clearIcon.onMouseLeave}
             >
+              <TrashIcon ref={clearIcon.ref} size={14} />
               {t("provider.clearConfig")}
             </button>
             <button
@@ -322,7 +344,10 @@ export function CustomConfigSection(props: CustomConfigSectionProps): JSX.Elemen
               onClick={props.onVerify}
               disabled={props.busy || !props.apiKey.trim()}
               data-hint={!props.apiKey ? t("provider.fillKeyFirst") : ""}
+              onMouseEnter={verifyIcon.onMouseEnter}
+              onMouseLeave={verifyIcon.onMouseLeave}
             >
+              <ShieldCheckIcon ref={verifyIcon.ref} size={15} />
               {props.busy ? t("provider.verifyRunning") : t("provider.saveAndVerify")}
             </button>
           </div>

@@ -1,5 +1,13 @@
 import { useState } from "react";
 import { FieldLabel } from "../../shared/FieldHelp.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  EyeIcon,
+  EyeOffIcon,
+  ShieldCheckIcon,
+  TrashIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 import { ReadinessChecklist } from "./ReadinessChecklist.js";
 import type { ReadinessMap } from "./apply-recommended-bundle.js";
 import {
@@ -40,6 +48,10 @@ function hostFromBaseUrl(url: string): string {
 
 export function LocalConfigSection(props: LocalConfigSectionProps): JSX.Element {
   const t = useT();
+  const reducedMotion = useReducedMotion();
+  const showKeyIcon = useHostedAnimatedIcon(reducedMotion);
+  const clearIcon = useHostedAnimatedIcon(reducedMotion);
+  const verifyIcon = useHostedAnimatedIcon(reducedMotion);
   const [optionalKeyOpen, setOptionalKeyOpen] = useState(false);
   const canVerify = Boolean(props.baseUrl.trim() && props.model.trim());
   const hasReadinessResults = Object.values(props.readiness).some((s) => s.status !== "idle");
@@ -185,7 +197,14 @@ export function LocalConfigSection(props: LocalConfigSectionProps): JSX.Element 
                       aria-label={
                         props.showKey ? t("provider.hideKeyAria") : t("provider.showKeyAria")
                       }
+                      onMouseEnter={showKeyIcon.onMouseEnter}
+                      onMouseLeave={showKeyIcon.onMouseLeave}
                     >
+                      {props.showKey ? (
+                        <EyeOffIcon ref={showKeyIcon.ref} size={14} />
+                      ) : (
+                        <EyeIcon ref={showKeyIcon.ref} size={14} />
+                      )}
                       {props.showKey ? t("provider.hideKey") : t("provider.showKey")}
                     </button>
                   </div>
@@ -203,7 +222,10 @@ export function LocalConfigSection(props: LocalConfigSectionProps): JSX.Element 
                   className="btn btn--ghost btn--sm"
                   onClick={props.onClear}
                   disabled={props.busy}
+                  onMouseEnter={clearIcon.onMouseEnter}
+                  onMouseLeave={clearIcon.onMouseLeave}
                 >
+                  <TrashIcon ref={clearIcon.ref} size={14} />
                   {t("provider.clearConfig")}
                 </button>
               ) : (
@@ -215,7 +237,10 @@ export function LocalConfigSection(props: LocalConfigSectionProps): JSX.Element 
                 onClick={props.onVerify}
                 disabled={props.busy || !canVerify}
                 data-hint={!canVerify ? t("provider.local.fillRequired") : ""}
+                onMouseEnter={verifyIcon.onMouseEnter}
+                onMouseLeave={verifyIcon.onMouseLeave}
               >
+                <ShieldCheckIcon ref={verifyIcon.ref} size={15} />
                 {props.busy ? t("provider.verifyRunning") : t("provider.local.saveAndVerify")}
               </button>
             </div>
