@@ -48,7 +48,7 @@ try {
   await expectError(
     "non-search model cannot satisfy enableWebSearch",
     () =>
-      new LLMAdapter(() => provider("gpt-4o-mini")).chatWithTools({
+      new LLMAdapter(() => provider("deepseek-v4-flash")).chatWithTools({
         systemPrompt: "search",
         messages: [{ role: "user", content: "search the web" }],
         stream: false,
@@ -83,7 +83,7 @@ try {
 
   // user 必须带「角色名」「维度名」结构，buildShortReaskMessages 才会触发重试。
   // 这模拟了 research-pipeline 真实发出的 prompt。
-  const noCite = await new LLMAdapter(() => provider("gpt-4o-mini-search-preview")).chatWithTools({
+  const noCite = await new LLMAdapter(() => provider("gpt-5-search-api")).chatWithTools({
     systemPrompt: "search",
     messages: [
       {
@@ -116,7 +116,7 @@ try {
   // 当 user message 没有「」结构（如英文 prompt），跳过 short-reask 重试，直接 soft-degrade。
   // 避免无端付第二次费。
   fetchCalls = 0;
-  const enNoCite = await new LLMAdapter(() => provider("gpt-4o-mini-search-preview")).chatWithTools({
+  const enNoCite = await new LLMAdapter(() => provider("gpt-5-search-api")).chatWithTools({
     systemPrompt: "search",
     messages: [{ role: "user", content: "who won the 2024 Nobel prize in physics?" }],
     stream: false,
@@ -159,7 +159,7 @@ try {
       { status: 200, headers: { "content-type": "application/json" } }
     );
   };
-  const inlineCite = await new LLMAdapter(() => provider("gpt-4o-mini-search-preview")).chatWithTools({
+  const inlineCite = await new LLMAdapter(() => provider("gpt-5-search-api")).chatWithTools({
     systemPrompt: "search",
     messages: [{ role: "user", content: "nobel?" }],
     stream: false,
@@ -200,7 +200,7 @@ try {
       { status: 200, headers: { "content-type": "application/json" } }
     );
 
-  const ok = await new LLMAdapter(() => provider("gpt-4o-mini-search-preview")).chatWithTools({
+  const ok = await new LLMAdapter(() => provider("gpt-5-search-api")).chatWithTools({
     systemPrompt: "search",
     messages: [{ role: "user", content: "who won the 2024 Nobel prize in physics?" }],
     stream: false,

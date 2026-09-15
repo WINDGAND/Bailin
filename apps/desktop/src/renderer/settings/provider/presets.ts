@@ -157,7 +157,7 @@ export const RECOMMENDED_BUNDLES: RecommendedBundle[] = [
       baseUrl: "https://api.ohmygpt.com/v1",
       model: "deepseek-v4-flash",
       visionModel: "bytedance/doubao-seed-2.0-lite-260428",
-      webSearchModel: "gpt-4o-mini-search-preview"
+      webSearchModel: "gpt-4o-mini"
     },
     image: { ...DEFAULT_IMAGE_CONFIG, useLLMProvider: true }
   },
@@ -175,7 +175,7 @@ export const RECOMMENDED_BUNDLES: RecommendedBundle[] = [
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o-mini",
       visionModel: "gpt-4o-mini",
-      webSearchModel: "gpt-4o-mini-search-preview"
+      webSearchModel: "gpt-4o-mini"
     },
     image: { ...DEFAULT_IMAGE_CONFIG, useLLMProvider: true }
   },
@@ -193,7 +193,7 @@ export const RECOMMENDED_BUNDLES: RecommendedBundle[] = [
       baseUrl: "https://api.deepseek.com",
       model: "deepseek-v4-flash",
       visionModel: "bytedance/doubao-seed-2.0-lite-260428",
-      webSearchModel: "gpt-4o-mini-search-preview"
+      webSearchModel: "gpt-4o-mini"
     },
     image: { ...DEFAULT_IMAGE_CONFIG, useLLMProvider: true }
   }
@@ -207,7 +207,7 @@ export const SINGLE_KEY_EXAMPLE_STACK = {
   relay: { label: "OhMyGPT", baseUrl: "https://api.ohmygpt.com/v1" },
   chat: { model: "deepseek-v4-flash", role: "chat" as const },
   vision: { model: "bytedance/doubao-seed-2.0-lite-260428", role: "vision" as const },
-  webSearch: { model: "gpt-4o-mini-search-preview", role: "webSearch" as const },
+  webSearch: { model: "gpt-4o-mini", role: "webSearch" as const },
   imageGen: { model: "gpt-image-2", tier: "standard", role: "imageGen" as const }
 };
 

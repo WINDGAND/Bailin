@@ -846,7 +846,7 @@ export const en: TranslationTree = {
       visionModel:
         "Model ID used to read uploaded reference images; must accept image input. For Qwen use qwen3.7-plus / qwen-vl-*; non-vision IDs fall back to the main multimodal model when possible.",
       webSearchModel:
-        "Model ID used for web research during deep character creation; usually a search-preview series. For Qwen/DashScope use a normal model ID (e.g. qwen-plus, qwen3.7-plus)—do not append -search; mistaken qwen-*-search names are auto-normalized.",
+        "Model ID used for web research during deep character creation. For OhMyGPT / OpenAI use gpt-4o-mini (Responses web_search); retired search-preview IDs are remapped automatically. For Qwen/DashScope use a normal model ID (e.g. qwen-plus, qwen3.7-plus)—do not append -search.",
       webSearch: "Web retrieval used during deep character creation; availability depends on model and provider.",
       imageGen: "Image model and parameters used to generate pixel pet sprites.",
       imageTiers:
@@ -874,7 +874,7 @@ export const en: TranslationTree = {
     visionModelLabel: "Vision model",
     visionModelPlaceholder: "e.g. gpt-4o-mini, claude-3-5-sonnet …",
     webSearchModelLabel: "Web search model",
-    webSearchModelPlaceholder: "e.g. gpt-4o-mini-search-preview …",
+    webSearchModelPlaceholder: "e.g. gpt-4o-mini …",
     apiKeyLabel: "API Key",
     apiKeyHint: "After saving, decrypted once via system DPAPI only—never uploaded.",
     showKey: "Show",

@@ -31,7 +31,11 @@ import type { CharacterRuntime } from "../runtime/character-runtime.js";
 import type { BailinOrchestrator } from "../orchestration/bailin-orchestrator.js";
 import type { ProactiveOrchestrator } from "../proactive/proactive-orchestrator.js";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
-import { DEFAULT_VISION_MODEL, DEFAULT_WEB_SEARCH_MODEL } from "../adapters/llm-adapter.js";
+import {
+  DEFAULT_VISION_MODEL,
+  DEFAULT_WEB_SEARCH_MODEL,
+  remapRetiredSearchPreviewModel
+} from "../adapters/llm-adapter.js";
 import {
   buildTierRequestBody,
   DEFAULT_IMAGE_GENERATION_CONFIG,
@@ -302,7 +306,9 @@ export function registerIpc(deps: IpcDeps): void {
         ...rest,
         apiKey: key,
         visionModel: rest.visionModel?.trim() || DEFAULT_VISION_MODEL,
-        webSearchModel: rest.webSearchModel?.trim() || DEFAULT_WEB_SEARCH_MODEL
+        webSearchModel: remapRetiredSearchPreviewModel(
+          rest.webSearchModel?.trim() || DEFAULT_WEB_SEARCH_MODEL
+        )
       };
     } catch {
       return null;

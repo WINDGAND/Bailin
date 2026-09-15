@@ -89,7 +89,7 @@ export interface RunResearchAgentsInput {
   timeoutMs: number;
   /**
    * 调研用的「内置联网模型」（仅在 webSearchEnabled=true 时使用）。
-   * 例如 gpt-4o-mini-search-preview。空则用 provider 默认 model。
+   * 例如 gpt-4o-mini。空则用 provider 默认 model。
    */
   researchModel?: string;
   /** 上层订阅每个 agent 完成 / 失败的实时回调，UI 用来更新状态卡片。 */

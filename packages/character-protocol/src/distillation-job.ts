@@ -66,11 +66,11 @@ export const DistillationJobConfigSchema = z.object({
     .max(4)
     .default([]),
   /**
-   * 调研阶段使用的「联网搜索模型」。默认 gpt-4o-mini-search-preview（OpenAI 内置联网，
-   * chat/completions 端点）。Phase 1 调研 + Phase 3b 外貌搜图都用它；其余阶段
+   * 调研阶段使用的「联网搜索模型」。默认 gpt-4o-mini（Responses API + web_search）。
+   * Phase 1 调研 + Phase 3b 外貌搜图都用它；其余阶段
    * （框架提炼、自我批评、Sprite、自检风格评分）继续用 provider 默认模型。
    */
-  researchModel: z.string().min(1).max(80).default("gpt-4o-mini-search-preview")
+  researchModel: z.string().min(1).max(80).default("gpt-4o-mini")
 });
 
 export type DistillationJobConfig = z.infer<typeof DistillationJobConfigSchema>;

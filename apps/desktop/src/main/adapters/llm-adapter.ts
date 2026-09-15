@@ -26,7 +26,7 @@ export interface ChatRequest {
   signal?: AbortSignal;
   /**
    * 用这个临时覆盖 provider.model（不改全局配置）。
-   * 用法：深度蒸馏调研阶段切到 gpt-4o-mini-search-preview，
+   * 用法：深度蒸馏调研阶段切到 gpt-4o-mini（Responses API + web_search），
    * 其他阶段沿用 provider 默认 model（推荐 deepseek-v4-flash）。
    */
   modelOverride?: string;
@@ -171,7 +171,17 @@ const VISION_MODEL_KEYWORDS = [
 
 /** 参考图 vision 读图 / 自检专用模型（与主模型分离，主模型可为 DeepSeek 等纯文本模型）。 */
 export const DEFAULT_VISION_MODEL = "bytedance/doubao-seed-2.0-lite-260428";
-export const DEFAULT_WEB_SEARCH_MODEL = "gpt-4o-mini-search-preview";
+/** 深度调研默认联网模型。search-preview 已于 2026-07 下架，改走 Responses + web_search。 */
+export const DEFAULT_WEB_SEARCH_MODEL = "gpt-4o-mini";
+
+/** OpenAI 已关停的 Chat Completions search-preview 别名，一律换成默认联网模型。 */
+const RETIRED_SEARCH_PREVIEW_RE = /gpt-4o(?:-mini)?-search-preview/i;
+
+export function remapRetiredSearchPreviewModel(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed) return trimmed;
+  return RETIRED_SEARCH_PREVIEW_RE.test(trimmed) ? DEFAULT_WEB_SEARCH_MODEL : trimmed;
+}
 
 /** 通义用户常误填 `qwen-plus-search`；去掉末尾 -search，保留 OpenAI search-preview 原名。 */
 export function normalizeQwenModelId(model: string): string {
@@ -242,9 +252,9 @@ export function resolveWebSearchModel(
   modelOverride?: string
 ): string {
   const trimmed = modelOverride?.trim();
-  if (trimmed) return normalizeQwenModelId(trimmed);
+  if (trimmed) return remapRetiredSearchPreviewModel(normalizeQwenModelId(trimmed));
   const fromProvider = provider?.webSearchModel?.trim();
-  if (fromProvider) return normalizeQwenModelId(fromProvider);
+  if (fromProvider) return remapRetiredSearchPreviewModel(normalizeQwenModelId(fromProvider));
   return DEFAULT_WEB_SEARCH_MODEL;
 }
 
@@ -278,8 +288,8 @@ function isSearchRelayBaseUrl(baseUrl: string): boolean {
  * Anthropic 兼容协议：走 /v1/messages。
  *   - 已知支持 server-side web_search 的模型：附加 tools = [{ type: "web_search_20250305" }]
  *
- * OpenAI Responses API 路径已删除——OhMyGPT 等主流中转站不支持，OpenAI 官方也允许在
- * chat/completions 上通过 search-preview 模型获得联网能力。
+ * OpenAI / OhMyGPT 联网：search-preview 已下架，改走 POST /v1/responses + tools.web_search。
+ * Chat Completions 上若仍有 search-preview / search-api 模型，则继续走旧路径。
  */
 export class LLMAdapter {
   constructor(private provider: () => LLMProviderConfig | null) {}
@@ -302,7 +312,7 @@ export class LLMAdapter {
     const p = this.provider();
     if (!p) return { webSearch: false, reason: "未配置 LLM 提供商" };
     const rawModel = modelOverride ?? p.webSearchModel?.trim() ?? p.model ?? "";
-    const model = normalizeQwenModelId(rawModel).toLowerCase();
+    const model = remapRetiredSearchPreviewModel(normalizeQwenModelId(rawModel)).toLowerCase();
 
     if (p.kind === "openai-compatible") {
       if (matchesSearchModel(model)) {
@@ -735,10 +745,11 @@ export class LLMAdapter {
    * 带联网搜索的一次性问答（非流式）。
    * 路由规则：
    *   1) enableWebSearch=false → 普通 chatOnce
-   *   2) modelOverride / provider.model 命中 search 关键字 → OpenAI search-preview 路径
+   *   2) 仍叫 search-preview / search-api 的模型 → Chat Completions + web_search_options
    *   3) 通义 / Qwen → enable_search 路径
-   *   4) Anthropic + 已知 web_search 模型 → server-side web_search tool
-   *   5) 其他 → error。联网调研不能静默降级为普通 chat。
+   *   4) gpt-4o / gpt-5.x → Responses API + tools.web_search（OhMyGPT / OpenAI 现用路径）
+   *   5) Anthropic + 已知 web_search 模型 → server-side web_search tool
+   *   6) 其他 → error。联网调研不能静默降级为普通 chat。
    */
   async chatWithTools(req: ChatWithToolsRequest): Promise<ChatWithToolsResult | ChatWithToolsError> {
     const provider = this.provider();
@@ -752,19 +763,24 @@ export class LLMAdapter {
     }
 
     if (provider.kind === "openai-compatible") {
-      const model = normalizeQwenModelId(req.modelOverride ?? provider.model);
+      const model = remapRetiredSearchPreviewModel(
+        normalizeQwenModelId(req.modelOverride ?? provider.model)
+      );
       if (matchesSearchModel(model)) {
         return this.openAISearchPreview(provider, model, req);
       }
       if (usesQwenEnableSearch(provider.baseUrl, model, provider.model)) {
         return this.dashScopeEnableSearch(provider, model, req);
       }
+      if (usesResponsesWebSearch(model)) {
+        return this.openAIResponsesWebSearch(provider, model, req);
+      }
       return {
         kind: "error",
         code: "WEB_SEARCH_UNSUPPORTED_MODEL",
         message:
-          `已要求联网搜索，但模型 ${model} 不是 search-preview/search-api 系列，也不是通义/Qwen enable_search 路径。` +
-          `请把调研模型改为 gpt-4o-mini-search-preview / gpt-4o-search-preview，` +
+          `已要求联网搜索，但模型 ${model} 不能走 Responses web_search，也不是通义 enable_search 路径。` +
+          `请把调研模型改为 gpt-4o-mini / gpt-4o / gpt-5.6-luna，` +
           `或使用通义 qwen-plus / qwen3.7-plus 等，` +
           `或换支持 server-side web_search 的 Anthropic 模型。`,
         toolEvents: []
@@ -797,6 +813,149 @@ export class LLMAdapter {
       code: "UNSUPPORTED_PROVIDER",
       message: "当前 provider 不支持工具调用",
       toolEvents: []
+    };
+  }
+
+  /**
+   * OpenAI Responses API + tools.web_search。
+   * search-preview 下架后，OhMyGPT / OpenAI 官方用这条路径做真实联网。
+   */
+  private async openAIResponsesWebSearch(
+    p: LLMProviderConfig,
+    model: string,
+    req: ChatWithToolsRequest
+  ): Promise<ChatWithToolsResult | ChatWithToolsError> {
+    const url = responsesUrl(p);
+    const input = req.messages.map((m) => ({
+      role: m.role,
+      content: typeof m.content === "string" ? m.content : toOpenAIContent(m.content)
+    }));
+    const body: Record<string, unknown> = {
+      model,
+      instructions: req.systemPrompt,
+      input,
+      tools: [{ type: "web_search" }],
+      store: false
+    };
+    if (req.maxTokens) body.max_output_tokens = req.maxTokens;
+
+    const startedAt = Date.now();
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${p.apiKey}`
+        },
+        body: JSON.stringify(body),
+        signal: mergeChatFetchSignal(req.signal)
+      });
+    } catch (e) {
+      const httpDt = Date.now() - startedAt;
+      const isTimeout =
+        e instanceof Error && (e.name === "TimeoutError" || e.message.includes("timeout"));
+      logSearchCall({
+        requestId: req.requestLabel,
+        phase: "first",
+        url,
+        model,
+        contextSize: req.searchContextSize ?? "medium",
+        httpStatus: 0,
+        httpDt,
+        ok: false,
+        errorPreview: "NETWORK: " + fetchErrorMessage(e)
+      });
+      return {
+        kind: "error",
+        code: isTimeout ? "TIMEOUT" : "NETWORK_ERROR",
+        message: fetchErrorMessage(e),
+        toolEvents: []
+      };
+    }
+
+    const httpDt = Date.now() - startedAt;
+    const rawText = await res.text().catch(() => "");
+    if (!res.ok) {
+      logSearchCall({
+        requestId: req.requestLabel,
+        phase: "first",
+        url,
+        model,
+        contextSize: req.searchContextSize ?? "medium",
+        httpStatus: res.status,
+        httpDt,
+        ok: false,
+        errorPreview: rawText.slice(0, 200)
+      });
+      return {
+        kind: "error",
+        code: mapHttpToCode(res.status),
+        message: rawText.slice(0, 800) || `HTTP ${res.status}`,
+        toolEvents: []
+      };
+    }
+
+    let json: unknown = null;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      logSearchCall({
+        requestId: req.requestLabel,
+        phase: "first",
+        url,
+        model,
+        contextSize: req.searchContextSize ?? "medium",
+        httpStatus: res.status,
+        httpDt,
+        ok: false,
+        errorPreview: "BAD_JSON: " + rawText.slice(0, 200)
+      });
+      return {
+        kind: "error",
+        code: "BAD_RESPONSE",
+        message: "Responses web_search 响应不可解析",
+        toolEvents: []
+      };
+    }
+
+    const parsed = parseOpenAIResponses(json);
+    const toolEvents: ToolEvent[] = [];
+    if (parsed.usedSearch || parsed.citations.length > 0) {
+      toolEvents.push({ kind: "tool_start", tool: "web_search" });
+      toolEvents.push({
+        kind: "tool_end",
+        tool: "web_search",
+        sources: parsed.citations
+      });
+    }
+    logSearchCall({
+      requestId: req.requestLabel,
+      phase: "first",
+      url,
+      model,
+      contextSize: req.searchContextSize ?? "medium",
+      httpStatus: res.status,
+      httpDt,
+      ok: true,
+      messageKeys: parsed.outputTypes,
+      annotationsRaw: parsed.citations.length,
+      citationsFromAnnotations: parsed.citations.length,
+      finalCitations: parsed.citations.length,
+      textLen: parsed.text.length,
+      verdict:
+        parsed.citations.length > 0
+          ? "OK_ANNOTATIONS"
+          : parsed.text
+            ? "EMPTY_CITATIONS"
+            : "EMPTY_BODY"
+    });
+    return {
+      kind: "done",
+      text: parsed.text,
+      finishReason: "stop",
+      toolEvents,
+      citations: parsed.citations
     };
   }
 
@@ -1274,6 +1433,61 @@ function matchesSearchModel(model: string): boolean {
   return OPENAI_SEARCH_MODEL_KEYWORDS.some((k) => lower.includes(k));
 }
 
+/** gpt-4o / gpt-5 系走 Responses API 的 web_search 工具。 */
+function usesResponsesWebSearch(model: string): boolean {
+  const m = model.toLowerCase();
+  if (matchesSearchModel(m)) return false;
+  return (
+    m.startsWith("gpt-4o") ||
+    m.startsWith("gpt-4.1") ||
+    m.startsWith("gpt-5")
+  );
+}
+
+function parseOpenAIResponses(json: unknown): {
+  text: string;
+  citations: string[];
+  usedSearch: boolean;
+  outputTypes: string[];
+} {
+  const citations = new Set<string>();
+  const outputTypes: string[] = [];
+  let text = "";
+  let usedSearch = false;
+  if (!json || typeof json !== "object") {
+    return { text, citations: [], usedSearch, outputTypes };
+  }
+  const root = json as {
+    output_text?: unknown;
+    output?: Array<{
+      type?: string;
+      content?: Array<{
+        type?: string;
+        text?: string;
+        annotations?: Array<{ type?: string; url?: string; url_citation?: { url?: string } }>;
+      }>;
+    }>;
+  };
+  if (typeof root.output_text === "string") text = root.output_text;
+  for (const item of root.output ?? []) {
+    if (item?.type) outputTypes.push(item.type);
+    if (item?.type === "web_search_call") usedSearch = true;
+    if (item?.type !== "message") continue;
+    for (const part of item.content ?? []) {
+      if (part?.type !== "output_text" || typeof part.text !== "string") continue;
+      if (!text) text = part.text;
+      for (const ann of part.annotations ?? []) {
+        const url = ann.url ?? ann.url_citation?.url;
+        if (typeof url === "string" && url.length > 0) citations.add(url);
+      }
+    }
+  }
+  if (citations.size === 0 && text.length > 0) {
+    for (const u of extractInlineUrls(text)) citations.add(u);
+  }
+  return { text, citations: Array.from(citations), usedSearch, outputTypes };
+}
+
 /** 从正文捞 http(s) URL，最多 6 条。 */
 function extractInlineUrls(text: string): string[] {
   if (!text) return [];
@@ -1352,6 +1566,11 @@ function toAnthropicContent(content: ChatMessageContent): unknown {
 function chatCompletionsUrl(p: LLMProviderConfig): string {
   const trimmed = trimRightSlash(p.baseUrl);
   return /\/v\d+$/.test(trimmed) ? trimmed + "/chat/completions" : trimmed + "/v1/chat/completions";
+}
+
+function responsesUrl(p: LLMProviderConfig): string {
+  const trimmed = trimRightSlash(p.baseUrl);
+  return /\/v\d+$/.test(trimmed) ? trimmed + "/responses" : trimmed + "/v1/responses";
 }
 
 /**

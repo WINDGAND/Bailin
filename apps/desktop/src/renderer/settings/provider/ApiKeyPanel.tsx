@@ -43,7 +43,7 @@ type Kind = "openai-compatible" | "anthropic-compatible";
 const CLOUD_DEFAULT_BUNDLE = getRecommendedBundle(DEFAULT_BUNDLE_ID)!;
 const DEFAULT_LOCAL = getLocalEndpointPreset(DEFAULT_LOCAL_PRESET_ID)!;
 
-const DEFAULT_WEB_SEARCH_MODEL = "gpt-4o-mini-search-preview";
+const DEFAULT_WEB_SEARCH_MODEL = "gpt-4o-mini";
 
 function applyBundleToForm(
   bundle: RecommendedBundle,

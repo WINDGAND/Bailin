@@ -840,7 +840,7 @@ export const zh = {
       visionModel:
         "用于读取上传参考图的模型 ID；需支持图像输入。通义可用 qwen3.7-plus / qwen-vl-*；误填非视觉模型时会尝试回落主模型。",
       webSearchModel:
-        "深度创建角色时用于联网检索的模型 ID；通常为 search-preview 系列。通义请填普通模型名（如 qwen-plus、qwen3.7-plus），勿加 -search；产品会自动兼容误填的 qwen-*-search。",
+        "深度创建角色时用于联网检索的模型 ID。欧麦 / OpenAI 请填 gpt-4o-mini（走 Responses 联网）；search-preview 已下架，会自动改成 gpt-4o-mini。通义请填普通模型名（如 qwen-plus、qwen3.7-plus），勿加 -search。",
       webSearch: "深度创建角色时用于联网检索；是否可用取决于所选模型与服务商。",
       imageGen: "用于生成像素桌宠外观的图像模型与相关参数。",
       imageTiers:
@@ -867,7 +867,7 @@ export const zh = {
     visionModelLabel: "识图模型",
     visionModelPlaceholder: "例如 gpt-4o-mini、claude-3-5-sonnet …",
     webSearchModelLabel: "联网模型",
-    webSearchModelPlaceholder: "例如 gpt-4o-mini-search-preview …",
+    webSearchModelPlaceholder: "例如 gpt-4o-mini …",
     apiKeyLabel: "API Key",
     apiKeyHint: "保存后只通过系统 DPAPI 解密读取一次，永远不会上传。",
     showKey: "显示",

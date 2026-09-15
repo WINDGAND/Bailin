@@ -195,24 +195,54 @@ describe("LLMAdapter qwen enable_search path", () => {
     assert.equal(seenBody?.web_search_options, undefined);
   });
 
-  it("keeps search-preview path for non-qwen models", async () => {
+  it("remaps retired search-preview models to gpt-4o-mini", () => {
+    assert.equal(
+      resolveWebSearchModel({
+        kind: "openai-compatible",
+        baseUrl: "https://api.ohmygpt.com/v1",
+        apiKey: "sk-test",
+        model: "deepseek-v4-flash",
+        webSearchModel: "gpt-4o-mini-search-preview"
+      }),
+      "gpt-4o-mini"
+    );
+    assert.equal(
+      resolveWebSearchModel({
+        kind: "openai-compatible",
+        baseUrl: "https://api.ohmygpt.com/v1",
+        apiKey: "sk-test",
+        model: "deepseek-v4-flash",
+        webSearchModel: "gpt-4o-search-preview-2025-03-11"
+      }),
+      "gpt-4o-mini"
+    );
+  });
+
+  it("uses Responses web_search for gpt-4o-mini on OhMyGPT", async () => {
+    let seenUrl = "";
     let seenBody: Record<string, unknown> | null = null;
-    globalThis.fetch = (async (_url, init) => {
+    globalThis.fetch = (async (url, init) => {
+      seenUrl = String(url);
       seenBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
       return new Response(
         JSON.stringify({
-          choices: [
+          status: "completed",
+          output: [
+            { type: "web_search_call", status: "completed" },
             {
-              message: {
-                content: "ok https://example.com/nobel",
-                annotations: [
-                  {
-                    type: "url_citation",
-                    url_citation: { url: "https://example.com/nobel" }
-                  }
-                ]
-              },
-              finish_reason: "stop"
+              type: "message",
+              content: [
+                {
+                  type: "output_text",
+                  text: "2024 物理学奖公告 https://www.nobelprize.org/prizes/physics/2024/prize-announcement/",
+                  annotations: [
+                    {
+                      type: "url_citation",
+                      url: "https://www.nobelprize.org/prizes/physics/2024/prize-announcement/"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         }),
@@ -225,7 +255,7 @@ describe("LLMAdapter qwen enable_search path", () => {
       baseUrl: "https://api.ohmygpt.com/v1",
       apiKey: "sk-test",
       model: "deepseek-v4-flash",
-      webSearchModel: "gpt-4o-mini-search-preview"
+      webSearchModel: "gpt-4o-mini"
     }));
 
     const r = await adapter.chatWithTools({
@@ -236,9 +266,13 @@ describe("LLMAdapter qwen enable_search path", () => {
       modelOverride: "gpt-4o-mini-search-preview"
     });
     assert.equal(r.kind, "done");
-    assert.equal(seenBody?.model, "gpt-4o-mini-search-preview");
-    assert.ok(seenBody?.web_search_options);
-    assert.equal(seenBody?.enable_search, undefined);
+    if (r.kind !== "done") return;
+    assert.ok(seenUrl.endsWith("/responses"), `url=${seenUrl}`);
+    assert.equal(seenBody?.model, "gpt-4o-mini");
+    assert.deepEqual(seenBody?.tools, [{ type: "web_search" }]);
+    assert.equal(seenBody?.web_search_options, undefined);
+    assert.ok(r.citations.some((u) => u.includes("nobelprize.org")));
+    assert.ok(r.toolEvents.some((e) => e.kind === "tool_start" && e.tool === "web_search"));
   });
 });
 
