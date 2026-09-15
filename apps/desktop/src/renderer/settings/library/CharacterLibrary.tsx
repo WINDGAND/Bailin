@@ -20,6 +20,19 @@ import type {
 import { useT } from "../../shared/i18n/index.js";
 import { ChatMarkdown } from "../../shared/chat-markdown.js";
 import { Icon } from "../../shared/icon.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  ArchiveIcon,
+  GaugeIcon,
+  MonitorCheckIcon,
+  PaletteIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  SparklesIcon,
+  TrashIcon,
+  UploadIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 import { useVisualJobs } from "../app/visual-job-context.js";
 import { resolveCharacterSignature } from "./character-signature.js";
 import { interpretQuoteRetryResult } from "./quote-retry-feedback.js";
@@ -74,6 +87,14 @@ export function CharacterLibrary({
   const bailin = useBailin();
   const confirm = useConfirm();
   const { showToast } = useToast();
+  const reducedMotion = useReducedMotion();
+  const createIcon = useHostedAnimatedIcon(reducedMotion);
+  const desktopIcon = useHostedAnimatedIcon(reducedMotion);
+  const appearanceIcon = useHostedAnimatedIcon(reducedMotion);
+  const regenerateIcon = useHostedAnimatedIcon(reducedMotion);
+  const referenceIcon = useHostedAnimatedIcon(reducedMotion);
+  const quoteRetryIcon = useHostedAnimatedIcon(reducedMotion);
+  const deleteIcon = useHostedAnimatedIcon(reducedMotion);
   const {
     getJob,
     isBusy,
@@ -542,7 +563,10 @@ export function CharacterLibrary({
           className="btn btn--magenta"
           onClick={onNewClick}
           disabled={reordering}
+          onMouseEnter={createIcon.onMouseEnter}
+          onMouseLeave={createIcon.onMouseLeave}
         >
+          <PlusIcon ref={createIcon.ref} size={16} />
           {t("library.newCharacter")}
         </button>
       </div>
@@ -835,6 +859,8 @@ export function CharacterLibrary({
                         className="char-signature__retry"
                         disabled={anyBusy}
                         onClick={() => void retryQuote()}
+                        onMouseEnter={quoteRetryIcon.onMouseEnter}
+                        onMouseLeave={quoteRetryIcon.onMouseLeave}
                       >
                         {quoteRetrying ? (
                           <>
@@ -842,7 +868,10 @@ export function CharacterLibrary({
                             <span>{t("library.quoteRetrying")}</span>
                           </>
                         ) : (
-                          t("library.quoteRetryAction")
+                          <>
+                            <RefreshCwIcon ref={quoteRetryIcon.ref} size={13} />
+                            <span>{t("library.quoteRetryAction")}</span>
+                          </>
                         )}
                       </button>
                     ) : null}
@@ -913,15 +942,20 @@ export function CharacterLibrary({
                     className={isSelectedActive ? "btn btn--ghost" : "btn btn--magenta"}
                     onClick={() => void activate(selected.card.id)}
                     disabled={anyBusy}
+                    onMouseEnter={desktopIcon.onMouseEnter}
+                    onMouseLeave={desktopIcon.onMouseLeave}
                   >
                     {activating ? (
                       <>
                         <Spinner /> {t("library.activating")}
                       </>
-                    ) : isSelectedActive ? (
-                      t("library.showOnDesktop")
                     ) : (
-                      t("library.setActive")
+                      <>
+                        <MonitorCheckIcon ref={desktopIcon.ref} size={16} />
+                        {isSelectedActive
+                          ? t("library.showOnDesktop")
+                          : t("library.setActive")}
+                      </>
                     )}
                   </button>
 
@@ -933,6 +967,8 @@ export function CharacterLibrary({
                       aria-haspopup="menu"
                       aria-expanded={appearanceMenuOpen}
                       disabled={activating}
+                      onMouseEnter={appearanceIcon.onMouseEnter}
+                      onMouseLeave={appearanceIcon.onMouseLeave}
                       onClick={() => {
                         if (selectedRegenerating) return;
                         setAppearanceMenuOpen((open) => !open);
@@ -944,6 +980,7 @@ export function CharacterLibrary({
                         </>
                       ) : (
                         <>
+                          <PaletteIcon ref={appearanceIcon.ref} size={16} />
                           {t("library.appearanceMenu")}
                           <Icon
                             name="chevron-down"
@@ -970,6 +1007,8 @@ export function CharacterLibrary({
                               ? t("library.regenerateSpriteHintWithAppearance")
                               : t("library.regenerateSpriteHintSkeleton")
                           }
+                          onMouseEnter={regenerateIcon.onMouseEnter}
+                          onMouseLeave={regenerateIcon.onMouseLeave}
                           onClick={() => {
                             setAppearanceMenuOpen(false);
                             void runSpriteRegeneration(
@@ -979,6 +1018,7 @@ export function CharacterLibrary({
                           }}
                         >
                           <span className="library-actions__menu-label">
+                            <RefreshCwIcon ref={regenerateIcon.ref} size={15} />
                             {t("library.regenerateSprite")}
                           </span>
                           <span className="library-actions__menu-caption">
@@ -993,12 +1033,15 @@ export function CharacterLibrary({
                           className="library-actions__menu-item"
                           disabled={anyBusy}
                           data-hint={t("library.newReferenceHint")}
+                          onMouseEnter={referenceIcon.onMouseEnter}
+                          onMouseLeave={referenceIcon.onMouseLeave}
                           onClick={() => {
                             setAppearanceMenuOpen(false);
                             newRefFileInput.current?.click();
                           }}
                         >
                           <span className="library-actions__menu-label">
+                            <UploadIcon ref={referenceIcon.ref} size={15} />
                             {t("library.newReference")}
                           </span>
                           <span className="library-actions__menu-caption">
@@ -1033,7 +1076,10 @@ export function CharacterLibrary({
                   className="btn btn--danger"
                   onClick={() => void remove(selected.card.id, selected.card.meta.name)}
                   disabled={anyBusy}
+                  onMouseEnter={deleteIcon.onMouseEnter}
+                  onMouseLeave={deleteIcon.onMouseLeave}
                 >
+                  <TrashIcon ref={deleteIcon.ref} size={16} />
                   {t("library.delete")}
                 </button>
               </div>
@@ -1103,6 +1149,8 @@ function ResearchArchiveSection({
   onToggle: (agentId: number) => void;
 }): JSX.Element {
   const t = useT();
+  const reducedMotion = useReducedMotion();
+  const archiveIcon = useHostedAnimatedIcon(reducedMotion);
   const sorted = useMemo(
     () => [...docs].sort((a, b) => a.agentId - b.agentId),
     [docs]
@@ -1110,7 +1158,12 @@ function ResearchArchiveSection({
 
   return (
     <details className="research-archive">
-      <summary className="research-archive__summary">
+      <summary
+        className="research-archive__summary"
+        onMouseEnter={archiveIcon.onMouseEnter}
+        onMouseLeave={archiveIcon.onMouseLeave}
+      >
+        <ArchiveIcon ref={archiveIcon.ref} size={15} />
         {t("library.researchArchive", { count: docs.length })}
       </summary>
       <p className="research-archive__hint body-sm">{t("library.researchArchiveHint")}</p>
@@ -1204,6 +1257,8 @@ const QUALITY_GROUP_TITLE_KEY: Record<
 
 function QualityMetricsSection({ report }: { report: QualityReport }): JSX.Element {
   const t = useT();
+  const reducedMotion = useReducedMotion();
+  const metricsIcon = useHostedAnimatedIcon(reducedMotion);
   const groups = useMemo(() => {
     const buckets: Record<QualityGroupId, QualityCheckItem[]> = {
       structure: [],
@@ -1224,7 +1279,14 @@ function QualityMetricsSection({ report }: { report: QualityReport }): JSX.Eleme
 
   return (
     <details className="research-archive quality-metrics">
-      <summary className="research-archive__summary">{t("library.debugMetrics")}</summary>
+      <summary
+        className="research-archive__summary"
+        onMouseEnter={metricsIcon.onMouseEnter}
+        onMouseLeave={metricsIcon.onMouseLeave}
+      >
+        <GaugeIcon ref={metricsIcon.ref} size={15} />
+        {t("library.debugMetrics")}
+      </summary>
       <p className="research-archive__hint body-sm">{t("library.debugMetricsHint")}</p>
 
       <div className="quality-metrics__verdict">
@@ -1304,13 +1366,28 @@ function EmptyLibrary({
   onNew: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }): JSX.Element {
+  const reducedMotion = useReducedMotion();
+  const sparklesIcon = useHostedAnimatedIcon(reducedMotion);
+  const plusIcon = useHostedAnimatedIcon(reducedMotion);
   return (
     <div className="library-detail" style={{ padding: "22px 4px" }}>
-      <div className="empty">
+      <div
+        className="empty"
+        onMouseEnter={sparklesIcon.onMouseEnter}
+        onMouseLeave={sparklesIcon.onMouseLeave}
+      >
+        <SparklesIcon ref={sparklesIcon.ref} className="empty__glyph" size={28} />
         <div className="empty__title">{t("library.emptyTitle")}</div>
         <p className="empty__body">{t("library.emptyBody")}</p>
         <div className="row gap-2" style={{ marginTop: 6 }}>
-          <button type="button" className="btn btn--magenta btn--sm" onClick={onNew}>
+          <button
+            type="button"
+            className="btn btn--magenta btn--sm"
+            onClick={onNew}
+            onMouseEnter={plusIcon.onMouseEnter}
+            onMouseLeave={plusIcon.onMouseLeave}
+          >
+            <PlusIcon ref={plusIcon.ref} size={15} />
             {t("library.emptyCta")}
           </button>
         </div>

@@ -121,7 +121,7 @@ export const en: TranslationTree = {
     reorderLoadingAria: "Preparing reorder list",
     dragHandleAria: "Drag to reorder {{name}}",
     toastReorderFailed: "Couldn't save order: {{error}}",
-    newCharacter: "+ Create a character",
+    newCharacter: "Create a character",
     emptyTitle: "Your library is empty",
     emptyBody: "Create one now and bring it to your desktop.",
     emptyCta: "Create character",

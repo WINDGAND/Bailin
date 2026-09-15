@@ -312,6 +312,19 @@ body {
   outline: 2px solid var(--magenta);
   outline-offset: 3px;
 }
+
+.bl-animated-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.bl-animated-icon svg {
+  display: block;
+}
 .btn:disabled,
 .btn[aria-disabled="true"] {
   opacity: 0.45;
@@ -1434,6 +1447,23 @@ body {
   line-height: 1.5;
 }
 
+.empty__glyph {
+  color: var(--ink-faint);
+  transition: color var(--motion-fast) var(--ease-out);
+}
+
+.empty:hover .empty__glyph,
+.empty:focus-within .empty__glyph {
+  color: var(--magenta);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty:hover .empty__glyph,
+  .empty:focus-within .empty__glyph {
+    color: var(--ink-faint);
+  }
+}
+
 /* ---------- Tooltip-on-button (data-hint) ---------- */
 
 [data-hint] {
@@ -2545,6 +2575,9 @@ body.settings-window #root {
 }
 
 .library-actions__menu-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
@@ -2573,7 +2606,7 @@ body.settings-window #root {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 6px 10px;
   padding: 10px 0;
   font-family: var(--font-body);

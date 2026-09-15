@@ -119,7 +119,7 @@ export const zh = {
     reorderLoadingAria: "正在准备调整顺序",
     dragHandleAria: "拖动以调整「{{name}}」的顺序",
     toastReorderFailed: "保存顺序失败：{{error}}",
-    newCharacter: "+ 创建新角色",
+    newCharacter: "创建新角色",
     emptyTitle: "仓库还是空的",
     emptyBody: "立刻创建一个，让它上桌陪你。",
     emptyCta: "创建角色",
