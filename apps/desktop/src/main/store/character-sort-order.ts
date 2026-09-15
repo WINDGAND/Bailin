@@ -47,3 +47,17 @@ export function buildSortOrderBackfill(
   });
   return sorted.map((row, index) => ({ id: row.id, sort_order: index }));
 }
+
+/**
+ * 新角色插到仓库最前：自身 sort_order=0，已有角色按当前顺序整体后移。
+ * `existingSortedIds` 必须已是 list 展示顺序（sort_order ASC）。
+ */
+export function planInsertAtFront(
+  existingSortedIds: readonly string[],
+  newId: string
+): Array<{ id: string; sort_order: number }> {
+  return [
+    { id: newId, sort_order: 0 },
+    ...existingSortedIds.map((id, index) => ({ id, sort_order: index + 1 }))
+  ];
+}

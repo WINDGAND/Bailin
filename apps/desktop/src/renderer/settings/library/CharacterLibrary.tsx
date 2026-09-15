@@ -241,6 +241,7 @@ export function CharacterLibrary({
       if (outcome !== "success") return;
       void (async () => {
         await refreshList(true);
+        setListPage(1);
         const next = await bailin.characters.get(characterId);
         if (next) {
           setThumbnails((prev) => ({ ...prev, [characterId]: next.sprite ?? null }));

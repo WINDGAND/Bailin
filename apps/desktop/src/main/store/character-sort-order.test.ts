@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   CharacterReorderError,
   buildSortOrderBackfill,
+  planInsertAtFront,
   validateCharacterReorderIds
 } from "./character-sort-order.js";
 
@@ -67,5 +68,19 @@ describe("buildSortOrderBackfill", () => {
       { id: "a", sort_order: 0 },
       { id: "b", sort_order: 1 }
     ]);
+  });
+});
+
+describe("planInsertAtFront", () => {
+  it("puts the new character first and shifts existing ids", () => {
+    assert.deepEqual(planInsertAtFront(["old", "older"], "new"), [
+      { id: "new", sort_order: 0 },
+      { id: "old", sort_order: 1 },
+      { id: "older", sort_order: 2 }
+    ]);
+  });
+
+  it("inserts as the only item when the library is empty", () => {
+    assert.deepEqual(planInsertAtFront([], "solo"), [{ id: "solo", sort_order: 0 }]);
   });
 });

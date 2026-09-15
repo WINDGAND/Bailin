@@ -311,25 +311,26 @@ export class LocalVault {
     now: number;
   }): void {
     const { id, bundle, isSkeleton, now } = input;
-    const nextSortOrder = (
-      this.db
-        .prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM characters")
-        .get() as { n: number }
-    ).n;
-    this.db
-      .prepare(
-        `INSERT INTO characters (id, name, source_name, source_type, track, is_skeleton, bundle_json, created_at, updated_at, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name,
-           source_name = excluded.source_name,
-           source_type = excluded.source_type,
-           track = excluded.track,
-           is_skeleton = excluded.is_skeleton,
-           bundle_json = excluded.bundle_json,
-           updated_at = excluded.updated_at`
-      )
-      .run(
+    const upsert = this.db.prepare(
+      `INSERT INTO characters (id, name, source_name, source_type, track, is_skeleton, bundle_json, created_at, updated_at, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         source_name = excluded.source_name,
+         source_type = excluded.source_type,
+         track = excluded.track,
+         is_skeleton = excluded.is_skeleton,
+         bundle_json = excluded.bundle_json,
+         updated_at = excluded.updated_at`
+    );
+    const tx = this.db.transaction(() => {
+      const exists = this.db
+        .prepare("SELECT 1 AS ok FROM characters WHERE id = ?")
+        .get(id) as { ok: number } | undefined;
+      if (!exists) {
+        this.db.prepare("UPDATE characters SET sort_order = sort_order + 1").run();
+      }
+      upsert.run(
         id,
         bundle.card.meta.name,
         bundle.card.meta.sourceName ?? null,
@@ -339,8 +340,10 @@ export class LocalVault {
         JSON.stringify(bundle),
         bundle.card.createdAt || now,
         now,
-        nextSortOrder
+        0
       );
+    });
+    tx();
   }
 
   listCharacters(): Array<{
