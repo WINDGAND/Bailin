@@ -6,6 +6,18 @@ import { ensureLlmConfigured } from "../../shared/ensure-llm-configured.js";
 import { useT } from "../../shared/i18n/index.js";
 import { OptionGroup } from "../../shared/option-group.js";
 import { useDistillationJobs } from "../app/distillation-job-context.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  BookTextIcon,
+  FolderOpenIcon,
+  LinkIcon,
+  SparklesIcon,
+  SquarePenIcon,
+  TrashIcon,
+  UploadIcon,
+  UserIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 
 type SourceType = "public-figure" | "fictional" | "original";
 type Track = "utility" | "companion";
@@ -35,7 +47,15 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
   const bailin = useBailin();
   const { showToast } = useToast();
   const confirm = useConfirm();
+  const reducedMotion = useReducedMotion();
   const { activeJob, startJob, clearJob, cancelJob } = useDistillationJobs();
+  const submitIcon = useHostedAnimatedIcon(reducedMotion);
+  const dropzoneIcon = useHostedAnimatedIcon(reducedMotion);
+  const folderIcon = useHostedAnimatedIcon(reducedMotion);
+  const linkIcon = useHostedAnimatedIcon(reducedMotion);
+  const publicFigureIcon = useHostedAnimatedIcon(reducedMotion);
+  const fictionalIcon = useHostedAnimatedIcon(reducedMotion);
+  const originalIcon = useHostedAnimatedIcon(reducedMotion);
 
   const [name, setName] = useState("");
   const [sourceContext, setSourceContext] = useState("");
@@ -300,17 +320,26 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
               {
                 value: "public-figure",
                 label: t("forge.sourcePublicFigure"),
-                caption: t("forge.sourcePublicFigureCaption")
+                caption: t("forge.sourcePublicFigureCaption"),
+                icon: <UserIcon ref={publicFigureIcon.ref} size={18} />,
+                onMouseEnter: publicFigureIcon.onMouseEnter,
+                onMouseLeave: publicFigureIcon.onMouseLeave
               },
               {
                 value: "fictional",
                 label: t("forge.sourceFictional"),
-                caption: t("forge.sourceFictionalCaption")
+                caption: t("forge.sourceFictionalCaption"),
+                icon: <BookTextIcon ref={fictionalIcon.ref} size={18} />,
+                onMouseEnter: fictionalIcon.onMouseEnter,
+                onMouseLeave: fictionalIcon.onMouseLeave
               },
               {
                 value: "original",
                 label: t("forge.sourceOriginal"),
-                caption: t("forge.sourceOriginalCaption")
+                caption: t("forge.sourceOriginalCaption"),
+                icon: <SquarePenIcon ref={originalIcon.ref} size={18} />,
+                onMouseEnter: originalIcon.onMouseEnter,
+                onMouseLeave: originalIcon.onMouseLeave
               }
             ]}
           />
@@ -395,11 +424,18 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
               <div className="forge-section__head">
                 <span className="bl-field-label">{t("forge.referenceLabel")}</span>
               </div>
-              <div className="apple-dropzone">
-                <div style={{ marginBottom: 10 }}>
-                  <div className="apple-dropzone__title">{t("forge.dropzoneTitle")}</div>
-                  <div className="apple-dropzone__hint">
-                    {t("forge.dropzoneHint", { max: MAX_REFERENCE_IMAGES })}
+              <div
+                className="apple-dropzone"
+                onMouseEnter={dropzoneIcon.onMouseEnter}
+                onMouseLeave={dropzoneIcon.onMouseLeave}
+              >
+                <div className="apple-dropzone__lead">
+                  <UploadIcon ref={dropzoneIcon.ref} size={22} />
+                  <div>
+                    <div className="apple-dropzone__title">{t("forge.dropzoneTitle")}</div>
+                    <div className="apple-dropzone__hint">
+                      {t("forge.dropzoneHint", { max: MAX_REFERENCE_IMAGES })}
+                    </div>
                   </div>
                 </div>
                 <div className="forge-ref-controls">
@@ -408,7 +444,10 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                     className="btn btn--ghost btn--sm"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={referenceImages.length >= MAX_REFERENCE_IMAGES}
+                    onMouseEnter={folderIcon.onMouseEnter}
+                    onMouseLeave={folderIcon.onMouseLeave}
                   >
+                    <FolderOpenIcon ref={folderIcon.ref} size={15} />
                     {t("forge.chooseFile")}
                   </button>
                   <input
@@ -444,7 +483,10 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
                       urlDraft.trim().length === 0 ||
                       referenceImages.length >= MAX_REFERENCE_IMAGES
                     }
+                    onMouseEnter={linkIcon.onMouseEnter}
+                    onMouseLeave={linkIcon.onMouseLeave}
                   >
+                    <LinkIcon ref={linkIcon.ref} size={15} />
                     {t("forge.addUrl")}
                   </button>
                 </div>
@@ -641,7 +683,10 @@ export function CreateCharacter({ onDone }: { onDone: () => void }): JSX.Element
             type="submit"
             className="btn btn--magenta"
             disabled={busy || trimmedName.length === 0 || deepDisabled}
+            onMouseEnter={submitIcon.onMouseEnter}
+            onMouseLeave={submitIcon.onMouseLeave}
           >
+            <SparklesIcon ref={submitIcon.ref} size={16} />
             {submitLabel}
           </button>
         </div>
@@ -707,6 +752,8 @@ function ReferenceThumb({
   onSetPrimary: () => void;
 }) {
   const t = useT();
+  const reducedMotion = useReducedMotion();
+  const removeIcon = useHostedAnimatedIcon(reducedMotion);
   const isPrimary = img.role === "primary";
   return (
     <div
@@ -771,19 +818,13 @@ function ReferenceThumb({
         ) : null}
         <button
           type="button"
+          className="forge-ref-thumb__remove"
           onClick={onRemove}
-          style={{
-            background: "none",
-            border: "none",
-            color: "inherit",
-            padding: 0,
-            cursor: "pointer",
-            fontSize: 12,
-            lineHeight: 1
-          }}
+          onMouseEnter={removeIcon.onMouseEnter}
+          onMouseLeave={removeIcon.onMouseLeave}
           title={t("forge.refRemove")}
         >
-          ×
+          <TrashIcon ref={removeIcon.ref} size={12} />
         </button>
       </div>
     </div>

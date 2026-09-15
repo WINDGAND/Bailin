@@ -7,6 +7,9 @@ export interface OptionGroupItem<T extends string> {
   caption?: string;
   /** 可选图标节点（自带 aria-hidden）。 */
   icon?: ReactNode;
+  /** 卡片 hover 时驱动 hosted 动画图标；由调用方接 useHostedAnimatedIcon。 */
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
   disabled?: boolean;
 }
 
@@ -150,13 +153,15 @@ export function OptionGroup<T extends string>({
             onClick={() => {
               if (!opt.disabled) moveTo(opt.value);
             }}
+            onMouseEnter={opt.onMouseEnter}
+            onMouseLeave={opt.onMouseLeave}
             onKeyDown={(e) => onItemKeyDown(e, idx)}
           >
             {renderItem ? (
               renderItem(opt)
             ) : (
               <>
-                {opt.icon}
+                {opt.icon ? <span className="forge-mode__icon">{opt.icon}</span> : null}
                 <span className="forge-mode__title">{opt.label}</span>
                 {opt.caption ? <span className="forge-mode__caption">{opt.caption}</span> : null}
               </>

@@ -433,12 +433,18 @@ export function CopyButton({
   text,
   label,
   className,
-  small = false
+  small = false,
+  icon,
+  onMouseEnter,
+  onMouseLeave
 }: {
   text: string;
   label?: string;
   className?: string;
   small?: boolean;
+  icon?: ReactNode;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }): JSX.Element {
   const t = useT();
   const resolvedLabel = label ?? t("feedback.copy");
@@ -471,8 +477,11 @@ export function CopyButton({
       type="button"
       className={`btn btn--ghost ${small ? "btn--sm" : ""} ${className ?? ""}`}
       onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       aria-live="polite"
     >
+      {icon}
       {copied ? t("feedback.copied") : resolvedLabel}
     </button>
   );

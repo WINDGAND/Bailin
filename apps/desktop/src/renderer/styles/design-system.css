@@ -4412,6 +4412,15 @@ body.settings-window #root {
   line-height: var(--leading-caption);
 }
 
+.forge-mode__icon {
+  display: flex;
+  color: var(--ink-soft);
+}
+
+.forge-mode__card.is-active .forge-mode__icon {
+  color: var(--magenta-deep);
+}
+
 .forge-mode__hint {
   margin-top: 8px;
   font-size: 12.5px;
@@ -4549,6 +4558,18 @@ body.settings-window #root {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.forge-ref-thumb__remove {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 .forge-disclosure {
@@ -5645,6 +5666,18 @@ body.settings-window #root {
   padding: 14px;
 }
 
+.apple-dropzone__lead {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.apple-dropzone__lead .bl-animated-icon {
+  margin-top: 1px;
+  color: var(--ink-soft);
+}
+
 .apple-dropzone__title {
   font-size: 13px;
   font-weight: 600;
@@ -6203,6 +6236,10 @@ body.settings-window #root {
 }
 
 [data-theme="dark"] .forge-mode__card.is-active .forge-mode__title {
+  color: var(--magenta-soft, var(--magenta));
+}
+
+[data-theme="dark"] .forge-mode__card.is-active .forge-mode__icon {
   color: var(--magenta-soft, var(--magenta));
 }
 

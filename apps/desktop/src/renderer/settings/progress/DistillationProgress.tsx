@@ -15,6 +15,11 @@ import { PetRenderer } from "../../shared/pet-renderer.js";
 import { useBailin } from "../../shared/use-bailin.js";
 import { useReducedMotion } from "../../shared/use-reduced-motion.js";
 import {
+  CopyIcon,
+  PartyPopperIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
+import {
   resolveAtlasPetPixelSize,
   resolveDslPetPixelSize
 } from "../../../shared/pet-display-scale.js";
@@ -55,6 +60,9 @@ export function DistillationProgress({
 }: Props): JSX.Element {
   const t = useT();
   const { locale } = useI18n();
+  const reducedMotion = useReducedMotion();
+  const goToLibraryIcon = useHostedAnimatedIcon(reducedMotion);
+  const copyErrorIcon = useHostedAnimatedIcon(reducedMotion);
   // 阶段条 + 内容区都从 DistillationJobProvider 读：设置页 key={tab} 会卸载本组件，
   // 但 Provider 不卸，切回来时步骤 4/5（外貌 / 绘制形象）等已发生事件不会丢。
   const {
@@ -204,7 +212,13 @@ export function DistillationProgress({
                 {t("distill.doneBody")}
               </p>
               <div className="row row--end gap-2">
-                <button className="btn btn--magenta" onClick={() => onComplete()}>
+                <button
+                  className="btn btn--magenta"
+                  onClick={() => onComplete()}
+                  onMouseEnter={goToLibraryIcon.onMouseEnter}
+                  onMouseLeave={goToLibraryIcon.onMouseLeave}
+                >
+                  <PartyPopperIcon ref={goToLibraryIcon.ref} size={16} />
                   {t("distill.goToLibrary")}
                 </button>
               </div>
@@ -225,6 +239,9 @@ export function DistillationProgress({
                   small
                   text={buildErrorReport(jobId, characterName, finalState.reason, warnings, t)}
                   label={t("distill.copyErrorLog")}
+                  icon={<CopyIcon ref={copyErrorIcon.ref} size={15} />}
+                  onMouseEnter={copyErrorIcon.onMouseEnter}
+                  onMouseLeave={copyErrorIcon.onMouseLeave}
                 />
                 <button className="btn btn--ghost" onClick={() => onCancel()}>
                   {t("distill.back")}
