@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 
 /** Apple-ish role=switch 开关，与用户画像 / 桌宠页共用 `.bl-switch` 样式。 */
 export function BlSwitch({
@@ -81,19 +81,30 @@ export function BlSwitchRow({
 /** 发丝列表内的紧凑开关行（提醒类型等）。 */
 export function BlToggleRow({
   label,
+  icon,
   checked,
   onCheckedChange,
-  disabled
+  disabled,
+  onMouseEnter,
+  onMouseLeave
 }: {
   label: string;
+  icon?: ReactNode;
   checked: boolean;
   onCheckedChange: (next: boolean) => void;
   disabled?: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }): JSX.Element {
   const labelId = useId();
   return (
-    <div className="desktop-toggle-row">
-      <span id={labelId} className="body-sm">
+    <div
+      className="desktop-toggle-row"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <span id={labelId} className="body-sm desktop-toggle-row__label">
+        {icon}
         {label}
       </span>
       <BlSwitch

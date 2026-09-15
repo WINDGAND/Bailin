@@ -26,6 +26,19 @@ import { BlSelect } from "../../shared/BlSelect.js";
 import { PetPreview } from "../../shared/pet-preview.js";
 import { useI18n } from "../../shared/i18n/index.js";
 import { translateTriggerReason as translateTriggerReasonText } from "../../shared/translate-trigger-reason.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  CoffeeIcon,
+  EyeIcon,
+  HandIcon,
+  LockOpenIcon,
+  MessageCircleIcon,
+  TimerIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
+import type { AnimatedIconProps } from "../../shared/animated-icons/shell.js";
+import type { AnimatedIconHandle } from "../../shared/animated-icons/hover.js";
+import type { ForwardRefExoticComponent, RefAttributes } from "react";
 
 const DEFAULT_SETTINGS: ProactiveSettings = {
   enabled: true,
@@ -71,6 +84,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
   const { bundle } = useActiveCharacter();
   const { showToast } = useToast();
   const confirm = useConfirm();
+  const reducedMotion = useReducedMotion();
+  const trySpeakIcon = useHostedAnimatedIcon(reducedMotion);
+  const tryScreenshotIcon = useHostedAnimatedIcon(reducedMotion);
   const [settings, setSettings] = useState<ProactiveSettings>(DEFAULT_SETTINGS);
   const [status, setStatus] = useState<ProactiveStatus | null>(null);
   const [visionAvailable, setVisionAvailable] = useState<boolean | null>(null);
@@ -391,7 +407,10 @@ export function DesktopBehaviorPanel(): JSX.Element {
                       setLlmTesting(false);
                     }
                   }}
+                  onMouseEnter={tryScreenshotIcon.onMouseEnter}
+                  onMouseLeave={tryScreenshotIcon.onMouseLeave}
                 >
+                  <EyeIcon ref={tryScreenshotIcon.ref} size={15} />
                   {llmTesting ? t("common.loading") : t("desktop.smartScreenshotTryButton")}
                 </button>
               </div>
@@ -404,8 +423,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
           <div style={{ marginTop: 4 }}>
             <span className="bl-field-label">{t("desktop.scenariosTitle")}</span>
             <div className="desktop-toggle-list">
-              <BlToggleRow
+              <ScenarioToggleRow
                 label={t("desktop.scenarioLongActive")}
+                icon={TimerIcon}
                 checked={settings.scenarioToggles.longActive}
                 onCheckedChange={(longActive) =>
                   void save({
@@ -414,8 +434,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
                   })
                 }
               />
-              <BlToggleRow
+              <ScenarioToggleRow
                 label={t("desktop.scenarioIdle")}
+                icon={CoffeeIcon}
                 checked={settings.scenarioToggles.idle}
                 onCheckedChange={(idle) =>
                   void save({
@@ -424,8 +445,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
                   })
                 }
               />
-              <BlToggleRow
+              <ScenarioToggleRow
                 label={t("desktop.scenarioReturn")}
+                icon={HandIcon}
                 checked={settings.scenarioToggles.returnActive}
                 onCheckedChange={(returnActive) =>
                   void save({
@@ -434,8 +456,9 @@ export function DesktopBehaviorPanel(): JSX.Element {
                   })
                 }
               />
-              <BlToggleRow
+              <ScenarioToggleRow
                 label={t("desktop.scenarioUnlock")}
+                icon={LockOpenIcon}
                 checked={settings.scenarioToggles.unlock}
                 onCheckedChange={(unlock) =>
                   void save({
@@ -534,11 +557,43 @@ export function DesktopBehaviorPanel(): JSX.Element {
               });
               await refreshStatus();
             }}
+            onMouseEnter={trySpeakIcon.onMouseEnter}
+            onMouseLeave={trySpeakIcon.onMouseLeave}
           >
+            <MessageCircleIcon ref={trySpeakIcon.ref} size={16} />
             {t("desktop.triggerButton")}
           </button>
         </div>
       </section>
     </div>
+  );
+}
+
+type ScenarioIcon = ForwardRefExoticComponent<
+  AnimatedIconProps & RefAttributes<AnimatedIconHandle | null>
+>;
+
+function ScenarioToggleRow({
+  label,
+  icon: Icon,
+  checked,
+  onCheckedChange
+}: {
+  label: string;
+  icon: ScenarioIcon;
+  checked: boolean;
+  onCheckedChange: (next: boolean) => void;
+}): JSX.Element {
+  const reducedMotion = useReducedMotion();
+  const hosted = useHostedAnimatedIcon(reducedMotion);
+  return (
+    <BlToggleRow
+      label={label}
+      icon={<Icon ref={hosted.ref} size={14} />}
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+      onMouseEnter={hosted.onMouseEnter}
+      onMouseLeave={hosted.onMouseLeave}
+    />
   );
 }

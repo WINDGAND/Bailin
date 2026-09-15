@@ -8682,6 +8682,13 @@ body.settings-window #root {
   min-width: 0;
 }
 
+.desktop-toggle-row__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .desktop-toggle-row:last-child {
   border-bottom: none;
 }
@@ -8788,7 +8795,6 @@ body.settings-window #root {
 .desktop-screenshot-meta {
   margin: 10px 0 0;
   padding-top: 10px;
-  border-top: 1px solid var(--hairline);
 }
 
 /* ---------- [37] Desktop companion（桌宠与陪伴）——发丝分区 + 品牌滑块 ---------- */
@@ -8890,6 +8896,13 @@ body.settings-window #root {
   min-width: 0;
 }
 
+.desktop-toggle-row__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .desktop-toggle-row:last-child {
   border-bottom: none;
 }
@@ -8996,6 +9009,5 @@ body.settings-window #root {
 .desktop-screenshot-meta {
   margin: 10px 0 0;
   padding-top: 10px;
-  border-top: 1px solid var(--hairline);
 }
 
