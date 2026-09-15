@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ForwardRefExoticComponent, type RefAttributes } from "react";
 import { ulid } from "ulid";
 import type {
   MemorySettings,
@@ -18,11 +18,44 @@ import { useConfirm, useToast } from "../../shared/feedback.js";
 import { useDirtyTracker } from "../app/dirty-context.js";
 import { useI18n, useT } from "../../shared/i18n/index.js";
 import { formatChatTime } from "../../shared/format-chat-time.js";
-import { Icon } from "../../shared/icon.js";
 import { BlSwitch } from "../../shared/bl-switch.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  BanIcon,
+  CircleHelpIcon,
+  CloudRainIcon,
+  CompassIcon,
+  HeartIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  SlidersHorizontalIcon,
+  SparklesIcon,
+  TrashIcon,
+  UndoIcon,
+  UserIcon,
+  WrenchIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
+import type { AnimatedIconProps } from "../../shared/animated-icons/shell.js";
+import type { AnimatedIconHandle } from "../../shared/animated-icons/hover.js";
 
 const MAX_NAME = 24;
 const UNDO_WINDOW_MS = 10 * 60 * 1000;
+
+type CategoryIcon = ForwardRefExoticComponent<
+  AnimatedIconProps & RefAttributes<AnimatedIconHandle | null>
+>;
+
+const CATEGORY_ICONS: Record<ProfileFactCategory, CategoryIcon> = {
+  identity: UserIcon,
+  goal: CompassIcon,
+  concern: CloudRainIcon,
+  interest: HeartIcon,
+  skill: WrenchIcon,
+  preference: SlidersHorizontalIcon,
+  boundary: BanIcon,
+  other: CircleHelpIcon
+};
 
 function profileKey(p: UserProfile): string {
   return JSON.stringify(p);
@@ -57,6 +90,12 @@ export function MemoryPanel(): JSX.Element {
   const bailin = useBailin();
   const confirm = useConfirm();
   const { showToast } = useToast();
+  const reducedMotion = useReducedMotion();
+  const addFactIcon = useHostedAnimatedIcon(reducedMotion);
+  const clearIcon = useHostedAnimatedIcon(reducedMotion);
+  const learnedIcon = useHostedAnimatedIcon(reducedMotion);
+  const undoIcon = useHostedAnimatedIcon(reducedMotion);
+  const refreshIcon = useHostedAnimatedIcon(reducedMotion);
   const [profile, setProfile] = useState<UserProfile>(emptyProfile());
   const [initial, setInitial] = useState<UserProfile>(emptyProfile());
   const [settings, setSettings] = useState<MemorySettings>({
@@ -260,7 +299,14 @@ export function MemoryPanel(): JSX.Element {
             <span className="body-sm" style={{ flex: 1 }}>
               {t("memory.pendingAutoBanner")}
             </span>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => void reload()}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => void reload()}
+              onMouseEnter={refreshIcon.onMouseEnter}
+              onMouseLeave={refreshIcon.onMouseLeave}
+            >
+              <RefreshCwIcon ref={refreshIcon.ref} size={15} />
               {t("memory.refreshProfile")}
             </button>
           </div>
@@ -358,14 +404,19 @@ export function MemoryPanel(): JSX.Element {
           )}
 
           <div style={{ marginTop: 16 }}>
-            <AddFactButton onAdd={addFact} />
+            <AddFactButton onAdd={addFact} icon={addFactIcon} />
           </div>
         </div>
 
         {latestChangeRecord ? (
-          <div className="memory-activity" style={{ marginBottom: 24 }}>
+          <div
+            className="memory-activity"
+            style={{ marginBottom: 24 }}
+            onMouseEnter={learnedIcon.onMouseEnter}
+            onMouseLeave={learnedIcon.onMouseLeave}
+          >
             <span className="memory-activity__icon">
-              <Icon name="sparkle" size={13} />
+              <SparklesIcon ref={learnedIcon.ref} size={13} />
             </span>
             <span className="memory-activity__text">
               <strong>{t("memory.recentLearned")}</strong>
@@ -381,7 +432,10 @@ export function MemoryPanel(): JSX.Element {
                 className="btn btn--ghost btn--sm"
                 disabled={undoing}
                 onClick={() => void undoLast()}
+                onMouseEnter={undoIcon.onMouseEnter}
+                onMouseLeave={undoIcon.onMouseLeave}
               >
+                <UndoIcon ref={undoIcon.ref} size={15} />
                 {t("memory.undoLast")}
               </button>
             ) : null}
@@ -395,7 +449,10 @@ export function MemoryPanel(): JSX.Element {
               className="btn btn--danger btn--sm"
               onClick={() => void clearProfile()}
               disabled={clearing}
+              onMouseEnter={clearIcon.onMouseEnter}
+              onMouseLeave={clearIcon.onMouseLeave}
             >
+              <TrashIcon ref={clearIcon.ref} size={15} />
               {t("memory.clearProfile")}
             </button>
           </div>
@@ -503,7 +560,13 @@ function FactGroup({
   );
 }
 
-function AddFactButton({ onAdd }: { onAdd: (category: ProfileFactCategory) => void }): JSX.Element {
+function AddFactButton({
+  onAdd,
+  icon
+}: {
+  onAdd: (category: ProfileFactCategory) => void;
+  icon: ReturnType<typeof useHostedAnimatedIcon>;
+}): JSX.Element {
   const t = useT();
   const [open, setOpen] = useState(false);
   const groupId = useId();
@@ -516,7 +579,10 @@ function AddFactButton({ onAdd }: { onAdd: (category: ProfileFactCategory) => vo
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={open ? groupId : undefined}
+        onMouseEnter={icon.onMouseEnter}
+        onMouseLeave={icon.onMouseLeave}
       >
+        <PlusIcon ref={icon.ref} size={15} />
         {t("memory.addFact")}
       </button>
       {open ? (
@@ -528,21 +594,43 @@ function AddFactButton({ onAdd }: { onAdd: (category: ProfileFactCategory) => vo
           style={{ marginTop: 10 }}
         >
           {PROFILE_FACT_CATEGORY_ORDER.map((cat) => (
-            <button
+            <FactCategoryChip
               key={cat}
-              type="button"
-              className="forge-chip"
-              onClick={() => {
-                onAdd(cat);
+              category={cat}
+              onPick={(picked) => {
+                onAdd(picked);
                 setOpen(false);
               }}
-            >
-              {t(`memory.category.${cat}`)}
-            </button>
+            />
           ))}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function FactCategoryChip({
+  category,
+  onPick
+}: {
+  category: ProfileFactCategory;
+  onPick: (category: ProfileFactCategory) => void;
+}): JSX.Element {
+  const t = useT();
+  const reducedMotion = useReducedMotion();
+  const hosted = useHostedAnimatedIcon(reducedMotion);
+  const Icon = CATEGORY_ICONS[category];
+  return (
+    <button
+      type="button"
+      className="forge-chip"
+      onClick={() => onPick(category)}
+      onMouseEnter={hosted.onMouseEnter}
+      onMouseLeave={hosted.onMouseLeave}
+    >
+      <Icon ref={hosted.ref} size={14} />
+      {t(`memory.category.${category}`)}
+    </button>
   );
 }
 
@@ -560,6 +648,8 @@ function FactRow({
   locale: "zh" | "en";
 }) {
   const t = useT();
+  const reducedMotion = useReducedMotion();
+  const removeIcon = useHostedAnimatedIcon(reducedMotion);
   return (
     <li className="memory-ledger-row">
       <input
@@ -580,10 +670,12 @@ function FactRow({
           type="button"
           className="memory-ledger-row__remove"
           onClick={onRemove}
+          onMouseEnter={removeIcon.onMouseEnter}
+          onMouseLeave={removeIcon.onMouseLeave}
           aria-label={t("memory.removeRow")}
           data-hint={t("memory.removeHint")}
         >
-          <Icon name="close" size={13} strokeWidth={1.8} />
+          <TrashIcon ref={removeIcon.ref} size={12} />
         </button>
       </div>
     </li>

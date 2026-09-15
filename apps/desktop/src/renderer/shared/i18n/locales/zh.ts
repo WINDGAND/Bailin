@@ -479,7 +479,7 @@ export const zh = {
     factsSectionHint: "桌宠会在对话中自动整理；有数据的分类才会出现。",
     factsEmpty: "还没有记下关于你的事 — 聊几次天，桌宠会自动帮你记",
     factPlaceholder: "例如：在上海做产品 / 喜欢摄影…",
-    addFact: "+ 添加一条记忆",
+    addFact: "添加一条记忆",
     category: {
       identity: "基础信息",
       goal: "当前目标",

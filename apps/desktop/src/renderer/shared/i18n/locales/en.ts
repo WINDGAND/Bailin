@@ -482,7 +482,7 @@ export const en: TranslationTree = {
     factsSectionHint: "Organized automatically from conversations; only categories with data appear.",
     factsEmpty: "Nothing recorded yet — chat a few times and your pet will remember for you",
     factPlaceholder: "e.g. product manager in Shanghai / loves photography…",
-    addFact: "+ Add a memory",
+    addFact: "Add a memory",
     category: {
       identity: "Basics",
       goal: "Current goals",

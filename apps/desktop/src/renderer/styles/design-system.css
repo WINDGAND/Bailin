@@ -4485,6 +4485,9 @@ body.settings-window #root {
 
 .forge-chip {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--grid-strong);
   background: transparent;
   color: var(--ink-soft);
