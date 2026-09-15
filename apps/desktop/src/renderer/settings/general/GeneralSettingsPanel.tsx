@@ -3,6 +3,12 @@ import { useT } from "../../shared/i18n/index.js";
 import { useKeyboard } from "../../shared/keyboard.js";
 import { useBailin } from "../../shared/use-bailin.js";
 import { useConfirm, useToast } from "../../shared/feedback.js";
+import { useReducedMotion } from "../../shared/use-reduced-motion.js";
+import {
+  KeyboardIcon,
+  TrashIcon,
+  useHostedAnimatedIcon
+} from "../../shared/animated-icons/index.js";
 import { AppearanceSection } from "./AppearanceSection.js";
 import { LanguageSection } from "../language/LanguageSection.js";
 import { AboutSection } from "./AboutSection.js";
@@ -13,6 +19,9 @@ export function GeneralSettingsPanel(): JSX.Element {
   const bailin = useBailin();
   const confirm = useConfirm();
   const { showToast } = useToast();
+  const reducedMotion = useReducedMotion();
+  const shortcutsIcon = useHostedAnimatedIcon(reducedMotion);
+  const clearIcon = useHostedAnimatedIcon(reducedMotion);
   const [clearing, setClearing] = useState(false);
 
   async function clearAll(): Promise<void> {
@@ -94,7 +103,10 @@ export function GeneralSettingsPanel(): JSX.Element {
             type="button"
             className="settings-shortcuts__open"
             onClick={() => kb.openHelp()}
+            onMouseEnter={shortcutsIcon.onMouseEnter}
+            onMouseLeave={shortcutsIcon.onMouseLeave}
           >
+            <KeyboardIcon ref={shortcutsIcon.ref} size={15} />
             <span className="kbd">?</span>
             <span>{t("keyboard.discoverHint")}</span>
           </button>
@@ -121,7 +133,10 @@ export function GeneralSettingsPanel(): JSX.Element {
             className="btn btn--danger btn--sm"
             onClick={() => void clearAll()}
             disabled={clearing}
+            onMouseEnter={clearIcon.onMouseEnter}
+            onMouseLeave={clearIcon.onMouseLeave}
           >
+            <TrashIcon ref={clearIcon.ref} size={14} />
             {t("settings.clearAllData")}
           </button>
         </section>
