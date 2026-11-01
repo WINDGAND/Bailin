@@ -1,3 +1,23 @@
+/**
+ * 质量自检（Phase·4）核心模块。
+ *
+ * 职责：在角色卡（CharacterCard）孵化/蒸馏完成后，对其质量做一次系统性的
+ * 「体检」，产出结构化的 QualityReport 供上层（如 synthesis-pipeline、
+ * 设置页进度面板）决定是否通过、告警或打回重做。
+ *
+ * 检查分三大类：
+ *  1. 结构化指标 —— 纯本地计算，逐项核对卡片字段是否满足 huashu-nuwa
+ *     SKILL.md 中的「通过标准」表（心智模型数量、局限性、启发式条数、
+ *     签名词、内在张力、诚实边界、外貌规格、调研来源占比等）；
+ *  2. Sanity / Edge 测试 —— 基于调研文档让 LLM 生成「公开立场题」和
+ *     「边缘问题」，再让角色作答、由评审 LLM 逐题打分（多次 LLM 调用）；
+ *  3. 风格测试 —— 让 LLM 以角色口吻写短文，再由评审 LLM 打分。
+ *
+ * 每个检查项（QualityCheckItem）都带 0..1 的 score 与 pass 标记；
+ * 汇总时取所有项的平均分作为 overallScore，并按「是否存在低分不过项」
+ * 得出 pass / warn / fail 三档结论。
+ */
+
 import type {
   CharacterCard,
   QualityCheckItem,
@@ -15,8 +35,11 @@ import {
 } from "@bailin/prompts";
 import type { LLMAdapter } from "../adapters/llm-adapter.js";
 
+/** runQualityCheck 的入参集合。 */
 export interface RunQualityCheckInput {
+  /** 待体检的角色卡（结构化指标均从此读取）。 */
   card: CharacterCard;
+  /** Phase·3 调研产出的文档列表；缺省时跳过来源占比与 Sanity/Edge 检查。 */
   researchDocs?: ResearchDoc[];
   /** 是否做风格测试（一次额外 LLM 调用 + 一次评分调用）。默认 true。 */
   runVoiceTest?: boolean;
@@ -27,6 +50,18 @@ export interface RunQualityCheckInput {
 /**
  * Phase·4 质量自检：结构化指标 + Sanity/Edge + 风格 LLM 评分。
  * 对应 huashu-nuwa SKILL.md 第 525 行附近的「通过标准」表。
+ *
+ * 执行流程：
+ *  1. 依次执行各项纯本地结构化检查，逐项 push 到 items；
+ *  2. 若有调研文档且 runSanityEdge 为真，执行 Sanity/Edge LLM 测试并计入；
+ *  3. 若 runVoiceTest 为真，执行风格测试（生成短文 + 评分）并计入；
+ *  4. 取所有检查项 score 的平均值作为 overallScore；
+ *  5. 判定结论：任一项不过且 score < 0.3 → fail（硬失败）；
+ *     仅存在不过项（分数尚可）→ warn；全部通过 → pass。
+ *
+ * @param llm   LLM 适配器，用于 Sanity/Edge 出题、作答与评分调用
+ * @param input 检查输入（角色卡、调研文档、可选的测试开关）
+ * @returns 汇总后的质量报告（含结论、总分、逐项明细与三类测试结果）
  */
 export async function runQualityCheck(
   llm: LLMAdapter,
@@ -98,6 +133,12 @@ export async function runQualityCheck(
   });
 
   // 7a. 外貌 spec：置信度 + 参考图来源
+  // 外貌 AppearanceSpec 存在时才有意义，逐项检查：
+  //   - sourceConfidence：调研来源置信度，high 得满分；
+  //   - 虚构/公众人物角色必须有至少 1 张参考图，否则 sprite 可能凭
+  //     训练知识「硬编」出与原作不符的形象；
+  //   - gender 字段不能为 unknown，否则 sprite 生成时可能选错性别模板。
+  // 整个 AppearanceSpec 缺失时记一项 0.2 低分，sprite 将退回骨架样式。
   const appearance = card.meta.appearance;
   if (appearance) {
     items.push({
@@ -148,6 +189,9 @@ export async function runQualityCheck(
   }
 
   // 7. 一手来源占比 >50%（基于调研文档）
+  // 仅当存在调研文档时检查，衡量 Phase·3 调研的「证据质量」：
+  //   - 至少 4/6 个调研 agent 实际触发了 web_search（防止调研空转）；
+  //   - 使用联网搜索的 agent 占比 >50%，保证来源偏向一手信息。
   if (researchDocs && researchDocs.length > 0) {
     const totalSources = researchDocs.reduce((acc, d) => acc + d.sources.length, 0);
     const usedWeb = researchDocs.filter((d) => d.webSearchUsed).length;
@@ -169,9 +213,14 @@ export async function runQualityCheck(
     });
   }
 
+  // Sanity/Edge 测试结果（可能因文档缺失或 LLM 调用失败而不存在）
   let sanityTest: QualityReport["sanityTest"];
   let edgeTest: QualityReport["edgeTest"];
 
+  // Sanity 测试：验证角色在公开议题上的立场方向与设定一致；
+  // Edge 测试：验证角色对边缘/敏感问题保持适度不确定，不乱下断言。
+  // 两者共用一次出题 + 多次作答 + 一次评审的流水线，见
+  // runSanityEdgeTestStep；任一环节失败则静默跳过（不阻塞整体报告）。
   if (runSanityEdge && researchDocs && researchDocs.length > 0) {
     const sanityEdgeResult = await runSanityEdgeTestStep(llm, card, researchDocs);
     if (sanityEdgeResult) {
@@ -201,6 +250,9 @@ export async function runQualityCheck(
   }
 
   // 8. 风格测试：先生成 100 字短文 → 再让 LLM 评分
+  // 两段式：先让角色「写一段话」考察语气/用词，再由评审 LLM 按
+  // 表达 DNA 打 1..10 分。任一步失败则 voiceTest 为 undefined，
+  // 汇总时该项不计入 items。
   let voiceTest: QualityReport["voiceTest"];
   if (runVoiceTest) {
     voiceTest = await runVoiceTestStep(llm, card);
@@ -215,6 +267,9 @@ export async function runQualityCheck(
     }
   }
 
+  // 汇总：平均分 + 三档结论。
+  // hardFail：某项不过且 score < 0.3，属于「硬伤」，直接 fail；
+  // softFail：存在不过项但分数尚可（>= 0.3），给 warn 提示人工复核。
   const overallScore =
     items.reduce((acc, it) => acc + it.score, 0) / Math.max(items.length, 1);
   const hardFail = items.some((it) => !it.pass && it.score < 0.3);
@@ -236,6 +291,24 @@ export async function runQualityCheck(
   };
 }
 
+/**
+ * Sanity/Edge 测试步骤：出题 → 作答 → 评审 三段式流水线。
+ *
+ * 1. 出题：基于调研文档片段（researchDocsToSegments）让 LLM 生成
+ *    3 道「公开立场题」（带期望立场）+ 1 道「边缘问题」；
+ * 2. 作答：对每道题用 buildCharacterAnswerPrompt 让角色本尊回答
+ *    （temperature 0.5，回答截断到 800 字符，失败时以占位文案兜底）；
+ * 3. 评审：将全部问答交给 buildSanityEdgeJudgePrompt 评审，
+ *    逐题打 1..10 分并给出点评。
+ *
+ * 任一环节 LLM 调用失败或 JSON 解析失败都返回 undefined，
+ * 由调用方静默跳过该项，不影响其余检查项。
+ *
+ * @param llm          LLM 适配器
+ * @param card         角色卡（用于角色口吻作答与出题上下文）
+ * @param researchDocs 调研文档（出题的事实依据）
+ * @returns Sanity 与 Edge 两份测试结果；流程中断时返回 undefined
+ */
 async function runSanityEdgeTestStep(
   llm: LLMAdapter,
   card: CharacterCard,
@@ -244,6 +317,7 @@ async function runSanityEdgeTestStep(
   sanityTest?: QualityReport["sanityTest"];
   edgeTest?: QualityReport["edgeTest"];
 } | undefined> {
+  // —— 第 1 段：出题。temperature 压到 0.2 保证题目贴合调研事实。 ——
   const segments = researchDocsToSegments(researchDocs);
   if (segments.length === 0) return undefined;
 
@@ -257,11 +331,13 @@ async function runSanityEdgeTestStep(
   });
   if (questionR.kind !== "done") return undefined;
 
+  // 解析出题 JSON：sanity 题目为空或缺 edge 题时视为出题失败
   const questionSet = parseSanityEdgeQuestions(questionR.text);
   if (!questionSet || questionSet.sanity.length === 0 || !questionSet.edge.question) {
     return undefined;
   }
 
+  // —— 第 2 段：作答。取前 3 道 sanity 题，用角色口吻逐题回答。 ——
   const sanityAnswers: Array<{
     question: string;
     expectedStance: string;
@@ -300,6 +376,7 @@ async function runSanityEdgeTestStep(
       ? edgeAnswerR.text.trim().slice(0, 800)
       : "（回答生成失败）";
 
+  // —— 第 3 段：评审。将全部问答交给评审 LLM 逐题打分。 ——
   const judgePrompt = buildSanityEdgeJudgePrompt({
     characterName: card.meta.name,
     sanity: sanityAnswers,
@@ -317,6 +394,7 @@ async function runSanityEdgeTestStep(
   const judged = parseSanityEdgeJudge(judgeR.text, sanityAnswers.length);
   if (!judged) return undefined;
 
+  // 评审结果与问答逐一对齐；评审输出缺失的题目按 5 分/不通过兜底
   const sanityQuestions = sanityAnswers.map((s, i) => {
     const j = judged.sanity[i] ?? { score: 5, pass: false, critique: "评分缺失" };
     return {
@@ -348,6 +426,16 @@ async function runSanityEdgeTestStep(
   };
 }
 
+/**
+ * 解析出题 LLM 返回的 JSON，得到 Sanity 题集 + Edge 题。
+ *
+ * 容错策略：只保留 question / expectedStance 均为 string 的题目，
+ * 并对长度做硬截断（题目 300、立场 200、相关性 120 字符），
+ * 防止 LLM 输出超长内容撑爆下游 prompt。
+ *
+ * @param raw 出题 LLM 的原始输出（可能带 markdown 代码围栏）
+ * @returns 结构化题集；无法解析或缺少必要字段时返回 null
+ */
 function parseSanityEdgeQuestions(raw: string): SanityEdgeQuestionSet | null {
   const candidate = extractJson(raw);
   if (!candidate) return null;
@@ -373,6 +461,18 @@ function parseSanityEdgeQuestions(raw: string): SanityEdgeQuestionSet | null {
   }
 }
 
+/**
+ * 解析评审 LLM 返回的 JSON，得到逐题评分与整体通过标记。
+ *
+ * 容错策略：对每个字段做类型守卫，非法值回退到安全默认
+ * （分数 5、pass 由分数 >= 7 推断、点评「(无点评)」），
+ * 保证即使评审输出残缺也能产出完整的 sanity/edge 结构，
+ * 不让单次评审失败阻塞整份质量报告。
+ *
+ * @param raw         评审 LLM 的原始输出
+ * @param sanityCount sanity 题目数量（评分列表按此对齐，缺失项补默认值）
+ * @returns 评分结构；JSON 完全无法解析时返回 null
+ */
 function parseSanityEdgeJudge(
   raw: string,
   sanityCount: number
@@ -392,6 +492,7 @@ function parseSanityEdgeJudge(
       overallEdgePass?: unknown;
     };
     const sanity: Array<{ score: number; pass: boolean; critique: string }> = [];
+    // 按下标对齐评审结果；第 i 题缺失时回退为 5 分 + 不通过
     for (let i = 0; i < sanityCount; i++) {
       const row = j.sanity?.[i];
       const score =
@@ -427,6 +528,21 @@ function parseSanityEdgeJudge(
   }
 }
 
+/**
+ * 风格测试步骤：生成短文 → 评分 两段式。
+ *
+ * 1. 生成：用 buildVoiceSamplePrompt 让角色写约 100 字短文
+ *    （temperature 0.6，鼓励个性化表达），截断到 800 字符；
+ * 2. 评分：将短文交给 buildVoiceJudgePrompt 按「表达 DNA」
+ *    打 1..10 分。
+ *
+ * 生成失败返回 undefined（该项不计入报告）；仅评分调用失败时
+ * 返回 5 分中评，保证短文样本仍可展示。
+ *
+ * @param llm  LLM 适配器
+ * @param card 角色卡（提供语气、签名词等风格上下文）
+ * @returns 风格测试结果（短文 + 分数 + 点评）；生成失败时 undefined
+ */
 async function runVoiceTestStep(
   llm: LLMAdapter,
   card: CharacterCard
@@ -452,6 +568,7 @@ async function runVoiceTestStep(
   });
   if (judgeR.kind !== "done") return { sample, score: 5, critique: "评分调用失败" };
 
+  // 解析评审打分；解析失败时把原始输出前 200 字符作为点评兜底
   const parsed = parseScoreJson(judgeR.text);
   return {
     sample,
@@ -460,6 +577,16 @@ async function runVoiceTestStep(
   };
 }
 
+/**
+ * 解析评分 LLM 返回的 JSON（{ score, critique }）。
+ *
+ * 容错策略：score 非数字时回退 5 分，并钳制到 1..10 整数；
+ * critique 非字符串时用「(无点评)」；整体解析失败时把原始
+ * 输出前 200 字符当作点评返回，永不抛异常。
+ *
+ * @param raw 评分 LLM 的原始输出
+ * @returns 归一化后的分数与点评
+ */
 function parseScoreJson(raw: string): { score: number; critique: string } {
   const candidate = extractJson(raw);
   if (!candidate) return { score: 5, critique: raw.slice(0, 200) };
@@ -473,6 +600,18 @@ function parseScoreJson(raw: string): { score: number; critique: string } {
   }
 }
 
+/**
+ * 从 LLM 原始输出中提取 JSON 字符串。
+ *
+ * LLM 有时会用 markdown 代码围栏（```json ... ```）包裹 JSON，
+ * 或在 JSON 前后混入说明文字。处理顺序：
+ *  1. 优先匹配 ```json 围栏内的内容；
+ *  2. 否则取首个 "{" 到最后一个 "}" 之间的子串。
+ * 两步都失败时返回 null（视为无有效 JSON）。
+ *
+ * @param raw LLM 的原始输出文本
+ * @returns 可直接 JSON.parse 的字符串；提取失败返回 null
+ */
 function extractJson(raw: string): string | null {
   const trimmed = raw.trim();
   let candidate = trimmed;
@@ -484,6 +623,7 @@ function extractJson(raw: string): string | null {
   return null;
 }
 
+/** 将任意数值钳制到 [0, 1] 区间；NaN/Infinity 等非法值按 0 处理。 */
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(1, n));
