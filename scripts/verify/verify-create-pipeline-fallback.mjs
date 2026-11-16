@@ -193,7 +193,7 @@ const prompt =
   "Background must be a flat solid RGB(0,255,0) chroma key area, no gradient or noise. " +
   "Single character only, no text, no shadows.";
 const body = {
-  model: "gpt-image-1-mini",
+  model: "gpt-image-2.6-sunburst",
   prompt,
   size: "1024x1024",
   n: 1,
